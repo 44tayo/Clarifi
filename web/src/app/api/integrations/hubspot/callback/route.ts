@@ -25,6 +25,10 @@ export async function GET(req: Request) {
     return Response.redirect(`${getSiteOrigin(origin)}/dashboard?hubspot=error`, 302)
   }
 
-  await saveHubSpotConnection(userId, tokens)
+  const saved = await saveHubSpotConnection(userId, tokens)
+  if (!saved) {
+    return Response.redirect(`${getSiteOrigin(origin)}/dashboard?hubspot=error`, 302)
+  }
+
   return Response.redirect(`${getSiteOrigin(origin)}/dashboard?hubspot=connected`, 302)
 }
