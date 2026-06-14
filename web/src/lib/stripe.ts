@@ -1,6 +1,7 @@
 import Stripe from 'stripe'
 import { type BillingInterval } from './pricing'
 import { type Plan } from './plans'
+import { getSupabaseAdmin } from './supabase-admin'
 
 let stripeClient: Stripe | null = null
 
@@ -81,4 +82,52 @@ export async function createStripeCheckoutSession(
   })
 
   return { url: checkout.url }
+}
+
+export async function createStripeBillingPortalSession(input: {
+  customerId: string
+  origin: string
+}): Promise<{ url: string | null; error?: string }> {
+  const stripe = getStripe()
+  if (!stripe) return { url: null, error: 'stripe_not_configured' }
+
+  const origin = input.origin.replace(/\/$/, '')
+  const session = await stripe.billingPortal.sessions.create({
+    customer: input.customerId,
+    return_url: `${origin}/dashboard`,
+  })
+
+  return { url: session.url }
+}
+
+/** Resolve Stripe customer ID from profile or email lookup, optionally backfilling Supabase. */
+export async function resolveStripeCustomerId(input: {
+  userId: string
+  email?: string | null
+  storedCustomerId?: string | null
+}): Promise<string | null> {
+  if (input.storedCustomerId) return input.storedCustomerId
+
+  const stripe = getStripe()
+  if (!stripe || !input.email) return null
+
+  const customers = await stripe.customers.list({ email: input.email, limit: 1 })
+  const customerId = customers.data[0]?.id ?? null
+  if (!customerId) return null
+
+  const supabase = getSupabaseAdmin()
+  if (supabase) {
+    await supabase
+      .from('profiles')
+      .upsert(
+        {
+          user_id: input.userId,
+          stripe_customer_id: customerId,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' },
+      )
+  }
+
+  return customerId
 }

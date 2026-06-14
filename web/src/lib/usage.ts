@@ -55,6 +55,32 @@ export async function getUserPlan(userId: string): Promise<Plan> {
   return 'free'
 }
 
+export async function getUserBillingProfile(userId: string): Promise<{
+  plan: Plan
+  stripeCustomerId: string | null
+}> {
+  const supabase = getSupabaseAdmin()
+  let plan: Plan = 'free'
+  let stripeCustomerId: string | null = null
+
+  if (supabase) {
+    const { data } = await supabase
+      .from('profiles')
+      .select('plan, stripe_customer_id')
+      .eq('user_id', userId)
+      .maybeSingle()
+
+    plan = normalizePlan(data?.plan)
+    stripeCustomerId = data?.stripe_customer_id ?? null
+  }
+
+  if (isCreatorUser(userId)) {
+    plan = 'pro_plus'
+  }
+
+  return { plan, stripeCustomerId }
+}
+
 export async function getUsageStats(
   userId: string,
   plan?: Plan,
