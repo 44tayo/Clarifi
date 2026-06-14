@@ -3,8 +3,10 @@ import Link from 'next/link'
 import { getAccountAuthProviders, readNameFromUserMetadata } from '@/lib/account-auth'
 import { DownloadClarifi } from '@/components/DownloadClarifi'
 import { DashboardAccountSection } from '@/components/dashboard/DashboardAccountSection'
+import { DashboardHubSpotSection } from '@/components/dashboard/DashboardHubSpotSection'
 import { DesktopConnect } from '@/components/DesktopConnect'
 import { getServerUser } from '@/lib/auth-server'
+import { getHubSpotConnection, isHubSpotConfigured, toPublicHubSpotStatus } from '@/lib/hubspot'
 import { PLAN_LIMITS } from '@/lib/plans'
 import { getServerLaunchPreviewState } from '@/lib/launch-preview-server'
 import { shouldBlockPrelaunchAccess } from '@/lib/prelaunch'
@@ -15,9 +17,14 @@ export const metadata = {
   robots: { index: false, follow: false },
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ hubspot?: string }>
+}) {
   const user = await getServerUser()
   if (!user) redirect('/sign-in?next=/dashboard')
+  const params = await searchParams
   const launchPreview = await getServerLaunchPreviewState()
   if (
     shouldBlockPrelaunchAccess(
@@ -39,6 +46,9 @@ export default async function DashboardPage() {
   const limitLabel = Number.isFinite(stats.limit)
     ? `${stats.used} / ${stats.limit}`
     : `${stats.used} (unlimited)`
+  const hubspotConnection = await getHubSpotConnection(user.id)
+  const hubspotStatus = toPublicHubSpotStatus(hubspotConnection)
+  const hubspotConfigured = isHubSpotConfigured()
 
   return (
     <main className="min-h-screen bg-black text-white">
@@ -78,6 +88,15 @@ export default async function DashboardPage() {
         </div>
 
         <DesktopConnect />
+
+        {hubspotConfigured ? (
+          <DashboardHubSpotSection
+            initialStatus={hubspotStatus}
+            connectUrl="/api/integrations/hubspot/connect"
+            showConnectedBanner={params.hubspot === 'connected'}
+            showErrorBanner={params.hubspot === 'error'}
+          />
+        ) : null}
 
         <div className="p-6 border border-white/10 rounded-2xl mt-6">
           <h2 className="font-semibold mb-1">Download Clarifi</h2>

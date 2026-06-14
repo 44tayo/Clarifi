@@ -148,6 +148,13 @@ import {
   type AudioPreferences,
 } from '../audioPreferences'
 import { fetchDeviceProfile, getDashboardUrl, updateDeviceProfile } from '../deviceAuth'
+import {
+  disconnectHubSpot,
+  fetchHubSpotStatus,
+  getHubSpotConnectUrl,
+  maybeAutoSyncSession,
+  updateHubSpotSettings,
+} from '../hubspotSync'
 import { removeLocalAvatar, saveLocalAvatar } from '../profileLocal'
 import { normalizeSettingsTab, openSettingsWindow } from '../settings'
 import {
@@ -1579,6 +1586,56 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
     await shell.openExternal(url)
     return { ok: true, url }
   })
+
+  registerValidatedHandler('settings:hubspot-status', {}, async () => {
+    return fetchHubSpotStatus()
+  })
+
+  registerValidatedHandler('settings:hubspot-open-connect', {}, async () => {
+    const url = getHubSpotConnectUrl()
+    await shell.openExternal(url)
+    return { ok: true, url }
+  })
+
+  registerValidatedHandler(
+    'settings:hubspot-update',
+    { requiresInput: true },
+    async (data) => {
+      const payload = data as {
+        autoSyncEnabled?: boolean
+        defaultContactEmail?: string | null
+        defaultDealId?: string | null
+      }
+      return updateHubSpotSettings(payload)
+    },
+  )
+
+  registerValidatedHandler('settings:hubspot-disconnect', {}, async () => {
+    const ok = await disconnectHubSpot()
+    return { ok, status: await fetchHubSpotStatus() }
+  })
+
+  registerValidatedHandler(
+    'hubspot:sync-session',
+    { requiresInput: true },
+    async (data) => {
+      const payload = data as {
+        sessionId?: string
+        title?: string
+        endedAt?: number
+        recap?: Record<string, unknown> | null
+      }
+      if (!payload.sessionId) {
+        return { ok: false, error: 'session_id_required' }
+      }
+      return maybeAutoSyncSession({
+        id: payload.sessionId,
+        title: payload.title ?? 'Clarifi call',
+        endedAt: payload.endedAt ?? Date.now(),
+        recap: payload.recap ?? null,
+      })
+    },
+  )
 
   registerValidatedHandler(
     'settings:open',

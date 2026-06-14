@@ -32,6 +32,7 @@ const PUBLIC_PREFIXES = [
 export function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith('/preview')) return true
   if (pathname.startsWith('/_next')) return true
+  if (pathname.startsWith('/api/integrations/hubspot')) return true
 
   return PUBLIC_PREFIXES.some((prefix) => {
     if (prefix === '/') return pathname === '/'

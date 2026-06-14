@@ -1532,6 +1532,13 @@ export default function Overlay() {
         } else {
           setViewingAudioSession(storedSession)
         }
+
+        void window.electronAPI.invoke('hubspot:sync-session', {
+          sessionId: storedSession.id,
+          title: storedSession.title,
+          endedAt: storedSession.endedAt,
+          recap: storedSession.recap,
+        })
       } catch (err) {
         console.error('Failed to save audio session:', err)
         const reload = (await window.electronAPI.invoke('audio-sessions:load')) as {

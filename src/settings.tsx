@@ -360,6 +360,18 @@ export default function SettingsApp() {
   const [productKnowledgeDraft, setProductKnowledgeDraft] = useState('')
   const [productKnowledgeSaving, setProductKnowledgeSaving] = useState(false)
   const [productKnowledgeSaved, setProductKnowledgeSaved] = useState(false)
+  const [hubspotStatus, setHubspotStatus] = useState<{
+    connected: boolean
+    configured: boolean
+    autoSyncEnabled: boolean
+    defaultContactEmail: string | null
+    defaultDealId: string | null
+    hubId: number | null
+  } | null>(null)
+  const [hubspotContactEmail, setHubspotContactEmail] = useState('')
+  const [hubspotAutoSync, setHubspotAutoSync] = useState(true)
+  const [hubspotSaving, setHubspotSaving] = useState(false)
+  const [hubspotMessage, setHubspotMessage] = useState<string | null>(null)
 
   const loadPrefs = useCallback(async () => {
     setPrefsLoading(true)
@@ -377,6 +389,20 @@ export default function SettingsApp() {
     setProfile(data)
     setDraftFirstName(data.firstName ?? '')
     setDraftLastName(data.lastName ?? '')
+  }, [])
+
+  const loadHubspot = useCallback(async () => {
+    const data = (await window.electronAPI.invoke('settings:hubspot-status')) as {
+      connected: boolean
+      configured: boolean
+      autoSyncEnabled: boolean
+      defaultContactEmail: string | null
+      defaultDealId: string | null
+      hubId: number | null
+    }
+    setHubspotStatus(data)
+    setHubspotContactEmail(data.defaultContactEmail ?? '')
+    setHubspotAutoSync(data.autoSyncEnabled)
   }, [])
 
   const loadPermissions = useCallback(async () => {
@@ -486,6 +512,23 @@ export default function SettingsApp() {
       setProductKnowledgeDraft(data.productKnowledge ?? '')
     })
   }, [loadPrefs, loadProfile, loadPermissions, loadAudioPrefs, loadChatHistory, loadAudioSessions, loadKeybindPrefs, applyKeybindPrefs])
+
+  useEffect(() => {
+    if (tab === 'integrations') {
+      void loadHubspot()
+    }
+  }, [tab, loadHubspot])
+
+  useEffect(() => {
+    if (tab !== 'integrations') return
+
+    const onFocus = () => {
+      void loadHubspot()
+    }
+
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [tab, loadHubspot])
 
   useEffect(() => {
     if (!recordingKeybindId) return
@@ -629,6 +672,54 @@ export default function SettingsApp() {
   }
 
   const openConnect = () => void window.electronAPI.invoke('auth:open-connect')
+
+  const openHubSpotConnect = () => void window.electronAPI.invoke('settings:hubspot-open-connect')
+
+  const saveHubSpotSettings = async () => {
+    setHubspotSaving(true)
+    setHubspotMessage(null)
+    try {
+      const data = (await window.electronAPI.invoke('settings:hubspot-update', {
+        autoSyncEnabled: hubspotAutoSync,
+        defaultContactEmail: hubspotContactEmail.trim() || null,
+      })) as {
+        connected: boolean
+        autoSyncEnabled: boolean
+        defaultContactEmail: string | null
+      }
+      setHubspotStatus((prev) => (prev ? { ...prev, ...data } : prev))
+      setHubspotMessage('HubSpot settings saved')
+    } catch {
+      setHubspotMessage('Could not save HubSpot settings')
+    } finally {
+      setHubspotSaving(false)
+    }
+  }
+
+  const disconnectHubSpot = async () => {
+    setHubspotSaving(true)
+    setHubspotMessage(null)
+    try {
+      const result = (await window.electronAPI.invoke('settings:hubspot-disconnect')) as {
+        ok?: boolean
+        status?: {
+          connected: boolean
+          autoSyncEnabled: boolean
+          defaultContactEmail: string | null
+        }
+      }
+      if (result.status) {
+        setHubspotStatus((prev) => (prev ? { ...prev, ...result.status, connected: false } : prev))
+        setHubspotContactEmail('')
+        setHubspotAutoSync(true)
+      }
+      setHubspotMessage('HubSpot disconnected')
+    } catch {
+      setHubspotMessage('Could not disconnect HubSpot')
+    } finally {
+      setHubspotSaving(false)
+    }
+  }
   const openBilling = () => void window.electronAPI.invoke('onboarding:open-billing')
   const openDashboard = () => void window.electronAPI.invoke('settings:open-dashboard')
 
@@ -1417,6 +1508,80 @@ export default function SettingsApp() {
               <p className="settings-card-desc">
                 Links this desktop app to your plan, usage limits, and web dashboard.
               </p>
+            </div>
+
+            <div className="settings-card">
+              <div className="settings-card-header">
+                <div>
+                  <div className="settings-card-title">HubSpot</div>
+                  <div className="settings-card-meta">
+                    {!profile?.paired
+                      ? 'Connect Clarifi account first'
+                      : hubspotStatus?.connected
+                        ? 'Connected'
+                        : 'Not connected'}
+                  </div>
+                </div>
+                {profile?.paired && !hubspotStatus?.connected ? (
+                  <button
+                    type="button"
+                    className="settings-btn small primary"
+                    onClick={openHubSpotConnect}
+                  >
+                    Connect
+                  </button>
+                ) : null}
+                {profile?.paired && hubspotStatus?.connected ? (
+                  <button
+                    type="button"
+                    className="settings-btn small"
+                    onClick={() => void disconnectHubSpot()}
+                    disabled={hubspotSaving}
+                  >
+                    Disconnect
+                  </button>
+                ) : null}
+              </div>
+              <p className="settings-card-desc">
+                After each call, Clarifi can auto-log a CRM note and action-item tasks to the
+                HubSpot contact you specify.
+              </p>
+              {profile?.paired && hubspotStatus?.connected ? (
+                <div className="settings-profile-edit" style={{ marginTop: 12 }}>
+                  <label className="settings-field-label" htmlFor="hubspot-contact-email">
+                    Prospect contact email
+                  </label>
+                  <input
+                    id="hubspot-contact-email"
+                    type="email"
+                    className="settings-input"
+                    placeholder="prospect@company.com"
+                    value={hubspotContactEmail}
+                    onChange={(e) => setHubspotContactEmail(e.target.value)}
+                  />
+                  <label className="settings-checkbox-row" style={{ marginTop: 12 }}>
+                    <input
+                      type="checkbox"
+                      checked={hubspotAutoSync}
+                      onChange={(e) => setHubspotAutoSync(e.target.checked)}
+                    />
+                    <span>Auto-sync notes and tasks after each call</span>
+                  </label>
+                  <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <button
+                      type="button"
+                      className="settings-btn small primary"
+                      onClick={() => void saveHubSpotSettings()}
+                      disabled={hubspotSaving}
+                    >
+                      {hubspotSaving ? 'Saving…' : 'Save'}
+                    </button>
+                    {hubspotMessage ? (
+                      <span className="settings-profile-upload-hint">{hubspotMessage}</span>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="settings-card">
