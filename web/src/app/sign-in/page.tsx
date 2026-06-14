@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { AuthForm } from '@/components/auth/AuthForm'
 import { AuthRedirect } from '@/components/auth/AuthRedirect'
 import { getServerUser } from '@/lib/auth-server'
-import { getServerDevLaunchPreview } from '@/lib/launch-preview-server'
+import { getServerLaunchPreviewState } from '@/lib/launch-preview-server'
 import { canAccessAuthDuringPrelaunch, resolvePostAuthRedirect } from '@/lib/prelaunch'
 import { isLaunchLive } from '@/lib/waitlist-config'
 import '@/components/auth/auth.css'
@@ -21,18 +21,28 @@ export const metadata = {
 export default async function SignInPage({ searchParams }: PageProps) {
   const params = await searchParams
   const { next, error } = params
-  const devPreviewLive = await getServerDevLaunchPreview(params.preview)
+  const launchPreview = await getServerLaunchPreviewState(params.preview)
   const redirectNext = next?.startsWith('/') ? next : '/dashboard'
-  if (!canAccessAuthDuringPrelaunch(redirectNext, devPreviewLive)) {
+  if (
+    !canAccessAuthDuringPrelaunch(
+      redirectNext,
+      launchPreview.previewLive,
+      launchPreview.forceWaitlist,
+    )
+  ) {
     redirect('/')
   }
 
   const user = await getServerUser()
   if (user) {
     redirect(
-      isLaunchLive(undefined, devPreviewLive)
+      isLaunchLive(undefined, launchPreview.previewLive, launchPreview.forceWaitlist)
         ? redirectNext
-        : resolvePostAuthRedirect(redirectNext, devPreviewLive),
+        : resolvePostAuthRedirect(
+            redirectNext,
+            launchPreview.previewLive,
+            launchPreview.forceWaitlist,
+          ),
     )
   }
 

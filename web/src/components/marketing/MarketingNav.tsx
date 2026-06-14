@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
-import { devPreviewHref } from '@/lib/launch-preview'
+import { previewHref } from '@/lib/launch-preview'
 import { useLaunchCountdown } from '@/hooks/useLaunchCountdown'
 import '@/components/landing/landing.css'
 
@@ -75,7 +75,7 @@ export function MarketingNav({ active, showBack = false }: MarketingNavProps) {
           </Link>
         </div>
         {isLive ? (
-          <Link href={devPreviewHref('/dashboard')} className="landing-cta landing-nav-cta">
+          <Link href={previewHref('/dashboard')} className="landing-cta landing-nav-cta">
             Dashboard
           </Link>
         ) : (

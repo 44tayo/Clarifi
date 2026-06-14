@@ -1,14 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { DEV_LAUNCH_PREVIEW_COOKIE, resolveDevLaunchPreview } from '@/lib/launch-preview'
+import { LAUNCH_PREVIEW_COOKIE, resolveLaunchPreviewState } from '@/lib/launch-preview'
 import { getLaunchCountdown } from '@/lib/waitlist-config'
 
 function readPreviewCookie(): string | null {
   if (typeof document === 'undefined') return null
   const match = document.cookie
     .split('; ')
-    .find((row) => row.startsWith(`${DEV_LAUNCH_PREVIEW_COOKIE}=`))
+    .find((row) => row.startsWith(`${LAUNCH_PREVIEW_COOKIE}=`))
   return match?.split('=')[1] ?? null
 }
 
@@ -18,17 +18,18 @@ function readPreviewQuery(): string | null {
 }
 
 export function useLaunchCountdown() {
-  const [devPreviewLive, setDevPreviewLive] = useState(false)
+  const [previewLive, setPreviewLive] = useState(false)
+  const [forceWaitlist, setForceWaitlist] = useState(false)
   const [countdown, setCountdown] = useState<ReturnType<typeof getLaunchCountdown> | null>(null)
 
   useEffect(() => {
     const syncPreview = () => {
-      setDevPreviewLive(
-        resolveDevLaunchPreview(
-          { preview: readPreviewQuery() },
-          readPreviewCookie(),
-        ),
+      const state = resolveLaunchPreviewState(
+        { preview: readPreviewQuery() },
+        readPreviewCookie(),
       )
+      setPreviewLive(state.previewLive)
+      setForceWaitlist(state.forceWaitlist)
     }
 
     syncPreview()
@@ -38,11 +39,11 @@ export function useLaunchCountdown() {
   }, [])
 
   useEffect(() => {
-    const tick = () => setCountdown(getLaunchCountdown(Date.now(), devPreviewLive))
+    const tick = () => setCountdown(getLaunchCountdown(Date.now(), previewLive, forceWaitlist))
     tick()
     const id = window.setInterval(tick, 1000)
     return () => window.clearInterval(id)
-  }, [devPreviewLive])
+  }, [previewLive, forceWaitlist])
 
   return countdown
 }

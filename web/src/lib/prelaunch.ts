@@ -34,22 +34,36 @@ export function isWaitlistAuthNext(next: string): boolean {
 }
 
 /** Whether /sign-in and /sign-up are reachable before public launch. */
-export function canAccessAuthDuringPrelaunch(next: string, devPreviewLive = false): boolean {
-  if (isLaunchLive(undefined, devPreviewLive)) return true
-  if (devPreviewLive) return true
+export function canAccessAuthDuringPrelaunch(
+  next: string,
+  previewLive = false,
+  forceWaitlist = false,
+): boolean {
+  if (isLaunchLive(undefined, previewLive, forceWaitlist)) return true
+  if (previewLive) return true
   if (isBillingCheckoutNext(next)) return true
   if (isAccountAuthNext(next)) return true
   return false
 }
 
-export function resolvePrelaunchAuthNext(next: string, devPreviewLive = false): string {
-  if (isLaunchLive(undefined, devPreviewLive) || !isPrelaunchBlockedPath(next)) return next
+export function resolvePrelaunchAuthNext(
+  next: string,
+  previewLive = false,
+  forceWaitlist = false,
+): string {
+  if (isLaunchLive(undefined, previewLive, forceWaitlist) || !isPrelaunchBlockedPath(next)) {
+    return next
+  }
   return '/?joined=1'
 }
 
 /** Where to send the user after sign-in during prelaunch. */
-export function resolvePostAuthRedirect(next: string, devPreviewLive = false): string {
-  if (isLaunchLive(undefined, devPreviewLive)) return next
+export function resolvePostAuthRedirect(
+  next: string,
+  previewLive = false,
+  forceWaitlist = false,
+): string {
+  if (isLaunchLive(undefined, previewLive, forceWaitlist)) return next
   if (isBillingCheckoutNext(next)) return next
   if (next === '/' || next.startsWith('/?')) return '/?joined=1'
   if (isPrelaunchBlockedPath(next)) return next
@@ -59,20 +73,22 @@ export function resolvePostAuthRedirect(next: string, devPreviewLive = false): s
 /** OAuth callback: waitlist join vs normal account sign-in. */
 export function isWaitlistOAuthFlow(
   next: string,
-  devPreviewLive = false,
+  previewLive = false,
+  forceWaitlist = false,
 ): boolean {
   if (isBillingCheckoutNext(next)) return false
   if (isAccountAuthNext(next)) return false
-  if (isLaunchLive(undefined, devPreviewLive)) return isWaitlistAuthNext(next)
+  if (isLaunchLive(undefined, previewLive, forceWaitlist)) return isWaitlistAuthNext(next)
   return isWaitlistAuthNext(next)
 }
 
 export function shouldBlockPrelaunchAccess(
   pathname: string,
   userId?: string | null,
-  devPreviewLive = false,
+  previewLive = false,
+  forceWaitlist = false,
 ): boolean {
-  if (isLaunchLive(undefined, devPreviewLive)) return false
+  if (isLaunchLive(undefined, previewLive, forceWaitlist)) return false
   if (
     process.env.NODE_ENV === 'development' &&
     (pathname === '/desktop/connect' || pathname.startsWith('/desktop/connect/'))

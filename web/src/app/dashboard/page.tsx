@@ -1,11 +1,12 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { getAccountAuthProviders, readNameFromUserMetadata } from '@/lib/account-auth'
 import { DownloadClarifi } from '@/components/DownloadClarifi'
 import { DashboardAccountSection } from '@/components/dashboard/DashboardAccountSection'
 import { DesktopConnect } from '@/components/DesktopConnect'
 import { getServerUser } from '@/lib/auth-server'
 import { PLAN_LIMITS } from '@/lib/plans'
-import { getServerDevLaunchPreview } from '@/lib/launch-preview-server'
+import { getServerLaunchPreviewState } from '@/lib/launch-preview-server'
 import { shouldBlockPrelaunchAccess } from '@/lib/prelaunch'
 import { getUsageStats } from '@/lib/usage'
 
@@ -17,14 +18,27 @@ export const metadata = {
 export default async function DashboardPage() {
   const user = await getServerUser()
   if (!user) redirect('/sign-in?next=/dashboard')
-  const devPreviewLive = await getServerDevLaunchPreview()
-  if (shouldBlockPrelaunchAccess('/dashboard', user.id, devPreviewLive)) redirect('/?joined=1')
+  const launchPreview = await getServerLaunchPreviewState()
+  if (
+    shouldBlockPrelaunchAccess(
+      '/dashboard',
+      user.id,
+      launchPreview.previewLive,
+      launchPreview.forceWaitlist,
+    )
+  ) {
+    redirect('/?joined=1')
+  }
 
   const stats = await getUsageStats(user.id)
+  const { firstName, lastName, displayName } = readNameFromUserMetadata(
+    user.user_metadata as Record<string, unknown>,
+    user.email,
+  )
+  const { hasEmailAuth, hasGoogleAuth } = getAccountAuthProviders(user.identities, user.email)
   const limitLabel = Number.isFinite(stats.limit)
     ? `${stats.used} / ${stats.limit}`
     : `${stats.used} (unlimited)`
-  const displayName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'there'
 
   return (
     <main className="min-h-screen bg-black text-white">
@@ -44,7 +58,11 @@ export default async function DashboardPage() {
         <DashboardAccountSection
           displayName={displayName}
           email={user.email}
+          firstName={firstName}
+          lastName={lastName}
           plan={stats.plan}
+          hasEmailAuth={hasEmailAuth}
+          hasGoogleAuth={hasGoogleAuth}
         />
 
         <div className="grid grid-cols-2 gap-6 mb-8 sm:grid-cols-2">

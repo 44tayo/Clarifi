@@ -23,6 +23,7 @@ const PUBLIC_PREFIXES = [
   '/api/desktop/status',
   '/api/desktop/profile',
   '/api/waitlist',
+  '/api/account',
   '/api/llm/chat',
   '/api/llm/suggest',
   '/api/llm/transcribe',

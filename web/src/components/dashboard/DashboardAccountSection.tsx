@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { AccountSettingsForm } from '@/components/dashboard/AccountSettingsForm'
 import { ManageBillingButton } from '@/components/billing/ManageBillingButton'
 import { SignOutButton } from '@/components/auth/SignOutButton'
 import { PLAN_LIMITS, isPaidPlan, type Plan } from '@/lib/plans'
@@ -6,13 +7,21 @@ import { PLAN_LIMITS, isPaidPlan, type Plan } from '@/lib/plans'
 type DashboardAccountSectionProps = {
   displayName: string
   email: string | undefined
+  firstName: string
+  lastName: string
   plan: Plan
+  hasEmailAuth: boolean
+  hasGoogleAuth: boolean
 }
 
 export function DashboardAccountSection({
   displayName,
   email,
+  firstName,
+  lastName,
   plan,
+  hasEmailAuth,
+  hasGoogleAuth,
 }: DashboardAccountSectionProps) {
   const planLabel = PLAN_LIMITS[plan].label
   const billingStatus = plan === 'free' ? 'Free tier' : 'Active subscription'
@@ -22,7 +31,7 @@ export function DashboardAccountSection({
       <h2 className="font-semibold mb-1">Account</h2>
       <p className="text-sm text-white/50 mb-5">Your Clarifi profile and subscription</p>
 
-      <dl className="grid gap-4 sm:grid-cols-3 mb-6">
+      <dl className="grid gap-4 sm:grid-cols-3 mb-2">
         <div>
           <dt className="text-xs uppercase tracking-wide text-white/40 mb-1">Name</dt>
           <dd className="text-sm font-medium">{displayName}</dd>
@@ -40,7 +49,15 @@ export function DashboardAccountSection({
         </div>
       </dl>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <AccountSettingsForm
+        firstName={firstName}
+        lastName={lastName}
+        email={email}
+        hasEmailAuth={hasEmailAuth}
+        hasGoogleAuth={hasGoogleAuth}
+      />
+
+      <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-6 mt-6">
         <ManageBillingButton className="inline-block bg-white text-black px-6 py-2 rounded-lg text-sm font-medium hover:bg-white/90 disabled:opacity-60" />
         {!isPaidPlan(plan) ? (
           <Link
@@ -54,8 +71,8 @@ export function DashboardAccountSection({
       </div>
 
       <p className="text-xs text-white/40 mt-4">
-        Manage billing opens Stripe&apos;s secure portal to update your card, view invoices, or cancel
-        anytime. Subscribe first if you have not started a plan yet.
+        Manage billing opens Stripe&apos;s secure portal to update your card, view invoices, or
+        cancel anytime.
       </p>
     </section>
   )

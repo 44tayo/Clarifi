@@ -1,8 +1,7 @@
-export const DEV_LAUNCH_PREVIEW_COOKIE = 'clarifi_dev_launch_preview'
+export const LAUNCH_PREVIEW_COOKIE = 'clarifi_launch_preview'
 
-export function isDevEnvironment(): boolean {
-  return process.env.NODE_ENV === 'development'
-}
+/** @deprecated Use LAUNCH_PREVIEW_COOKIE */
+export const DEV_LAUNCH_PREVIEW_COOKIE = LAUNCH_PREVIEW_COOKIE
 
 export type SearchParamsLike =
   | { get(name: string): string | null | undefined }
@@ -19,21 +18,32 @@ function getPreviewParam(searchParams?: SearchParamsLike | null): string | null 
   return undefined
 }
 
-/** Dev-only: ?preview=live shows post-launch UI; ?preview=waitlist clears it. */
+export type LaunchPreviewState = {
+  previewLive: boolean
+  forceWaitlist: boolean
+}
+
+/** ?preview=live forces post-launch UI; ?preview=waitlist forces waitlist UI. */
+export function resolveLaunchPreviewState(
+  searchParams?: SearchParamsLike | null,
+  cookieValue?: string | null,
+): LaunchPreviewState {
+  const preview = getPreviewParam(searchParams)
+  if (preview === 'waitlist') return { previewLive: false, forceWaitlist: true }
+  if (preview === 'live') return { previewLive: true, forceWaitlist: false }
+  if (cookieValue === '1') return { previewLive: true, forceWaitlist: false }
+  return { previewLive: false, forceWaitlist: false }
+}
+
+/** @deprecated Use resolveLaunchPreviewState */
 export function resolveDevLaunchPreview(
   searchParams?: SearchParamsLike | null,
   cookieValue?: string | null,
 ): boolean {
-  if (!isDevEnvironment()) return false
-
-  const preview = getPreviewParam(searchParams)
-  if (preview === 'waitlist') return false
-  if (preview === 'live') return true
-
-  return cookieValue === '1'
+  return resolveLaunchPreviewState(searchParams, cookieValue).previewLive
 }
 
-export function devLaunchPreviewCookieOptions() {
+export function launchPreviewCookieOptions() {
   return {
     path: '/',
     sameSite: 'lax' as const,
@@ -42,25 +52,34 @@ export function devLaunchPreviewCookieOptions() {
   }
 }
 
+/** @deprecated Use launchPreviewCookieOptions */
+export function devLaunchPreviewCookieOptions() {
+  return launchPreviewCookieOptions()
+}
+
 function readPreviewCookieClient(): string | null {
   if (typeof document === 'undefined') return null
   const match = document.cookie
     .split('; ')
-    .find((row) => row.startsWith(`${DEV_LAUNCH_PREVIEW_COOKIE}=`))
+    .find((row) => row.startsWith(`${LAUNCH_PREVIEW_COOKIE}=`))
   return match?.split('=')[1] ?? null
 }
 
-/** Dev-only query suffix for links while previewing post-launch UI. */
-export function devPreviewHref(path: string): string {
-  if (!isDevEnvironment() || typeof window === 'undefined') return path
-  const active = resolveDevLaunchPreview(
+export function previewHref(path: string): string {
+  if (typeof window === 'undefined') return path
+  const { previewLive } = resolveLaunchPreviewState(
     { preview: new URLSearchParams(window.location.search).get('preview') },
     readPreviewCookieClient(),
   )
-  if (!active) return path
+  if (!previewLive) return path
   const [base, query = ''] = path.split('?')
   const params = new URLSearchParams(query)
   params.set('preview', 'live')
   const qs = params.toString()
   return qs ? `${base}?${qs}` : path
+}
+
+/** @deprecated Use previewHref */
+export function devPreviewHref(path: string): string {
+  return previewHref(path)
 }

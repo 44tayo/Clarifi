@@ -2,7 +2,7 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import type { EmailOtpType } from '@supabase/supabase-js'
 import { AUTH_NEXT_COOKIE, resolveAuthNext } from '@/lib/auth-next'
-import { DEV_LAUNCH_PREVIEW_COOKIE, resolveDevLaunchPreview } from '@/lib/launch-preview'
+import { LAUNCH_PREVIEW_COOKIE, resolveLaunchPreviewState } from '@/lib/launch-preview'
 import { resolvePostAuthRedirect } from '@/lib/prelaunch'
 import { getSupabaseEnv } from '@/lib/supabase/env'
 import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
@@ -21,16 +21,17 @@ export async function GET(request: Request) {
   const type = searchParams.get('type') as EmailOtpType | null
   const cookieStore = await cookies()
   const authNextCookie = cookieStore.get(AUTH_NEXT_COOKIE)?.value ?? null
-  const devPreviewLive = resolveDevLaunchPreview(
+  const launchPreview = resolveLaunchPreviewState(
     searchParams,
-    cookieStore.get(DEV_LAUNCH_PREVIEW_COOKIE)?.value ?? null,
+    cookieStore.get(LAUNCH_PREVIEW_COOKIE)?.value ?? null,
   )
   const safeNext = resolvePostAuthRedirect(
     resolveAuthNext(
       searchParams.get('next') ?? (authNextCookie ? decodeURIComponent(authNextCookie) : null),
       '/dashboard',
     ),
-    devPreviewLive,
+    launchPreview.previewLive,
+    launchPreview.forceWaitlist,
   )
 
   if (!tokenHash || !type || !getSupabaseEnv()) {
