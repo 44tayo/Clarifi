@@ -61,9 +61,15 @@ export function InstallModal({ open, onClose, onDownloadAgain }: InstallModalPro
             color: '#374151',
           }}
         >
-          <strong>App won&apos;t open?</strong> This preview build isn&apos;t Apple-notarized yet.
-          In Finder, go to <strong>Applications</strong>, then <strong>right-click Clarifi → Open → Open</strong> the first time.
-          If Terminal <code>xattr</code> shows &ldquo;Operation not permitted&rdquo;, skip it — right-click Open is the reliable fix.
+          <strong>App won&apos;t open?</strong> This build is for <strong>Apple Silicon Macs</strong> (M1/M2/M3/M4) and is not Apple-notarized yet.
+          <ol style={{ margin: '0.6rem 0 0', paddingLeft: '1.2rem' }}>
+            <li>Drag Clarifi into <strong>Applications</strong> (do not run it from the DMG).</li>
+            <li>In Finder → Applications, <strong>right-click Clarifi → Open → Open</strong> the first time.</li>
+            <li>
+              If you still see &ldquo;can&apos;t be opened,&rdquo; run in Terminal:{' '}
+              <code style={{ fontSize: '0.8rem' }}>xattr -cr /Applications/Clarifi.app</code> then try step 2 again.
+            </li>
+          </ol>
         </div>
         <p style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.875rem', color: '#6b7280' }}>
           Problem?{' '}

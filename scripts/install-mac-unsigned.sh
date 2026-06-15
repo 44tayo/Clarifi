@@ -36,12 +36,7 @@ sleep 1
 mkdir -p "$TARGET_DIR"
 rm -rf "$TARGET_APP"
 cp -R "$SOURCE_APP" "$TARGET_APP"
-xattr -cr "$TARGET_APP" 2>/dev/null || true
-codesign --remove-signature "$TARGET_APP" 2>/dev/null || true
-NATIVE_MOD="${TARGET_APP}/Contents/Resources/window_capture_exclude.node"
-if [[ -f "$NATIVE_MOD" ]]; then
-  codesign --force --sign - "$NATIVE_MOD" 2>/dev/null || true
-fi
+bash "$ROOT/scripts/adhoc-sign-mac-app.sh" "$TARGET_APP"
 
 echo ""
 echo "Installed to: $TARGET_APP"
@@ -51,4 +46,4 @@ echo "  1. Open Finder → Applications"
 echo "  2. RIGHT-CLICK Clarifi → Open"
 echo "  3. Click Open in the security dialog"
 echo ""
-echo "If xattr failed in Terminal before, installing to ~/Applications avoids that issue."
+echo "Requires Apple Silicon (M1/M2/M3/M4). Intel Macs are not supported yet."

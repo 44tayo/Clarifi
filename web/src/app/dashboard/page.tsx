@@ -101,8 +101,8 @@ export default async function DashboardPage({
         <div className="p-6 border border-white/10 rounded-2xl mt-6">
           <h2 className="font-semibold mb-1">Download Clarifi</h2>
           <p className="text-sm text-white/50 mb-4">
-            Install for your platform, then use Open Clarifi Desktop above to connect automatically.
-            On macOS first launch, right-click Clarifi in Applications → Open to bypass Gatekeeper.
+            Install for your platform (macOS: Apple Silicon only), then use Open Clarifi Desktop above to connect automatically.
+            On macOS first launch, drag Clarifi to Applications, then right-click Clarifi → Open to bypass Gatekeeper.
           </p>
           <DownloadClarifi variant="dashboard" />
           <Link

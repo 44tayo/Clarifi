@@ -41,6 +41,6 @@ export function getDownloadForPlatform(platform: 'mac' | 'windows'): {
   return {
     url: getMacDownloadUrl(),
     filename: MAC_DMG_FILENAME,
-    label: 'Download for macOS',
+    label: 'Download for macOS (Apple Silicon)',
   }
 }

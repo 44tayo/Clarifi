@@ -13,16 +13,17 @@ if [[ -z "$DMG" ]]; then
   exit 1
 fi
 
+APP_BUNDLE="$(ls -d release/mac-arm64/Clarifi.app 2>/dev/null | head -1)"
+if [[ -n "$APP_BUNDLE" ]]; then
+  bash "$ROOT/scripts/adhoc-sign-mac-app.sh" "$APP_BUNDLE"
+fi
+
 WEB_DMG="$ROOT/web/public/downloads/Clarifi-0.1.0-arm64.dmg"
-REPO_WEB_DMG="$(cd "$ROOT/.." && pwd)/web/public/downloads/Clarifi-0.1.0-arm64.dmg"
-mkdir -p "$(dirname "$WEB_DMG")" "$(dirname "$REPO_WEB_DMG")"
+mkdir -p "$(dirname "$WEB_DMG")"
 cp "$DMG" "$WEB_DMG"
-cp "$DMG" "$REPO_WEB_DMG"
 
 echo "Published unsigned DMG:"
 echo "  $WEB_DMG"
-echo "  $REPO_WEB_DMG"
 echo ""
-echo "Users without a signed build must clear quarantine after install:"
-echo "  xattr -cr /Applications/Clarifi.app"
-echo "Then right-click Clarifi → Open → Open."
+echo "Apple Silicon (arm64) only. Users must drag to Applications, then:"
+echo "  Right-click Clarifi → Open → Open (first launch only)"
