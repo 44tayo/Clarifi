@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
+import { copyFileSync, cpSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -16,6 +16,20 @@ function copyStealthNativePlugin() {
       const destDir = join(root, 'dist-electron/resources')
       mkdirSync(destDir, { recursive: true })
       copyFileSync(src, join(destDir, 'window_capture_exclude.node'))
+    },
+  }
+}
+
+function copyMemoryMigrationsPlugin() {
+  return {
+    name: 'copy-memory-migrations',
+    closeBundle() {
+      const root = process.cwd()
+      const src = join(root, 'electron/memory/migrations')
+      if (!existsSync(src)) return
+      const destDir = join(root, 'dist-electron/memory/migrations')
+      mkdirSync(destDir, { recursive: true })
+      cpSync(src, destDir, { recursive: true })
     },
   }
 }
@@ -38,11 +52,11 @@ export default defineConfig(({ mode }) => {
           },
           vite: {
             define: electronDefine,
-            plugins: [copyStealthNativePlugin()],
+            plugins: [copyStealthNativePlugin(), copyMemoryMigrationsPlugin()],
             build: {
               outDir: 'dist-electron',
               rollupOptions: {
-                external: ['electron', 'keytar', 'form-data', 'node-fetch'],
+                external: ['electron', 'keytar', 'form-data', 'node-fetch', 'better-sqlite3'],
               },
             },
           },

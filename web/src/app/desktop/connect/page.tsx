@@ -3,12 +3,20 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import {
+  ConnectFluxLoader,
+  useSimulatedProgress,
+} from '@/components/ui/connect-flux-loader'
 
 export default function DesktopConnectPage() {
   const [ready, setReady] = useState(false)
   const [signedIn, setSignedIn] = useState(false)
   const [status, setStatus] = useState<'idle' | 'loading' | 'opened' | 'error'>('idle')
   const [error, setError] = useState<string | null>(null)
+
+  const isConnecting = !ready || status === 'loading'
+  const isComplete = status === 'opened'
+  const progress = useSimulatedProgress(isConnecting || isComplete, isComplete)
 
   useEffect(() => {
     const supabase = createClient()
@@ -51,8 +59,12 @@ export default function DesktopConnectPage() {
 
   if (!ready) {
     return (
-      <main className="min-h-screen bg-black text-white flex items-center justify-center">
-        <p className="text-white/50">Loading…</p>
+      <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center px-8">
+        <ConnectFluxLoader
+          progress={progress}
+          className="max-w-sm"
+          textClassName="text-white/70 text-2xl sm:text-3xl"
+        />
       </main>
     )
   }
@@ -72,9 +84,15 @@ export default function DesktopConnectPage() {
   }
 
   return (
-    <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center gap-4 px-8 text-center">
+    <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center gap-6 px-8 text-center">
       <h1 className="text-2xl font-bold">Connecting Clarifi Desktop</h1>
-      {status === 'loading' && <p className="text-white/50">Preparing secure connection…</p>}
+      {(status === 'loading' || status === 'opened') && (
+        <ConnectFluxLoader
+          progress={progress}
+          className="max-w-sm"
+          textClassName="text-white/70 text-2xl sm:text-3xl"
+        />
+      )}
       {status === 'opened' && (
         <p className="text-green-400 text-sm max-w-md">
           Clarifi should open automatically. Return to the desktop app to start using it.

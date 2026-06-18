@@ -1,151 +1,153 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
-import Image from 'next/image'
+import type { ReactNode } from 'react'
 
-function RecordMeetingsCard() {
+import type { MarketingFeatureVariant } from '@/lib/design-tokens'
+import { featureAccentColors } from '@/lib/design-tokens'
+import {
+  LandingSection,
+  LandingSectionHeader,
+  MarketingFeatureCard,
+  MarketingFeatureGrid,
+  MarketingFeatureMock,
+} from '@/components/marketing'
+
+function NotetakerVisual() {
   return (
-    <article className="clarifi-bento-card clarifi-bento-record bento-apple-card" data-reveal>
-      <div className="bento-apple-card-visual">
-        <Image
-          src="/bento-record-macbook.jpg"
-          alt=""
-          fill
-          className="bento-record-macbook-img"
-          sizes="(max-width: 768px) 100vw, 420px"
-        />
+    <MarketingFeatureMock layout="summary">
+      <div className="ds-mock-doc">
+        <p className="ds-mock-doc-title">Summary</p>
+        <p className="ds-mock-doc-label">Key Discussion Points</p>
+        <ul>
+          <li>Clarified rollout timeline and pilot scope for the team.</li>
+          <li>Agreed on seat-by-seat expansion after a two-week pilot.</li>
+          <li>Next step: send recap with action items and pricing.</li>
+        </ul>
       </div>
-      <div className="bento-apple-card-copy">
-        <h3>Record meetings without a bot in the room</h3>
-        <p>
-          Your meetings stay completely normal. Just hit record on your desktop and let Clarifi
-          handle the rest.
-        </p>
-      </div>
-    </article>
+    </MarketingFeatureMock>
   )
 }
 
-function LiveTranscriptMock() {
+function ChatOverlayVisual() {
   return (
-    <div className="bento-live-mock">
-      <p className="landing-transcript-line">
-        <strong>You</strong> · 0:14 — Thanks for walking through the rollout plan today.
-      </p>
-      <p className="landing-transcript-line">
-        <strong>Them</strong> · 0:22 — Happy to — what does onboarding look like on your side?
-      </p>
-      <p className="landing-transcript-line">
-        <strong>You</strong> · 0:31 — We usually start with a two-week pilot…
-      </p>
-      <div className="bento-suggestions">
-        <div className="bento-suggestion type-response">
-          <span>💬</span>
-          <span>Offer a 2-week pilot, then expand seat-by-seat.</span>
+    <MarketingFeatureMock layout="chat">
+      <div className="ds-mock-chat-window">
+        <div className="ds-mock-chat-input">Ask anything...</div>
+        <div className="ds-mock-chat-bubble">
+          <span className="ds-mock-chat-brand">Clarifi</span>
+          <p>Here&apos;s a concise answer based on your screen and transcript.</p>
         </div>
-        <div className="bento-suggestion type-question">
-          <span>❓</span>
-          <span>What does your current onboarding workflow look like?</span>
-        </div>
-        <div className="bento-suggestion type-action">
-          <span>✓</span>
-          <span>Send a one-pager with timeline and pricing after the call.</span>
-        </div>
+        <div className="ds-mock-chat-prompt">what should I say about the pilot timeline?</div>
       </div>
-      <div className="bento-live-bar">
-        <span className="bento-live-timer">00:14</span>
-        <div className="bento-live-waveform active">
-          <span />
-          <span />
-          <span />
-          <span />
-        </div>
-        <span className="bento-live-pause">⏸</span>
-        <span className="bento-live-stop">●</span>
-      </div>
-    </div>
+    </MarketingFeatureMock>
   )
 }
+
+function DictationVisual() {
+  return (
+    <MarketingFeatureMock>
+      <svg viewBox="0 0 200 200" className="ds-mock-globe" aria-hidden>
+        <circle cx="100" cy="100" r="72" fill="none" stroke="currentColor" strokeWidth="1.2" />
+        <ellipse cx="100" cy="100" rx="72" ry="28" fill="none" stroke="currentColor" strokeWidth="1" />
+        <ellipse cx="100" cy="100" rx="28" ry="72" fill="none" stroke="currentColor" strokeWidth="1" />
+        <path d="M28 100 H172 M100 28 V172" fill="none" stroke="currentColor" strokeWidth="0.8" />
+      </svg>
+    </MarketingFeatureMock>
+  )
+}
+
+function NotesVisual() {
+  const notes = [
+    { label: 'Weekly Team Sync', color: featureAccentColors.green },
+    { label: 'Q4 Product Strategy', color: featureAccentColors.purple },
+    { label: 'Customer Discovery', color: featureAccentColors.sky },
+    { label: 'Sales Kickoff', color: featureAccentColors.orange },
+    { label: 'Board Update', color: featureAccentColors.cyan },
+  ]
+
+  return (
+    <MarketingFeatureMock layout="notes">
+      {notes.map((note) => (
+        <div key={note.label} className="ds-mock-note-chip" style={{ backgroundColor: note.color }}>
+          <span />
+          <p>{note.label}</p>
+        </div>
+      ))}
+    </MarketingFeatureMock>
+  )
+}
+
+function ShareVisual() {
+  return (
+    <MarketingFeatureMock layout="share">
+      <div className="ds-mock-share-head" aria-hidden />
+      <div className="ds-mock-share-bubble ds-mock-share-bubble-violet">Kate</div>
+      <div className="ds-mock-share-bubble ds-mock-share-bubble-blue">Jake</div>
+    </MarketingFeatureMock>
+  )
+}
+
+const FEATURES: {
+  variant: MarketingFeatureVariant
+  title: string
+  description: string
+  visual: ReactNode
+}[] = [
+  {
+    variant: 'wide',
+    title: 'AI meeting notetaker',
+    description:
+      "Capture every word so you don't miss anything. Focus on your meeting and let Clarifi take detailed notes for you instantly.",
+    visual: <NotetakerVisual />,
+  },
+  {
+    variant: 'narrow',
+    title: 'Seamless chat overlay',
+    description:
+      'A transparent chat window that floats above your screen. Work with AI while keeping your apps visible.',
+    visual: <ChatOverlayVisual />,
+  },
+  {
+    variant: 'third',
+    title: 'Universal dictation',
+    description: 'Turn your voice into perfectly formatted text 3x faster than typing.',
+    visual: <DictationVisual />,
+  },
+  {
+    variant: 'third',
+    title: 'Chat with your notes',
+    description:
+      'Your second brain. Instantly query details from past meetings or documents just by asking. (coming soon)',
+    visual: <NotesVisual />,
+  },
+  {
+    variant: 'third',
+    title: 'Share meeting notes',
+    description:
+      'Keep everyone in the loop. Send summaries and next steps to everyone in the call. (coming soon)',
+    visual: <ShareVisual />,
+  },
+]
 
 export function ClarifiBentoSection() {
-  const gridRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const el = gridRef.current
-    if (!el) return
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) {
-          el.classList.add('bento-in-view')
-          observer.disconnect()
-        }
-      },
-      { threshold: 0.15, rootMargin: '0px 0px -60px 0px' },
-    )
-
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [])
-
   return (
-    <section className="landing-section clarifi-bento-section">
-      <div className="landing-section-header centered" data-reveal>
-        <h2>Everything you need from every conversation</h2>
-        <p>Record on your Mac, get instant recaps, and live AI support — all in one place.</p>
-      </div>
+    <LandingSection className="clarifi-bento-section">
+      <LandingSectionHeader
+        title="Everything you need for all your conversations"
+        subtitle="Record on your Laptop - get live support, instant recaps and connect your apps to take action"
+      />
 
-      <div className="clarifi-bento" ref={gridRef}>
-        <div className="clarifi-bento-main-col">
-          <article className="clarifi-bento-card clarifi-bento-main" data-reveal>
-            <h3>Ask Clarifi anything</h3>
-            <p>
-              Clarifi searches your meetings, transcripts, and screen context to answer questions
-              and help you create follow-ups, recaps, and next steps.
-            </p>
-            <div className="bento-ask-macbook-visual">
-              <Image
-                src="/bento-ask-clarifi-macbook-v2.jpg"
-                alt="Clarifi overlay on Google Meet during a screen share on Mac"
-                fill
-                className="bento-ask-macbook-img"
-                sizes="(max-width: 768px) 100vw, 720px"
-              />
-            </div>
-          </article>
-
-          <article className="clarifi-bento-card clarifi-bento-live" data-reveal>
-            <h3>Live suggestions while you talk</h3>
-            <p>Real-time transcription plus AI prompts for what to say, ask, or do next.</p>
-            <LiveTranscriptMock />
-          </article>
-        </div>
-
-        <div className="clarifi-bento-side">
-          <RecordMeetingsCard />
-
-          <article className="clarifi-bento-card clarifi-bento-recap" data-reveal>
-            <div className="bento-recap-otter">
-              <div className="bento-recap-otter-header">
-                <h3>Instant recaps you can trust</h3>
-                <p>
-                  Clarifi turns every session into a clear summary with decisions, action items,
-                  and a follow-up draft.
-                </p>
-              </div>
-              <div className="bento-recap-otter-shot">
-                <Image
-                  src="/bento-recap-summary.png"
-                  alt=""
-                  width={1024}
-                  height={1013}
-                  className="bento-recap-summary-img"
-                />
-              </div>
-            </div>
-          </article>
-        </div>
-      </div>
-    </section>
+      <MarketingFeatureGrid>
+        {FEATURES.map((feature) => (
+          <MarketingFeatureCard
+            key={feature.title}
+            variant={feature.variant}
+            title={feature.title}
+            description={feature.description}
+            visual={feature.visual}
+          />
+        ))}
+      </MarketingFeatureGrid>
+    </LandingSection>
   )
 }

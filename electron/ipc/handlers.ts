@@ -32,29 +32,15 @@ import {
   analyzeLiveSession,
   chatWithMeetingContext,
   chatWithStoredAudioSession,
-  generateSalesAnswerAssist,
-  generateSalesSuggestionAssist,
-  generateSalesTermDefine,
-  getCachedSalesDefines,
-  getSalesCallOpeningActions,
-  hasStickySalesAnswer,
-  isSalesAssistInFlight,
+  generateGeneralAnswerAssist,
   generateSessionRecap,
   generateSuggestions,
   inferSpeakerLabels,
   resetSuggestionState,
-  type SalesAssistError,
-  type SalesDefinePayload,
   type SalesPanelBroadcast,
-  type SalesPanelPayload,
   type SessionRecap,
 } from '../llm'
-import {
-  extractAllJargonTerms,
-  isCallOpeningWindow,
-  prospectUtteranceJustCompleted,
-  salesTailNeedsFastAnswer,
-} from '../salesAssistTrigger'
+import { salesTailNeedsFastAnswer } from '../salesAssistTrigger'
 import {
   deleteAudioSession,
   getAudioSessionById,
@@ -127,6 +113,16 @@ import {
   type ChatSession,
 } from '../chatHistory'
 import {
+  clearChatSessionsFromMemory,
+  clearAudioSessionsFromMemory,
+  deleteChatSessionFromMemory,
+  deleteAudioSessionFromMemory,
+  syncAudioSessionToMemory,
+  syncChatSessionToMemory,
+} from '../memory/sessionSync'
+import { handleMemoryIpc } from '../memory/memoryHandlers'
+import { handleProactiveIpc } from '../proactive'
+import {
   loadKeybindPreferences,
   resetKeybind,
   resetKeybindPreferences,
@@ -149,6 +145,15 @@ import {
 } from '../audioPreferences'
 import { fetchDeviceProfile, getDashboardUrl, updateDeviceProfile } from '../deviceAuth'
 import {
+  disconnectGmailAccount,
+  fetchGmailConnectUrl,
+  fetchGmailSearch,
+  fetchGmailSearchForMessage,
+  fetchGmailStatus,
+  getGmailConnectUrl,
+  messageRequestsGmailContext,
+} from '../gmailSync'
+import {
   disconnectHubSpot,
   fetchHubSpotStatus,
   getHubSpotConnectUrl,
@@ -166,14 +171,15 @@ import {
   removeCustomModel,
   setActiveMode,
   setActiveModel,
+  setGeneralKnowledge,
   setProductKnowledge,
+  setWorkKnowledge,
   setShowModelInToolbar,
   toPublicPreferences,
   type ModelProvider,
 } from '../userPreferences'
 
 let sessionTranscriptEntries: TranscriptEntry[] = []
-let suggestionCounter = 0
 let onSystemAudioData: ((buffer: Buffer) => void) | null = null
 
 const SESSION_TRANSCRIPT_MAX = 500
@@ -182,33 +188,16 @@ const MAX_STRING_LENGTH = 50_000
 const HTML_TAG_REGEX = /<[^>]*>/g
 
 const LLM_RATE_LIMIT = { max: 10, windowMs: 60_000 }
-const SALES_ASSIST_RATE_LIMIT = { max: 30, windowMs: 60_000 }
-const SALES_ANSWER_DEBOUNCE_MS = 2_500
-const SALES_ANSWER_FAST_DEBOUNCE_MS = 800
-const SALES_ANSWER_MIN_INTERVAL_MS = 2_000
-const SALES_ANSWER_FAST_MIN_INTERVAL_MS = 1_200
-const SALES_SUGGEST_DEBOUNCE_MS = 1_200
-const SALES_SUGGEST_FAST_DEBOUNCE_MS = 600
-const SALES_SUGGEST_MIN_INTERVAL_MS = 2_000
-const SALES_SUGGEST_FAST_MIN_INTERVAL_MS = 1_200
-const SALES_DEFINE_DEBOUNCE_MS = 1_200
-const SALES_DEFINE_MIN_INTERVAL_MS = 1_500
+const GENERAL_ANSWER_DEBOUNCE_MS = 1_000
+const GENERAL_ANSWER_FAST_DEBOUNCE_MS = 450
+const GENERAL_ANSWER_MIN_INTERVAL_MS = 1_000
+const GENERAL_ANSWER_FAST_MIN_INTERVAL_MS = 700
 
-let lastSalesAnswerRunAt = 0
-let lastSalesSuggestRunAt = 0
-let lastSalesDefineRunAt = 0
-let salesAnswerDirty = false
-let salesSuggestDirty = false
-let salesDefineDirty = false
-let salesAnswerInFlight = false
-let salesSuggestInFlight = false
-let salesDefineInFlight = false
-let salesAnswerDebounceTimer: NodeJS.Timeout | null = null
-let salesSuggestDebounceTimer: NodeJS.Timeout | null = null
-let salesDefineDebounceTimer: NodeJS.Timeout | null = null
-let salesSessionStartedAt: number | null = null
-let salesCallOpeningActive = false
-let stickySalesPanel: SalesPanelBroadcast = {}
+let lastGeneralAnswerRunAt = 0
+let generalAnswerDirty = false
+let generalAnswerInFlight = false
+let generalAnswerDebounceTimer: NodeJS.Timeout | null = null
+let stickyGeneralPanel: SalesPanelBroadcast = {}
 
 type RateLimitBucket = {
   count: number
@@ -375,244 +364,90 @@ async function queryAnthropic(prompt: string, apiKey: string): Promise<unknown> 
   }
 }
 
-function resetSalesAssistScheduler(): void {
-  salesAnswerDirty = false
-  salesSuggestDirty = false
-  salesDefineDirty = false
-  salesSessionStartedAt = null
-  salesCallOpeningActive = false
-  stickySalesPanel = {}
-  for (const timer of [
-    salesAnswerDebounceTimer,
-    salesSuggestDebounceTimer,
-    salesDefineDebounceTimer,
-  ]) {
-    if (timer) clearTimeout(timer)
-  }
-  salesAnswerDebounceTimer = null
-  salesSuggestDebounceTimer = null
-  salesDefineDebounceTimer = null
+function resetGeneralAssistScheduler(): void {
+  generalAnswerDirty = false
+  stickyGeneralPanel = {}
+  if (generalAnswerDebounceTimer) clearTimeout(generalAnswerDebounceTimer)
+  generalAnswerDebounceTimer = null
 }
 
-function broadcastSalesPanelUpdate(patch: Partial<SalesPanelBroadcast>): void {
+function broadcastGeneralPanelUpdate(patch: Partial<SalesPanelBroadcast>): void {
   if (patch.error) {
-    stickySalesPanel = { ...stickySalesPanel, error: patch.error }
+    stickyGeneralPanel = { ...stickyGeneralPanel, error: patch.error }
   } else {
-    stickySalesPanel = {
-      answer: patch.answer !== undefined ? patch.answer : stickySalesPanel.answer,
-      suggestions:
-        patch.suggestions !== undefined ? patch.suggestions : stickySalesPanel.suggestions,
-      opening: patch.opening !== undefined ? patch.opening : stickySalesPanel.opening,
-      error: stickySalesPanel.error,
+    stickyGeneralPanel = {
+      answer: patch.answer !== undefined ? patch.answer : stickyGeneralPanel.answer,
+      error: stickyGeneralPanel.error,
     }
-    if (patch.answer !== undefined || patch.suggestions !== undefined || patch.opening !== undefined) {
-      delete stickySalesPanel.error
+    if (patch.answer !== undefined) {
+      delete stickyGeneralPanel.error
     }
   }
 
   const overlay = getOverlayWindow()
   if (!overlay || overlay.isDestroyed()) return
-  overlay.webContents.send('sales-assist:update', stickySalesPanel)
+  overlay.webContents.send('general-assist:update', stickyGeneralPanel)
 }
 
-function broadcastSalesDefineUpdate(): void {
-  const overlay = getOverlayWindow()
-  if (!overlay || overlay.isDestroyed()) return
-  const payload: SalesDefinePayload = { defines: getCachedSalesDefines() }
-  overlay.webContents.send('sales-define:update', payload)
-}
-
-function maybeUpdateCallOpening(): void {
-  if (!salesCallOpeningActive) return
-  const lines = getSessionTranscript()
-  const showOpening = isCallOpeningWindow(
-    lines.length,
-    hasStickySalesAnswer(),
-    salesSessionStartedAt,
-  )
-  if (!showOpening) {
-    salesCallOpeningActive = false
-    broadcastSalesPanelUpdate({ opening: null })
-    return
-  }
-  broadcastSalesPanelUpdate({ opening: getSalesCallOpeningActions() })
-}
-
-async function flushSalesAnswerUpdate(): Promise<void> {
-  if (getActiveMode().id !== 'sales') return
-  if (!salesAnswerDirty) return
+async function flushGeneralAnswerUpdate(): Promise<void> {
+  if (!generalAnswerDirty) return
 
   const lines = getSessionTranscript()
   const fast = salesTailNeedsFastAnswer(lines)
-  const debounceMs = fast ? SALES_ANSWER_FAST_DEBOUNCE_MS : SALES_ANSWER_DEBOUNCE_MS
-  const minInterval = fast ? SALES_ANSWER_FAST_MIN_INTERVAL_MS : SALES_ANSWER_MIN_INTERVAL_MS
+  const debounceMs = fast ? GENERAL_ANSWER_FAST_DEBOUNCE_MS : GENERAL_ANSWER_DEBOUNCE_MS
+  const minInterval = fast ? GENERAL_ANSWER_FAST_MIN_INTERVAL_MS : GENERAL_ANSWER_MIN_INTERVAL_MS
   const now = Date.now()
 
-  if (salesAnswerInFlight) {
-    salesAnswerDebounceTimer = setTimeout(() => void flushSalesAnswerUpdate(), debounceMs)
+  if (generalAnswerInFlight) {
+    generalAnswerDebounceTimer = setTimeout(() => void flushGeneralAnswerUpdate(), debounceMs)
     return
   }
-  if (now - lastSalesAnswerRunAt < minInterval) {
-    salesAnswerDebounceTimer = setTimeout(
-      () => void flushSalesAnswerUpdate(),
-      minInterval - (now - lastSalesAnswerRunAt),
+  if (now - lastGeneralAnswerRunAt < minInterval) {
+    generalAnswerDebounceTimer = setTimeout(
+      () => void flushGeneralAnswerUpdate(),
+      minInterval - (now - lastGeneralAnswerRunAt),
     )
     return
   }
 
-  salesAnswerDirty = false
-  salesAnswerInFlight = true
-  lastSalesAnswerRunAt = now
+  generalAnswerDirty = false
+  generalAnswerInFlight = true
+  lastGeneralAnswerRunAt = now
 
   try {
-    const result = await generateSalesAnswerAssist(lines)
-    if (result === null && isSalesAssistInFlight()) {
-      salesAnswerDirty = true
-      return
-    }
+    const result = await generateGeneralAnswerAssist(lines)
     if (result?.error) {
-      broadcastSalesPanelUpdate({ error: result.error })
+      broadcastGeneralPanelUpdate({ error: result.error })
       return
     }
     if (result?.answer) {
-      salesCallOpeningActive = false
-      broadcastSalesPanelUpdate({ answer: result.answer, opening: null })
+      broadcastGeneralPanelUpdate({ answer: result.answer })
     }
   } finally {
-    salesAnswerInFlight = false
-    maybeUpdateCallOpening()
-    if (salesAnswerDirty) scheduleSalesAnswerUpdate()
+    generalAnswerInFlight = false
+    if (generalAnswerDirty) scheduleGeneralAnswerUpdate()
   }
 }
 
-async function flushSalesSuggestUpdate(): Promise<void> {
-  if (getActiveMode().id !== 'sales') return
-  if (!salesSuggestDirty) return
-
+function scheduleGeneralAnswerUpdate(): void {
+  generalAnswerDirty = true
   const lines = getSessionTranscript()
-  const fast = prospectUtteranceJustCompleted(lines.slice(-30))
-  const debounceMs = fast ? SALES_SUGGEST_FAST_DEBOUNCE_MS : SALES_SUGGEST_DEBOUNCE_MS
-  const minInterval = fast ? SALES_SUGGEST_FAST_MIN_INTERVAL_MS : SALES_SUGGEST_MIN_INTERVAL_MS
-  const now = Date.now()
-
-  if (salesSuggestInFlight) {
-    salesSuggestDebounceTimer = setTimeout(() => void flushSalesSuggestUpdate(), debounceMs)
-    return
-  }
-  if (now - lastSalesSuggestRunAt < minInterval) {
-    salesSuggestDebounceTimer = setTimeout(
-      () => void flushSalesSuggestUpdate(),
-      minInterval - (now - lastSalesSuggestRunAt),
-    )
-    return
-  }
-
-  salesSuggestDirty = false
-  salesSuggestInFlight = true
-  lastSalesSuggestRunAt = now
-
-  try {
-    const result = await generateSalesSuggestionAssist(getSessionTranscript())
-    if (result === null && isSalesAssistInFlight()) {
-      salesSuggestDirty = true
-      return
-    }
-    if (result?.suggestions?.length) {
-      broadcastSalesPanelUpdate({ suggestions: result.suggestions })
-    }
-  } finally {
-    salesSuggestInFlight = false
-    if (salesSuggestDirty) scheduleSalesSuggestUpdate()
-  }
+  const debounceMs = salesTailNeedsFastAnswer(lines)
+    ? GENERAL_ANSWER_FAST_DEBOUNCE_MS
+    : GENERAL_ANSWER_DEBOUNCE_MS
+  if (generalAnswerDebounceTimer) clearTimeout(generalAnswerDebounceTimer)
+  generalAnswerDebounceTimer = setTimeout(() => void flushGeneralAnswerUpdate(), debounceMs)
 }
 
-async function flushSalesDefineUpdate(): Promise<void> {
-  if (getActiveMode().id !== 'sales') return
-  if (!salesDefineDirty) return
-
-  const now = Date.now()
-  if (salesDefineInFlight) {
-    salesDefineDebounceTimer = setTimeout(() => void flushSalesDefineUpdate(), SALES_DEFINE_DEBOUNCE_MS)
-    return
-  }
-  if (now - lastSalesDefineRunAt < SALES_DEFINE_MIN_INTERVAL_MS) {
-    salesDefineDebounceTimer = setTimeout(
-      () => void flushSalesDefineUpdate(),
-      SALES_DEFINE_MIN_INTERVAL_MS - (now - lastSalesDefineRunAt),
-    )
-    return
-  }
-
-  salesDefineDirty = false
-  salesDefineInFlight = true
-  lastSalesDefineRunAt = now
-
-  try {
-    const lines = getSessionTranscript()
-    const tailLines = lines.slice(-30)
-    const terms = extractAllJargonTerms(tailLines)
-    const cached = new Set(getCachedSalesDefines().map((entry) => entry.term.toLowerCase()))
-    const pending = terms.filter((term) => !cached.has(term.toLowerCase())).slice(-1)
-
-    for (const term of pending) {
-      const entry = await generateSalesTermDefine(term, lines)
-      if (entry) broadcastSalesDefineUpdate()
-    }
-  } finally {
-    salesDefineInFlight = false
-    if (salesDefineDirty) scheduleSalesDefineUpdate()
-  }
-}
-
-function scheduleSalesAnswerUpdate(): void {
-  if (getActiveMode().id !== 'sales') return
-  salesAnswerDirty = true
-  const lines = getSessionTranscript()
-  const debounceMs = salesTailNeedsFastAnswer(lines.slice(-30))
-    ? SALES_ANSWER_FAST_DEBOUNCE_MS
-    : SALES_ANSWER_DEBOUNCE_MS
-  if (salesAnswerDebounceTimer) clearTimeout(salesAnswerDebounceTimer)
-  salesAnswerDebounceTimer = setTimeout(() => void flushSalesAnswerUpdate(), debounceMs)
-}
-
-function scheduleSalesSuggestUpdate(): void {
-  if (getActiveMode().id !== 'sales') return
-  salesSuggestDirty = true
-  const lines = getSessionTranscript()
-  const debounceMs = prospectUtteranceJustCompleted(lines.slice(-30))
-    ? SALES_SUGGEST_FAST_DEBOUNCE_MS
-    : SALES_SUGGEST_DEBOUNCE_MS
-  if (salesSuggestDebounceTimer) clearTimeout(salesSuggestDebounceTimer)
-  salesSuggestDebounceTimer = setTimeout(() => void flushSalesSuggestUpdate(), debounceMs)
-}
-
-function scheduleSalesDefineUpdate(): void {
-  if (getActiveMode().id !== 'sales') return
-  salesDefineDirty = true
-  if (salesDefineDebounceTimer) clearTimeout(salesDefineDebounceTimer)
-  salesDefineDebounceTimer = setTimeout(() => void flushSalesDefineUpdate(), SALES_DEFINE_DEBOUNCE_MS)
-}
-
-function scheduleSalesPanelUpdates(): void {
-  maybeUpdateCallOpening()
-  scheduleSalesAnswerUpdate()
-  scheduleSalesSuggestUpdate()
-  scheduleSalesDefineUpdate()
+function scheduleGeneralPanelUpdates(): void {
+  scheduleGeneralAnswerUpdate()
 }
 
 async function updateLiveAssistForOverlay(lines: string[]): Promise<void> {
   const overlay = getOverlayWindow()
   if (!overlay || overlay.isDestroyed()) return
 
-  const isSales = getActiveMode().id === 'sales'
-
-  if (isSales) {
-    scheduleSalesPanelUpdates()
-    return
-  }
-
-  suggestionCounter += 1
-  if (suggestionCounter % 2 !== 0) return
+  scheduleGeneralPanelUpdates()
 
   const suggestions = await generateSuggestions(lines)
   if (suggestions.length > 0) {
@@ -741,6 +576,7 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
         throw new Error('invalid session')
       }
       const sessions = saveChatSession(session)
+      syncChatSessionToMemory(session)
       return { sessions }
     },
   )
@@ -754,12 +590,14 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
         throw new Error('id is required')
       }
       const sessions = deleteChatSession(payload.id)
+      deleteChatSessionFromMemory(payload.id)
       return { sessions }
     },
   )
 
   ipcMain.handle('chat:history-clear', () => {
     const sessions = clearChatSessions()
+    clearChatSessionsFromMemory()
     return { sessions }
   })
 
@@ -775,6 +613,8 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
         throw new Error('title is required')
       }
       const sessions = renameChatSession(payload.id, payload.title)
+      const updated = sessions.find((s) => s.id === payload.id)
+      if (updated) syncChatSessionToMemory(updated)
       return { sessions }
     },
   )
@@ -788,6 +628,8 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
         throw new Error('id is required')
       }
       const sessions = archiveChatSession(payload.id, Boolean(payload.archived))
+      const updated = sessions.find((s) => s.id === payload.id)
+      if (updated) syncChatSessionToMemory(updated)
       return { sessions }
     },
   )
@@ -829,6 +671,7 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
       throw new Error('invalid session')
     }
     const sessions = saveAudioSession(session)
+    syncAudioSessionToMemory(session)
     return { sessions }
   })
 
@@ -841,6 +684,7 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
         throw new Error('id is required')
       }
       const sessions = deleteAudioSession(payload.id)
+      deleteAudioSessionFromMemory(payload.id)
       return { sessions }
     },
   )
@@ -857,6 +701,8 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
         throw new Error('title is required')
       }
       const sessions = renameAudioSession(payload.id, payload.title)
+      const updated = sessions.find((s) => s.id === payload.id)
+      if (updated) syncAudioSessionToMemory(updated)
       return { sessions }
     },
   )
@@ -873,6 +719,8 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
         throw new Error('messages is required')
       }
       const sessions = updateAudioSessionChat(payload.id, payload.messages)
+      const updated = sessions.find((s) => s.id === payload.id)
+      if (updated) syncAudioSessionToMemory(updated)
       return { sessions }
     },
   )
@@ -895,6 +743,8 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
         }
       }
       const sessions = updateAudioSessionSpeakerLabels(payload.id, speakerLabels)
+      const updated = sessions.find((s) => s.id === payload.id)
+      if (updated) syncAudioSessionToMemory(updated)
       return { sessions }
     },
   )
@@ -1025,25 +875,7 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
   registerValidatedHandler(
     'llm:session-analyze',
     { rateLimitKey: 'llm:session-analyze', rateLimit: LLM_RATE_LIMIT },
-    async () => {
-      if (getActiveMode().id === 'sales') return null
-      return analyzeLiveSession(getSessionTranscript())
-    },
-  )
-
-  registerValidatedHandler(
-    'llm:sales-live-assist',
-    { rateLimitKey: 'llm:sales-live-assist', rateLimit: SALES_ASSIST_RATE_LIMIT },
-    async () => {
-      const lines = getSessionTranscript()
-      const answerResult = await generateSalesAnswerAssist(lines)
-      if (answerResult?.error) return answerResult.error
-      return {
-        answer: answerResult?.answer ?? stickySalesPanel.answer ?? null,
-        suggestions: stickySalesPanel.suggestions ?? [],
-        opening: salesCallOpeningActive ? getSalesCallOpeningActions() : null,
-      } satisfies SalesPanelPayload
-    },
+    async () => analyzeLiveSession(getSessionTranscript()),
   )
 
   registerValidatedHandler(
@@ -1056,9 +888,8 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
 
   ipcMain.handle('audio:start', async () => {
     sessionTranscriptEntries = []
-    suggestionCounter = 0
     resetSuggestionState()
-    resetSalesAssistScheduler()
+    resetGeneralAssistScheduler()
     clearTranscriptionQueue()
 
     configureTranscriptionQueue({
@@ -1072,13 +903,7 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
     if (overlay && !overlay.isDestroyed()) {
       overlay.webContents.send('transcript:update', { recent: [], full: [] })
       overlay.webContents.send('suggestions:update', [])
-      if (getActiveMode().id === 'sales') {
-        salesSessionStartedAt = Date.now()
-        salesCallOpeningActive = true
-        stickySalesPanel = { opening: getSalesCallOpeningActions() }
-        overlay.webContents.send('sales-assist:update', stickySalesPanel)
-        overlay.webContents.send('sales-define:update', { defines: [] })
-      }
+      overlay.webContents.send('general-assist:update', { answer: null })
     }
 
     startRecording(() => {
@@ -1091,7 +916,7 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
         const hadEnergy = wavHasSpeechEnergy(wavBuffer)
         noteSystemAudioEnergy(rms, hadEnergy)
         const base64 = wavBuffer.toString('base64')
-        enqueueAudioChunk(base64, 'system')
+        enqueueAudioChunk(base64, 'system', rms)
       }
       if (startSystemAudio(onSystemAudioData)) {
         markSystemCaptureActive()
@@ -1272,12 +1097,38 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
         }
       }
 
-      return chatWithMeetingContext({
+      let emailContext: string | undefined
+      let gmailResults: Awaited<ReturnType<typeof fetchGmailSearchForMessage>> | null = null
+      let gmailNotConnected = false
+
+      if (messageRequestsGmailContext(payload.message)) {
+        const gmailStatus = await fetchGmailStatus()
+        if (!gmailStatus.connected) {
+          gmailNotConnected = true
+        } else {
+          gmailResults = await fetchGmailSearchForMessage(payload.message)
+          emailContext = gmailResults?.context ?? undefined
+        }
+      }
+
+      const chatResult = await chatWithMeetingContext({
         message: payload.message,
         transcriptLines: lines,
         useScreenContext,
         screenImage,
+        emailContext,
       })
+
+      if ('reply' in chatResult) {
+        return {
+          reply: chatResult.reply,
+          gmailResults: gmailResults?.messages ?? undefined,
+          gmailQuery: gmailResults?.query,
+          gmailNotConnected: gmailNotConnected || undefined,
+        }
+      }
+
+      return chatResult
     },
   )
 
@@ -1473,6 +1324,30 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
   )
 
   registerValidatedHandler(
+    'prefs:set-work-knowledge',
+    { requiresInput: true },
+    (data) => {
+      const payload = data as { knowledge?: string }
+      if (typeof payload.knowledge !== 'string') {
+        throw new Error('knowledge is required')
+      }
+      return setWorkKnowledge(payload.knowledge)
+    },
+  )
+
+  registerValidatedHandler(
+    'prefs:set-general-knowledge',
+    { requiresInput: true },
+    (data) => {
+      const payload = data as { knowledge?: string }
+      if (typeof payload.knowledge !== 'string') {
+        throw new Error('knowledge is required')
+      }
+      return setGeneralKnowledge(payload.knowledge)
+    },
+  )
+
+  registerValidatedHandler(
     'prefs:add-mode',
     { requiresInput: true },
     (data) => {
@@ -1614,6 +1489,50 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
     const ok = await disconnectHubSpot()
     return { ok, status: await fetchHubSpotStatus() }
   })
+
+  registerValidatedHandler('settings:gmail-status', {}, async () => {
+    return fetchGmailStatus()
+  })
+
+  registerValidatedHandler('settings:gmail-open-connect', {}, async () => {
+    const url = (await fetchGmailConnectUrl()) ?? getGmailConnectUrl()
+    await shell.openExternal(url)
+    return { ok: true, url }
+  })
+
+  registerValidatedHandler('settings:gmail-disconnect', {}, async () => {
+    const ok = await disconnectGmailAccount()
+    return { ok, status: await fetchGmailStatus() }
+  })
+
+  registerValidatedHandler(
+    'gmail:search',
+    { requiresInput: true },
+    async (data) => {
+      const payload = data as { message?: string; query?: string; maxResults?: number }
+      const status = await fetchGmailStatus()
+      if (!status.connected) {
+        return { connected: false, configured: status.configured, messages: [] }
+      }
+      const result = await fetchGmailSearch({
+        message: payload.message,
+        query: payload.query,
+        maxResults: payload.maxResults,
+      })
+      return result ?? { connected: true, messages: [], query: payload.query ?? '' }
+    },
+  )
+
+  registerValidatedHandler(
+    'gmail:open-url',
+    { requiresInput: true },
+    async (data) => {
+      const payload = data as { url?: string }
+      if (!payload.url?.trim()) throw new Error('url is required')
+      await shell.openExternal(payload.url.trim())
+      return { ok: true }
+    },
+  )
 
   registerValidatedHandler(
     'hubspot:sync-session',
@@ -1758,6 +1677,51 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
     registerKeybinds(saved)
     return toPublicKeybindPreferences()
   })
+
+  const MEMORY_IPC_CHANNELS = [
+    'memory:settings-get',
+    'memory:settings-update',
+    'memory:profile-get',
+    'memory:profile-update',
+    'memory:facts-list',
+    'memory:fact-upsert',
+    'memory:fact-delete',
+    'memory:people-list',
+    'memory:people-upsert',
+    'memory:people-update',
+    'memory:people-delete',
+    'memory:pre-session-context',
+    'memory:relationship-cards',
+    'memory:action-items-list',
+    'memory:action-item-complete',
+    'memory:briefing-get',
+    'memory:briefing-generate',
+    'memory:briefing-dismiss',
+    'memory:briefing-pin',
+    'memory:calendar-status',
+    'memory:calendar-connect',
+    'memory:calendar-disconnect',
+    'memory:calendar-events-today',
+    'memory:feedback-record',
+    'memory:learning-latest',
+    'memory:export',
+    'memory:clear-all',
+    'memory:apply-retention',
+  ] as const
+
+  for (const channel of MEMORY_IPC_CHANNELS) {
+    ipcMain.handle(channel, async (_event, data) => {
+      const result = handleMemoryIpc(channel, data)
+      return result instanceof Promise ? await result : result
+    })
+  }
+
+  for (const channel of PROACTIVE_IPC_CHANNELS) {
+    ipcMain.handle(channel, async (_event, data) => {
+      const result = await handleProactiveIpc(channel, data)
+      return result
+    })
+  }
 
   handlersRegistered = true
 }

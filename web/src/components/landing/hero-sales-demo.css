@@ -106,7 +106,7 @@
   left: 50%;
   transform: translateX(-50%);
   z-index: 5;
-  width: min(88%, 300px);
+  width: min(88%, 360px);
   pointer-events: none;
 }
 
@@ -115,7 +115,7 @@
 }
 
 .hero-desktop-clarifi .od-root.size-sm .od-stack {
-  transform: scale(0.48);
+  transform: scale(0.58);
   transform-origin: top center;
 }
 

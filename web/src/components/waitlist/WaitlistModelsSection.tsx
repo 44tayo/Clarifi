@@ -45,7 +45,11 @@ export function WaitlistModelsSection() {
   const moveDemoRef = useRef<OverlayDemoHandle>(null)
 
   return (
-    <section className="landing-section landing-section-tint waitlist-features-section" data-reveal>
+    <section
+      id="features"
+      className="landing-section landing-section-tint waitlist-features-section"
+      data-reveal
+    >
       <div className="landing-section-header centered" data-reveal>
         <h2>View some of our features</h2>
         <p>Our collection of Clarifi features for your convenience</p>

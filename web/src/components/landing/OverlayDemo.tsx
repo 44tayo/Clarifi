@@ -51,7 +51,7 @@ export type OverlayDemoProps = {
 const DEMO_TRANSCRIPT = [
   'Them · Can you walk us through the rollout timeline?',
   'You · We can start with a pilot in Q1…',
-  'Them · What about integration with our CRM?',
+  'Them · What are the main action items from today?',
 ]
 
 const DEMO_SUGGESTIONS: Suggestion[] = [
@@ -65,7 +65,7 @@ const DEMO_SUGGESTIONS: Suggestion[] = [
   },
   {
     type: 'action',
-    text: 'Offer to send a one-pager after the call with timeline + pricing.',
+    text: 'Offer to send a recap after the call with timeline and next steps.',
   },
 ]
 

@@ -38,6 +38,23 @@ const useDevShell = isDev && process.env.CLARIFI_DEV_SHELL === '1'
 
 let mainWindow: BrowserWindow | null = null
 
+async function handleGmailConnectedDeepLink(): Promise<void> {
+  console.log('[gmail] OAuth complete — refreshing connection status')
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send('gmail:connection-update', { connected: true })
+    }
+  }
+}
+
+async function handleProtocolUrl(url: string): Promise<void> {
+  if (url.includes('gmail-connected') || url.includes('integration/gmail')) {
+    await handleGmailConnectedDeepLink()
+    return
+  }
+  await handleAuthDeepLink(url)
+}
+
 async function handleAuthDeepLink(url: string): Promise<void> {
   const result = await exchangeAuthToken(url)
   if (result.ok) {
@@ -65,7 +82,7 @@ if (process.platform === 'darwin') {
     event.preventDefault()
     if (url.startsWith(`${PROTOCOL}://`)) {
       if (app.isReady()) {
-        void handleAuthDeepLink(url)
+        void handleProtocolUrl(url)
       } else {
         queueAuthUrl(url)
       }
@@ -106,7 +123,7 @@ if (!gotLock) {
     app.on('second-instance', (_event, argv) => {
       logStartup('H3', 'second-instance-received')
       const authUrl = argv.find((arg) => arg.startsWith(`${PROTOCOL}://`))
-      if (authUrl) void handleAuthDeepLink(authUrl)
+      if (authUrl) void handleProtocolUrl(authUrl)
       void showClarifiUI()
     })
   }
@@ -154,6 +171,14 @@ async function initializeStorage(): Promise<void> {
   } catch (err) {
     console.error('Storage init failed:', err)
   }
+
+  try {
+    const { initializeMemory } = await import('./memory')
+    initializeMemory()
+    console.log('[memory] database ready')
+  } catch (err) {
+    console.error('Memory database init failed:', err)
+  }
 }
 
 async function launchClarifi(): Promise<void> {
@@ -180,11 +205,11 @@ app.whenReady().then(async () => {
     registerProtocolClient()
 
     const pending = takePendingAuthUrl()
-    if (pending) await handleAuthDeepLink(pending)
+    if (pending) await handleProtocolUrl(pending)
 
     if (!isDev && process.argv.length > 1) {
       const authArg = process.argv.find((arg) => arg.startsWith(`${PROTOCOL}://`))
-      if (authArg) await handleAuthDeepLink(authArg)
+      if (authArg) await handleProtocolUrl(authArg)
     }
 
     try {
@@ -195,6 +220,8 @@ app.whenReady().then(async () => {
 
     await initializeStorage()
     registerHandlers()
+    const { initializeProactiveEngine } = await import('./proactive')
+    initializeProactiveEngine()
     await launchClarifi()
     registerKeybinds()
     logStartup('H4', 'launch-complete', {
@@ -221,6 +248,7 @@ app.whenReady().then(async () => {
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
   stopOverlayFollow()
+  void import('./proactive').then(({ stopProactiveEngine }) => stopProactiveEngine())
 })
 
 app.on('window-all-closed', () => {

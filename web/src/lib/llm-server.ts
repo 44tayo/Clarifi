@@ -21,6 +21,7 @@ export interface ChatRequest {
   transcriptLines: string[]
   useScreenContext: boolean
   screenImage?: ScreenContextImage
+  emailContext?: string
 }
 
 export type ChatResult = { reply: string } | { error: string }
@@ -37,7 +38,7 @@ function getAnthropicKey(): string | null {
 }
 
 export async function chatWithMeetingContext(request: ChatRequest): Promise<ChatResult> {
-  const { message, transcriptLines, useScreenContext, screenImage } = request
+  const { message, transcriptLines, useScreenContext, screenImage, emailContext } = request
 
   if (useScreenContext && !screenImage) {
     return { error: 'capture_failed' }
@@ -56,9 +57,13 @@ export async function chatWithMeetingContext(request: ChatRequest): Promise<Chat
     ? '\n\nReply concisely using screen context reply style. No backticks. No em-dashes. Max 6 visible details bullets. Max 6 tab names. One summary sentence with **bold** key names only. Total response under 1200 characters for simple screen questions.'
     : ''
 
+  const emailBlock = emailContext?.trim()
+    ? `\n\nConnected Gmail context:\n${emailContext.trim()}`
+    : ''
+
   const userText = screenImage
-    ? `Live meeting transcript:\n${transcript}\n\nUser typed question:\n${message}${screenStyleHint}`
-    : `Live meeting transcript:\n${transcript}\n\nUser question:\n${message}`
+    ? `Live meeting transcript:\n${transcript}\n\nUser typed question:\n${message}${emailBlock}${screenStyleHint}`
+    : `Live meeting transcript:\n${transcript}\n\nUser question:\n${message}${emailBlock}`
 
   const systemPrompt = screenImage
     ? CLARIFI_ENTERPRISE_SYSTEM_PROMPT

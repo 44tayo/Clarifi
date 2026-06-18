@@ -59,7 +59,7 @@ export function PricingPage() {
         <section className="pricing-hero" data-reveal>
           <h1 className="pricing-hero-title">Try Clarifi free for 7 days.</h1>
           <p className="pricing-hero-sub">
-            Pro for individuals. Pro+ for teams. Unlimited AI on every sales call — cancel anytime.
+            Pro for individuals. Pro+ for teams. Unlimited AI on every meeting — cancel anytime.
           </p>
 
           <div className="pricing-toggles">

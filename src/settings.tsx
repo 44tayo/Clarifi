@@ -4,6 +4,7 @@ import {
   sortAnthropicModels,
 } from './lib/anthropic-models'
 import { acceleratorToKeyLabels, keyboardEventToAccelerator } from './lib/keybindDisplay'
+import { ProactiveSettingsPanel } from './components/ProactiveSettingsPanel'
 import './settings.css'
 
 type ModelProvider = 'anthropic' | 'openai' | 'gemini' | 'groq' | 'custom'
@@ -32,6 +33,8 @@ type PublicPreferences = {
   modes: ModeConfig[]
   showModelInToolbar: boolean
   productKnowledge: string
+  workKnowledge: string
+  generalKnowledge: string
 }
 
 type SettingsTab =
@@ -43,6 +46,7 @@ type SettingsTab =
   | 'audio'
   | 'audio_sessions'
   | 'history'
+  | 'productivity'
 
 type StoredAudioSession = {
   id: string
@@ -201,6 +205,7 @@ const SETTINGS_TABS: SettingsTab[] = [
   'audio',
   'audio_sessions',
   'history',
+  'productivity',
 ]
 
 const NAV_ITEMS: { id: SettingsTab; label: string; profile?: boolean }[] = [
@@ -212,6 +217,7 @@ const NAV_ITEMS: { id: SettingsTab; label: string; profile?: boolean }[] = [
   { id: 'audio', label: 'Audio' },
   { id: 'audio_sessions', label: 'Audio Sessions' },
   { id: 'history', label: 'History' },
+  { id: 'productivity', label: 'Productivity' },
 ]
 
 function formatHistoryTime(ts: number): string {
@@ -357,28 +363,20 @@ export default function SettingsApp() {
   const [keybindAccelerators, setKeybindAccelerators] = useState<KeybindPreferences | null>(null)
   const [recordingKeybindId, setRecordingKeybindId] = useState<KeybindActionId | null>(null)
   const [keybindError, setKeybindError] = useState('')
-  const [productKnowledgeDraft, setProductKnowledgeDraft] = useState('')
-  const [productKnowledgeSaving, setProductKnowledgeSaving] = useState(false)
-  const [productKnowledgeSaved, setProductKnowledgeSaved] = useState(false)
-  const [hubspotStatus, setHubspotStatus] = useState<{
-    connected: boolean
-    configured: boolean
-    autoSyncEnabled: boolean
-    defaultContactEmail: string | null
-    defaultDealId: string | null
-    hubId: number | null
-  } | null>(null)
-  const [hubspotContactEmail, setHubspotContactEmail] = useState('')
-  const [hubspotAutoSync, setHubspotAutoSync] = useState(true)
-  const [hubspotSaving, setHubspotSaving] = useState(false)
-  const [hubspotMessage, setHubspotMessage] = useState<string | null>(null)
+  const [workKnowledgeDraft, setWorkKnowledgeDraft] = useState('')
+  const [workKnowledgeSaving, setWorkKnowledgeSaving] = useState(false)
+  const [workKnowledgeSaved, setWorkKnowledgeSaved] = useState(false)
+  const [generalKnowledgeDraft, setGeneralKnowledgeDraft] = useState('')
+  const [generalKnowledgeSaving, setGeneralKnowledgeSaving] = useState(false)
+  const [generalKnowledgeSaved, setGeneralKnowledgeSaved] = useState(false)
 
   const loadPrefs = useCallback(async () => {
     setPrefsLoading(true)
     try {
       const data = (await window.electronAPI.invoke('prefs:load')) as PublicPreferences
       setPrefs(data)
-      setProductKnowledgeDraft(data.productKnowledge ?? '')
+      setWorkKnowledgeDraft(data.workKnowledge ?? '')
+      setGeneralKnowledgeDraft(data.generalKnowledge ?? '')
     } finally {
       setPrefsLoading(false)
     }
@@ -389,20 +387,6 @@ export default function SettingsApp() {
     setProfile(data)
     setDraftFirstName(data.firstName ?? '')
     setDraftLastName(data.lastName ?? '')
-  }, [])
-
-  const loadHubspot = useCallback(async () => {
-    const data = (await window.electronAPI.invoke('settings:hubspot-status')) as {
-      connected: boolean
-      configured: boolean
-      autoSyncEnabled: boolean
-      defaultContactEmail: string | null
-      defaultDealId: string | null
-      hubId: number | null
-    }
-    setHubspotStatus(data)
-    setHubspotContactEmail(data.defaultContactEmail ?? '')
-    setHubspotAutoSync(data.autoSyncEnabled)
   }, [])
 
   const loadPermissions = useCallback(async () => {
@@ -509,26 +493,10 @@ export default function SettingsApp() {
     window.electronAPI.on('prefs:changed', (next) => {
       const data = next as PublicPreferences
       setPrefs(data)
-      setProductKnowledgeDraft(data.productKnowledge ?? '')
+      setWorkKnowledgeDraft(data.workKnowledge ?? '')
+      setGeneralKnowledgeDraft(data.generalKnowledge ?? '')
     })
   }, [loadPrefs, loadProfile, loadPermissions, loadAudioPrefs, loadChatHistory, loadAudioSessions, loadKeybindPrefs, applyKeybindPrefs])
-
-  useEffect(() => {
-    if (tab === 'integrations') {
-      void loadHubspot()
-    }
-  }, [tab, loadHubspot])
-
-  useEffect(() => {
-    if (tab !== 'integrations') return
-
-    const onFocus = () => {
-      void loadHubspot()
-    }
-
-    window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
-  }, [tab, loadHubspot])
 
   useEffect(() => {
     if (!recordingKeybindId) return
@@ -606,23 +574,40 @@ export default function SettingsApp() {
     setPrefs(data)
   }
 
-  const saveProductKnowledge = async () => {
-    setProductKnowledgeSaving(true)
-    setProductKnowledgeSaved(false)
+  const saveWorkKnowledge = async () => {
+    setWorkKnowledgeSaving(true)
+    setWorkKnowledgeSaved(false)
     try {
-      const data = (await window.electronAPI.invoke('prefs:set-product-knowledge', {
-        knowledge: productKnowledgeDraft,
+      const data = (await window.electronAPI.invoke('prefs:set-work-knowledge', {
+        knowledge: workKnowledgeDraft,
       })) as PublicPreferences
       setPrefs(data)
-      setProductKnowledgeDraft(data.productKnowledge ?? '')
-      setProductKnowledgeSaved(true)
-      window.setTimeout(() => setProductKnowledgeSaved(false), 2000)
+      setWorkKnowledgeDraft(data.workKnowledge ?? '')
+      setGeneralKnowledgeDraft(data.generalKnowledge ?? '')
+      setWorkKnowledgeSaved(true)
+      window.setTimeout(() => setWorkKnowledgeSaved(false), 2000)
     } finally {
-      setProductKnowledgeSaving(false)
+      setWorkKnowledgeSaving(false)
     }
   }
 
-  const uploadProductKnowledge = () => {
+  const saveGeneralKnowledge = async () => {
+    setGeneralKnowledgeSaving(true)
+    setGeneralKnowledgeSaved(false)
+    try {
+      const data = (await window.electronAPI.invoke('prefs:set-general-knowledge', {
+        knowledge: generalKnowledgeDraft,
+      })) as PublicPreferences
+      setPrefs(data)
+      setGeneralKnowledgeDraft(data.generalKnowledge ?? '')
+      setGeneralKnowledgeSaved(true)
+      window.setTimeout(() => setGeneralKnowledgeSaved(false), 2000)
+    } finally {
+      setGeneralKnowledgeSaving(false)
+    }
+  }
+
+  const uploadWorkKnowledge = () => {
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = '.txt,.md,.csv,text/plain,text/markdown'
@@ -631,7 +616,26 @@ export default function SettingsApp() {
       if (!file) return
       if (file.size > 500 * 1024) return
       void file.text().then((text) => {
-        setProductKnowledgeDraft((prev) => {
+        setWorkKnowledgeDraft((prev) => {
+          const trimmed = text.trim()
+          if (!trimmed) return prev
+          return prev.trim() ? `${prev.trim()}\n\n${trimmed}` : trimmed
+        })
+      })
+    }
+    input.click()
+  }
+
+  const uploadGeneralKnowledge = () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.txt,.md,.csv,text/plain,text/markdown'
+    input.onchange = () => {
+      const file = input.files?.[0]
+      if (!file) return
+      if (file.size > 500 * 1024) return
+      void file.text().then((text) => {
+        setGeneralKnowledgeDraft((prev) => {
           const trimmed = text.trim()
           if (!trimmed) return prev
           return prev.trim() ? `${prev.trim()}\n\n${trimmed}` : trimmed
@@ -673,53 +677,6 @@ export default function SettingsApp() {
 
   const openConnect = () => void window.electronAPI.invoke('auth:open-connect')
 
-  const openHubSpotConnect = () => void window.electronAPI.invoke('settings:hubspot-open-connect')
-
-  const saveHubSpotSettings = async () => {
-    setHubspotSaving(true)
-    setHubspotMessage(null)
-    try {
-      const data = (await window.electronAPI.invoke('settings:hubspot-update', {
-        autoSyncEnabled: hubspotAutoSync,
-        defaultContactEmail: hubspotContactEmail.trim() || null,
-      })) as {
-        connected: boolean
-        autoSyncEnabled: boolean
-        defaultContactEmail: string | null
-      }
-      setHubspotStatus((prev) => (prev ? { ...prev, ...data } : prev))
-      setHubspotMessage('HubSpot settings saved')
-    } catch {
-      setHubspotMessage('Could not save HubSpot settings')
-    } finally {
-      setHubspotSaving(false)
-    }
-  }
-
-  const disconnectHubSpot = async () => {
-    setHubspotSaving(true)
-    setHubspotMessage(null)
-    try {
-      const result = (await window.electronAPI.invoke('settings:hubspot-disconnect')) as {
-        ok?: boolean
-        status?: {
-          connected: boolean
-          autoSyncEnabled: boolean
-          defaultContactEmail: string | null
-        }
-      }
-      if (result.status) {
-        setHubspotStatus((prev) => (prev ? { ...prev, ...result.status, connected: false } : prev))
-        setHubspotContactEmail('')
-        setHubspotAutoSync(true)
-      }
-      setHubspotMessage('HubSpot disconnected')
-    } catch {
-      setHubspotMessage('Could not disconnect HubSpot')
-    } finally {
-      setHubspotSaving(false)
-    }
-  }
   const openBilling = () => void window.electronAPI.invoke('onboarding:open-billing')
   const openDashboard = () => void window.electronAPI.invoke('settings:open-dashboard')
 
@@ -1441,36 +1398,76 @@ export default function SettingsApp() {
                 ))}
 
                 <div className="settings-card" style={{ marginTop: 24 }}>
-                  <div className="settings-card-title">Product knowledge</div>
+                  <div className="settings-card-title">General context</div>
                   <p className="settings-card-desc">
-                    Paste or upload battlecards, pricing, FAQs, and product docs. Used during Sales
-                    mode live calls and post-call recaps. If empty, Clarifi infers from the
-                    transcript only.
+                    Paste your role, stack, active projects, preferences, and glossary. Used during
+                    General mode live assist, suggestions, and chat. If empty, Clarifi infers from
+                    the transcript and screen only.
                   </p>
                   <textarea
                     className="settings-textarea"
                     rows={10}
-                    placeholder="Paste product info, objection handlers, pricing tiers, feature summaries…"
-                    value={productKnowledgeDraft}
-                    onChange={(e) => setProductKnowledgeDraft(e.target.value)}
+                    placeholder="Role, tech stack, current projects, standing priorities, terms you use…"
+                    value={generalKnowledgeDraft}
+                    onChange={(e) => setGeneralKnowledgeDraft(e.target.value)}
                   />
                   <div className="settings-profile-upload-row" style={{ marginTop: 12 }}>
                     <button
                       type="button"
                       className="settings-btn"
-                      onClick={uploadProductKnowledge}
+                      onClick={uploadGeneralKnowledge}
                     >
                       Upload file
                     </button>
                     <button
                       type="button"
                       className="settings-btn small primary"
-                      disabled={productKnowledgeSaving}
-                      onClick={() => void saveProductKnowledge()}
+                      disabled={generalKnowledgeSaving}
+                      onClick={() => void saveGeneralKnowledge()}
                     >
-                      {productKnowledgeSaving
+                      {generalKnowledgeSaving
                         ? 'Saving…'
-                        : productKnowledgeSaved
+                        : generalKnowledgeSaved
+                          ? 'Saved'
+                          : 'Save context'}
+                    </button>
+                  </div>
+                  <p className="settings-profile-upload-hint">
+                    Supports .txt, .md, .csv up to 500 KB. Max 80,000 characters stored.
+                  </p>
+                </div>
+
+                <div className="settings-card" style={{ marginTop: 24 }}>
+                  <div className="settings-card-title">Work knowledge</div>
+                  <p className="settings-card-desc">
+                    Paste team context, project notes, OKRs, and org details. Used during Meetings
+                    mode live calls, suggestions, and chat. If empty, Clarifi infers from the
+                    transcript only.
+                  </p>
+                  <textarea
+                    className="settings-textarea"
+                    rows={10}
+                    placeholder="Paste team structure, project status, stakeholder notes, talking points…"
+                    value={workKnowledgeDraft}
+                    onChange={(e) => setWorkKnowledgeDraft(e.target.value)}
+                  />
+                  <div className="settings-profile-upload-row" style={{ marginTop: 12 }}>
+                    <button
+                      type="button"
+                      className="settings-btn"
+                      onClick={uploadWorkKnowledge}
+                    >
+                      Upload file
+                    </button>
+                    <button
+                      type="button"
+                      className="settings-btn small primary"
+                      disabled={workKnowledgeSaving}
+                      onClick={() => void saveWorkKnowledge()}
+                    >
+                      {workKnowledgeSaving
+                        ? 'Saving…'
+                        : workKnowledgeSaved
                           ? 'Saved'
                           : 'Save knowledge'}
                     </button>
@@ -1508,126 +1505,6 @@ export default function SettingsApp() {
               <p className="settings-card-desc">
                 Links this desktop app to your plan, usage limits, and web dashboard.
               </p>
-            </div>
-
-            <div className="settings-card">
-              <div className="settings-card-header">
-                <div>
-                  <div className="settings-card-title">HubSpot</div>
-                  <div className="settings-card-meta">
-                    {!profile?.paired
-                      ? 'Connect Clarifi account first'
-                      : hubspotStatus?.connected
-                        ? 'Connected'
-                        : 'Not connected'}
-                  </div>
-                </div>
-                {profile?.paired && !hubspotStatus?.connected ? (
-                  <button
-                    type="button"
-                    className="settings-btn small primary"
-                    onClick={openHubSpotConnect}
-                  >
-                    Connect
-                  </button>
-                ) : null}
-                {profile?.paired && hubspotStatus?.connected ? (
-                  <button
-                    type="button"
-                    className="settings-btn small"
-                    onClick={() => void disconnectHubSpot()}
-                    disabled={hubspotSaving}
-                  >
-                    Disconnect
-                  </button>
-                ) : null}
-              </div>
-              <p className="settings-card-desc">
-                After each call, Clarifi can auto-log a CRM note and action-item tasks to the
-                HubSpot contact you specify.
-              </p>
-              {profile?.paired && hubspotStatus?.connected ? (
-                <div className="settings-profile-edit" style={{ marginTop: 12 }}>
-                  <label className="settings-field-label" htmlFor="hubspot-contact-email">
-                    Prospect contact email
-                  </label>
-                  <input
-                    id="hubspot-contact-email"
-                    type="email"
-                    className="settings-input"
-                    placeholder="prospect@company.com"
-                    value={hubspotContactEmail}
-                    onChange={(e) => setHubspotContactEmail(e.target.value)}
-                  />
-                  <label className="settings-checkbox-row" style={{ marginTop: 12 }}>
-                    <input
-                      type="checkbox"
-                      checked={hubspotAutoSync}
-                      onChange={(e) => setHubspotAutoSync(e.target.checked)}
-                    />
-                    <span>Auto-sync notes and tasks after each call</span>
-                  </label>
-                  <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <button
-                      type="button"
-                      className="settings-btn small primary"
-                      onClick={() => void saveHubSpotSettings()}
-                      disabled={hubspotSaving}
-                    >
-                      {hubspotSaving ? 'Saving…' : 'Save'}
-                    </button>
-                    {hubspotMessage ? (
-                      <span className="settings-profile-upload-hint">{hubspotMessage}</span>
-                    ) : null}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-
-            <div className="settings-card">
-              <div className="settings-card-title">Anthropic</div>
-              <p className="settings-card-desc">
-                Powers chat and live suggestions via your Clarifi account or a custom API key.
-              </p>
-              <span className="settings-btn small active-pill">Built-in</span>
-            </div>
-
-            <div className="settings-card">
-              <div className="settings-card-title">OpenAI</div>
-              <p className="settings-card-desc">
-                GPT-4o, GPT-4.1, o3-mini, and o4-mini models via OPENAI_API_KEY in your local env.
-              </p>
-              <span className="settings-btn small active-pill">Built-in</span>
-            </div>
-
-            <div className="settings-card">
-              <div className="settings-card-title">Google Gemini</div>
-              <p className="settings-card-desc">
-                Gemini 2.5 Flash/Pro and 2.0 models via GEMINI_API_KEY in your local env.
-              </p>
-              <span className="settings-btn small active-pill">Built-in</span>
-            </div>
-
-            <div className="settings-card">
-              <div className="settings-card-title">Groq (Whisper)</div>
-              <p className="settings-card-desc">
-                Transcribes microphone and meeting audio in real time through your Clarifi account.
-              </p>
-              <span className="settings-btn small active-pill">Built-in</span>
-            </div>
-
-            <div className="settings-card">
-              <div className="settings-card-title">Custom models</div>
-              <p className="settings-card-desc">
-                Add your own Anthropic, OpenAI, or Gemini models under Models → Add a model.
-              </p>
-              <button
-                type="button"
-                className="settings-btn small"
-                onClick={() => setTab('models')}
-              >
-                Manage models
-              </button>
             </div>
           </>
         )}
@@ -2077,6 +1954,8 @@ export default function SettingsApp() {
             )}
           </>
         )}
+
+        {tab === 'productivity' && <ProactiveSettingsPanel />}
       </main>
 
       <footer className="settings-footer">

@@ -26,10 +26,10 @@ import './landing.css'
 const TESTIMONIALS = [
   {
     name: 'Marcus T.',
-    role: 'Sales Director',
-    company: 'Fintech startup',
+    role: 'Account Executive',
+    company: 'B2B SaaS',
     quote:
-      'I close more deals because Clarifi feeds me answers in real time. Nobody on the call has any idea.',
+      'I walk out of every call with notes and next steps already done. Nobody on the call has any idea.',
   },
   {
     name: 'Priya N.',
@@ -187,7 +187,7 @@ export function LandingPage() {
   }, [])
 
   const joinWaitlist = useCallback(() => {
-    window.location.href = '/#join'
+    window.location.href = '/#faq'
   }, [])
 
   return (

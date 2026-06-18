@@ -1,12 +1,12 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getAccountAuthProviders, readNameFromUserMetadata } from '@/lib/account-auth'
-import { DownloadClarifi } from '@/components/DownloadClarifi'
+import { DashboardDownloadSection } from '@/components/dashboard/DashboardDownloadSection'
 import { DashboardAccountSection } from '@/components/dashboard/DashboardAccountSection'
-import { DashboardHubSpotSection } from '@/components/dashboard/DashboardHubSpotSection'
+import { DashboardGmailSection } from '@/components/dashboard/DashboardGmailSection'
 import { DesktopConnect } from '@/components/DesktopConnect'
 import { getServerUser } from '@/lib/auth-server'
-import { getHubSpotConnection, isHubSpotConfigured, toPublicHubSpotStatus } from '@/lib/hubspot'
+import { getGmailConnection, isGmailConfigured, toPublicGmailStatus } from '@/lib/gmail'
 import { PLAN_LIMITS } from '@/lib/plans'
 import { getServerLaunchPreviewState } from '@/lib/launch-preview-server'
 import { shouldBlockPrelaunchAccess } from '@/lib/prelaunch'
@@ -20,7 +20,7 @@ export const metadata = {
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ hubspot?: string }>
+  searchParams: Promise<{ gmail?: string }>
 }) {
   const user = await getServerUser()
   if (!user) redirect('/sign-in?next=/dashboard')
@@ -46,9 +46,9 @@ export default async function DashboardPage({
   const limitLabel = Number.isFinite(stats.limit)
     ? `${stats.used} / ${stats.limit}`
     : `${stats.used} (unlimited)`
-  const hubspotConnection = await getHubSpotConnection(user.id)
-  const hubspotStatus = toPublicHubSpotStatus(hubspotConnection)
-  const hubspotConfigured = isHubSpotConfigured()
+  const gmailConnection = await getGmailConnection(user.id)
+  const gmailStatus = toPublicGmailStatus(gmailConnection)
+  const gmailConfigured = isGmailConfigured()
 
   return (
     <main className="min-h-screen bg-black text-white">
@@ -89,12 +89,12 @@ export default async function DashboardPage({
 
         <DesktopConnect />
 
-        {hubspotConfigured ? (
-          <DashboardHubSpotSection
-            initialStatus={hubspotStatus}
-            connectUrl="/api/integrations/hubspot/connect"
-            showConnectedBanner={params.hubspot === 'connected'}
-            showErrorBanner={params.hubspot === 'error'}
+        {gmailConfigured ? (
+          <DashboardGmailSection
+            initialStatus={gmailStatus}
+            connectUrl="/api/integrations/gmail/connect"
+            showConnectedBanner={params.gmail === 'connected'}
+            showErrorBanner={params.gmail === 'error'}
           />
         ) : null}
 
@@ -104,7 +104,7 @@ export default async function DashboardPage({
             Install for your platform (macOS: Apple Silicon only), then use Open Clarifi Desktop above to connect automatically.
             On macOS first launch, drag Clarifi to Applications, then right-click Clarifi → Open to bypass Gatekeeper.
           </p>
-          <DownloadClarifi variant="dashboard" />
+          <DashboardDownloadSection />
           <Link
             href="/desktop/connect"
             className="inline-block border border-white/20 px-6 py-2 rounded-lg text-sm hover:bg-white/5 mt-3"

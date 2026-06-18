@@ -9,6 +9,12 @@ import {
   type SpeakerLabels,
 } from './lib/transcriptSpeakers'
 import './overlay.css'
+import {
+  ProactiveActionTray,
+  ProactiveFeaturePanel,
+  useProactivePanel,
+} from './components/ProactiveUI'
+import { GmailSearchResults, type GmailSearchMessage } from './components/GmailSearchResults'
 
 function ToolbarTooltip({
   label,
@@ -68,28 +74,6 @@ type SalesAssistAction = {
   context?: string
 }
 
-type SalesDefineEntry = {
-  term: string
-  speakable: string
-  context?: string
-}
-
-type SalesPanelPayload = {
-  answer?: SalesAssistAction | null
-  suggestions?: SalesAssistAction[]
-  opening?: SalesAssistAction[] | null
-}
-
-type SalesPanelErrorPayload = {
-  error: { error: string; message?: string }
-}
-
-function isSalesAssistErrorPayload(
-  payload: { error?: unknown },
-): payload is { error: string; message?: string } {
-  return typeof payload.error === 'string'
-}
-
 type SalesObjectionRecap = {
   type: string
   summary: string
@@ -144,7 +128,10 @@ type TranscriptEntry = {
   at: number
 }
 
-const MIC_SEGMENT_MS = 2000
+const MIC_SEGMENT_MS = 1000
+const MIC_SEGMENT_MIN_MS = 400
+const MIC_SILENCE_MS = 500
+const MIC_SILENCE_RMS = 0.006
 const MIC_SPEECH_RMS_MIN = 0.008
 
 function formatTranscriptTime(at: number): string {
@@ -161,7 +148,8 @@ function formatSessionOffset(at: number, startedAt: number | null): string {
 }
 
 function feedSpeakerLabel(entry: TranscriptEntry): string {
-  const speaker = entry.source === 'mic' ? 'Me' : 'Them'
+  const speaker =
+    entry.speaker?.trim() || (entry.source === 'mic' ? 'Me' : 'Them')
   return speaker.toUpperCase()
 }
 
@@ -307,6 +295,9 @@ type ChatMessage = {
   role: 'user' | 'assistant'
   content: string
   usedScreen?: boolean
+  gmailResults?: GmailSearchMessage[]
+  gmailQuery?: string
+  gmailNotConnected?: boolean
 }
 
 type ChatSession = {
@@ -473,6 +464,23 @@ function ChatThread({
             <div className="chat-assistant-content">
               {renderMarkdown(msg.content)}
             </div>
+            {msg.gmailNotConnected ? (
+              <div className="gmail-connect-prompt">
+                <span>Connect Gmail in Settings to search your inbox.</span>
+                <button
+                  type="button"
+                  className="gmail-connect-prompt-btn"
+                  onClick={() =>
+                    void window.electronAPI.invoke('settings:open', { tab: 'integrations' })
+                  }
+                >
+                  Connect Gmail
+                </button>
+              </div>
+            ) : null}
+            {msg.gmailResults && msg.gmailResults.length > 0 ? (
+              <GmailSearchResults query={msg.gmailQuery} messages={msg.gmailResults} />
+            ) : null}
             {onCopy && (
               <div className="chat-copy-row">
                 <button
@@ -527,33 +535,6 @@ const entityIcons: Record<SessionEntity['type'], string> = {
   other: '📌',
 }
 
-const salesActionIcons: Record<SalesCardKind, string> = {
-  speak_now: '💬',
-  technical_lookup: '📘',
-  objection: '💬',
-  product_info: '📘',
-  discovery: '❓',
-  next_step: '💬',
-}
-
-const salesActionColors: Record<SalesCardKind, string> = {
-  speak_now: 'rgba(34, 197, 94, 0.2)',
-  technical_lookup: 'rgba(59, 130, 246, 0.2)',
-  objection: 'rgba(239, 68, 68, 0.2)',
-  product_info: 'rgba(59, 130, 246, 0.2)',
-  discovery: 'rgba(249, 115, 22, 0.2)',
-  next_step: 'rgba(16, 185, 129, 0.2)',
-}
-
-function isSalesRecap(recap: SessionRecap): boolean {
-  return Boolean(
-    recap.dealSummary ||
-      recap.mutualActionPlan?.length ||
-      recap.prospectFollowUpEmail ||
-      recap.internalCrmNote ||
-      recap.objectionsRaised?.length,
-  )
-}
 
 const OVERLAY_HEIGHT_COLLAPSED = 132
 const OVERLAY_HEIGHT_CONNECT = 204
@@ -694,6 +675,8 @@ function ResizeHandles({
 }
 
 export default function Overlay() {
+  const { panel: proactivePanel, closePanel: closeProactivePanel, runAction } =
+    useProactivePanel()
   const [isRecording, setIsRecording] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([])
@@ -718,25 +701,15 @@ export default function Overlay() {
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const [fullTranscript, setFullTranscript] = useState<TranscriptEntry[]>([])
   const [sessionInsights, setSessionInsights] = useState<LiveSessionInsights | null>(null)
-  const [salesAnswer, setSalesAnswer] = useState<SalesAssistAction | null>(null)
-  const [salesSuggestions, setSalesSuggestions] = useState<SalesAssistAction[]>([])
-  const [salesOpening, setSalesOpening] = useState<SalesAssistAction[]>([])
-  const [salesDefines, setSalesDefines] = useState<SalesDefineEntry[]>([])
-  const [salesAssistError, setSalesAssistError] = useState('')
+  const [generalAnswer, setGeneralAnswer] = useState<SalesAssistAction | null>(null)
+  const [generalAssistError, setGeneralAssistError] = useState('')
   const [sessionRecap, setSessionRecap] = useState<SessionRecap | null>(null)
   const [showLiveInsights, setShowLiveInsights] = useState(true)
-  const [showLiveTranscript, setShowLiveTranscript] = useState(false)
-  const [expandedSalesAction, setExpandedSalesAction] = useState<number | null>(null)
-  const [expandedSalesDefine, setExpandedSalesDefine] = useState<number | null>(null)
-  const prevSalesAnswerRef = useRef<SalesAssistAction | null>(null)
-  const [audioRenamingId, setAudioRenamingId] = useState<string | null>(null)
-  const [audioRenameDraft, setAudioRenameDraft] = useState('')
   const [insightsLoading, setInsightsLoading] = useState(false)
   const [recapLoading, setRecapLoading] = useState(false)
   const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null)
   const [transcriptSearch, setTranscriptSearch] = useState('')
   const [sessionClock, setSessionClock] = useState(Date.now())
-  const [audioSessions, setAudioSessions] = useState<StoredAudioSession[]>([])
   const [viewingAudioSession, setViewingAudioSession] = useState<StoredAudioSession | null>(null)
   const [audioSessionChatMessages, setAudioSessionChatMessages] = useState<AudioSessionChatMessage[]>(
     [],
@@ -759,6 +732,8 @@ export default function Overlay() {
   const micAnalyserRef = useRef<AnalyserNode | null>(null)
   const micSpeechCheckRef = useRef<number | null>(null)
   const micSegmentMaxRmsRef = useRef(0)
+  const micSegmentStartedAtRef = useRef(0)
+  const micSilentMsRef = useRef(0)
   const liveTranscriptRef = useRef<HTMLDivElement | null>(null)
   const chatBodyRef = useRef<HTMLDivElement | null>(null)
   const modelMenuRef = useRef<HTMLDivElement | null>(null)
@@ -768,7 +743,7 @@ export default function Overlay() {
   const needsConnect = connectionState === 'needs_connect'
 
   const isAudioSessionDetail = panelMode === 'audio_session_detail'
-  const isDropdownPanel = panelMode === 'history' || panelMode === 'audio_sessions'
+  const isDropdownPanel = panelMode === 'history'
   const hasActiveChat = chatMessages.length > 0
   const isChatPanel =
     panelMode === 'chat' ||
@@ -805,80 +780,6 @@ export default function Overlay() {
     transcript.length > 0 ||
     suggestions.length > 0 ||
     Boolean(status)
-
-  const applySalesAssistPayload = useCallback((payload: unknown) => {
-    if (!payload || typeof payload !== 'object') return
-
-    const data = payload as SalesPanelPayload & SalesPanelErrorPayload & {
-      actions?: SalesAssistAction[]
-      primaryCard?: SalesAssistAction
-      secondaryCards?: SalesAssistAction[]
-      error?: { error: string; message?: string } | string
-      message?: string
-    }
-
-    const errObj =
-      data.error && typeof data.error === 'object' && 'error' in data.error
-        ? (data.error as { error: string; message?: string })
-        : isSalesAssistErrorPayload(data)
-          ? { error: data.error, message: data.message }
-          : null
-
-    if (errObj) {
-      setSalesAssistError(
-        errObj.message?.trim() ||
-          (errObj.error === 'no_api_key'
-            ? 'Add ANTHROPIC_API_KEY to .env.local or set a model key in Settings.'
-            : errObj.error === 'rate_limit_exceeded'
-              ? 'Assist is updating too quickly — wait a few seconds.'
-              : 'Assist is temporarily unavailable.'),
-      )
-      return
-    }
-
-    // Legacy combined payload support
-    if (Array.isArray(data.actions) && data.actions.length > 0) {
-      const answer =
-        data.actions.find((action) => action.kind === 'product_info' || action.kind === 'objection') ??
-        data.actions[0]
-      setSalesAnswer(answer)
-      setSalesSuggestions(
-        data.actions.filter((action) => action !== answer && action.kind !== 'technical_lookup'),
-      )
-      setSalesAssistError('')
-      return
-    }
-
-    if (data.answer !== undefined) {
-      if (data.answer) {
-        const prev = prevSalesAnswerRef.current
-        if (!prev || prev.label !== data.answer.label || prev.kind !== data.answer.kind) {
-          setExpandedSalesAction(0)
-        }
-        prevSalesAnswerRef.current = data.answer
-        setSalesAnswer(data.answer)
-      }
-    }
-
-    if (data.suggestions !== undefined) {
-      setSalesSuggestions(data.suggestions)
-    }
-
-    if (data.opening !== undefined) {
-      setSalesOpening(data.opening ?? [])
-    }
-
-    if (data.answer || data.suggestions || data.opening) {
-      setSalesAssistError('')
-    }
-  }, [])
-
-  const applySalesDefinePayload = useCallback((payload: unknown) => {
-    if (!payload || typeof payload !== 'object') return
-    const defines = (payload as { defines?: SalesDefineEntry[] }).defines
-    if (!Array.isArray(defines)) return
-    setSalesDefines(defines.slice(-3))
-  }, [])
 
   const applyBounds = useCallback((width: number, height: number, persist = false) => {
     void window.electronAPI.invoke('overlay:set-bounds', { width, height, persist })
@@ -937,7 +838,7 @@ export default function Overlay() {
     if (
       tourStep === 'sessions' &&
       prevPanelForTourRef.current === 'bar' &&
-      (panelMode === 'history' || panelMode === 'audio_sessions')
+      panelMode === 'history'
     ) {
       void window.electronAPI.invoke('onboarding:tutorial-signal', { type: 'sessions' })
     }
@@ -956,12 +857,29 @@ export default function Overlay() {
         setSuggestions([...(s as Suggestion[])])
       }
     })
-    window.electronAPI.on('sales-assist:update', (payload) => {
-      applySalesAssistPayload(payload)
+    window.electronAPI.on('general-assist:update', (payload) => {
+      if (!payload || typeof payload !== 'object') return
+      const data = payload as {
+        answer?: SalesAssistAction | null
+        error?: { error: string; message?: string } | string
+        message?: string
+      }
+      if (data.error) {
+        const errObj =
+          typeof data.error === 'object' && data.error && 'error' in data.error
+            ? data.error
+            : { error: String(data.error), message: data.message }
+        setGeneralAssistError(
+          errObj.message?.trim() || 'Assist is temporarily unavailable.',
+        )
+        return
+      }
+      if (data.answer !== undefined) {
+        setGeneralAnswer(data.answer)
+        setGeneralAssistError('')
+      }
     })
-    window.electronAPI.on('sales-define:update', (payload) => {
-      applySalesDefinePayload(payload)
-    })
+
     window.electronAPI.on('prefs:changed', (next) => {
       setPrefs(next as PublicPreferences)
     })
@@ -971,11 +889,8 @@ export default function Overlay() {
         setChatSessions(data.sessions)
       }
     })
-    window.electronAPI.on('audio-sessions:changed', (payload) => {
-      const data = payload as { sessions?: StoredAudioSession[] }
-      if (Array.isArray(data?.sessions)) {
-        setAudioSessions(data.sessions)
-      }
+    window.electronAPI.on('audio-sessions:changed', () => {
+      // Settings page listens for session list updates.
     })
     window.electronAPI.on('transcription:activity', (payload) => {
       const state = (payload as { state?: string })?.state
@@ -983,7 +898,7 @@ export default function Overlay() {
         setTranscriptionActivity(state)
       }
     })
-  }, [applySalesAssistPayload, applySalesDefinePayload])
+  }, [])
 
   useEffect(() => {
     void window.electronAPI.invoke('prefs:load').then((data) => {
@@ -1042,12 +957,6 @@ export default function Overlay() {
       const result = data as { sessions?: ChatSession[] }
       if (Array.isArray(result?.sessions)) {
         setChatSessions(result.sessions)
-      }
-    })
-    void window.electronAPI.invoke('audio-sessions:load').then((data) => {
-      const result = data as { sessions?: StoredAudioSession[] }
-      if (Array.isArray(result?.sessions)) {
-        setAudioSessions(result.sessions)
       }
     })
   }, [])
@@ -1325,6 +1234,8 @@ export default function Overlay() {
     const mediaRecorder = new MediaRecorder(stream, { mimeType })
     mediaRecorderRef.current = mediaRecorder
     micSegmentMaxRmsRef.current = 0
+    micSegmentStartedAtRef.current = Date.now()
+    micSilentMsRef.current = 0
 
     if (micSpeechCheckRef.current) {
       window.clearInterval(micSpeechCheckRef.current)
@@ -1333,6 +1244,24 @@ export default function Overlay() {
       const rms = getMicRms()
       if (rms > micSegmentMaxRmsRef.current) {
         micSegmentMaxRmsRef.current = rms
+      }
+
+      const segmentAge = Date.now() - micSegmentStartedAtRef.current
+      if (segmentAge < MIC_SEGMENT_MIN_MS) return
+
+      if (rms < MIC_SILENCE_RMS) {
+        micSilentMsRef.current += 150
+      } else {
+        micSilentMsRef.current = 0
+      }
+
+      const hadSpeech = micSegmentMaxRmsRef.current >= MIC_SPEECH_RMS_MIN
+      if (
+        hadSpeech &&
+        micSilentMsRef.current >= MIC_SILENCE_MS &&
+        mediaRecorder.state === 'recording'
+      ) {
+        mediaRecorder.stop()
       }
     }, 150)
 
@@ -1383,10 +1312,6 @@ export default function Overlay() {
         transcriptionMode?: 'dual' | 'group'
       }
       let transcriptionMode = audioPrefs?.transcriptionMode ?? 'dual'
-      if (prefs?.activeModeId === 'sales' && transcriptionMode !== 'dual') {
-        await window.electronAPI.invoke('audio:prefs-save', { transcriptionMode: 'dual' })
-        transcriptionMode = 'dual'
-      }
       const deviceId = audioPrefs?.preferredMicrophoneId?.trim()
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -1411,16 +1336,10 @@ export default function Overlay() {
       setFullTranscript([])
       setSuggestions([])
       setSessionInsights(null)
-      setSalesAnswer(null)
-      setSalesSuggestions([])
-      setSalesOpening([])
-      setSalesDefines([])
-      setSalesAssistError('')
+      setGeneralAnswer(null)
+      setGeneralAssistError('')
       setSessionRecap(null)
       setShowLiveInsights(true)
-      setShowLiveTranscript(false)
-      setExpandedSalesAction(null)
-      setExpandedSalesDefine(null)
       setTranscriptSearch('')
       setLiveSpeakerLabels({})
       setSessionStartedAt(Date.now())
@@ -1526,30 +1445,24 @@ export default function Overlay() {
           session: storedSession,
         })) as { sessions?: StoredAudioSession[] }
         if (Array.isArray(saveResult?.sessions)) {
-          setAudioSessions(saveResult.sessions)
           const saved = saveResult.sessions.find((s) => s.id === storedSession.id)
           setViewingAudioSession(saved ?? storedSession)
         } else {
           setViewingAudioSession(storedSession)
         }
 
-        void window.electronAPI.invoke('hubspot:sync-session', {
-          sessionId: storedSession.id,
-          title: storedSession.title,
-          endedAt: storedSession.endedAt,
-          recap: storedSession.recap,
-        })
       } catch (err) {
         console.error('Failed to save audio session:', err)
-        const reload = (await window.electronAPI.invoke('audio-sessions:load')) as {
-          sessions?: StoredAudioSession[]
-        }
-        if (Array.isArray(reload?.sessions)) {
-          setAudioSessions(reload.sessions)
-        }
         setViewingAudioSession(storedSession)
       }
       setAudioSessionChatMessages([])
+
+      const lines = (Array.isArray(transcriptEntries) ? transcriptEntries : []).map(
+        (e) => `${e.speaker}: ${e.text}`,
+      )
+      if (lines.length > 0) {
+        void window.electronAPI.invoke('proactive:summarise-transcript', { lines })
+      }
     } finally {
       setRecapLoading(false)
     }
@@ -1582,7 +1495,6 @@ export default function Overlay() {
           speakerLabels: updated,
         })) as { sessions?: StoredAudioSession[] }
         if (Array.isArray(result?.sessions)) {
-          setAudioSessions(result.sessions)
           const refreshed = result.sessions.find((s) => s.id === viewingAudioSession.id)
           if (refreshed) setViewingAudioSession(refreshed)
         }
@@ -1617,7 +1529,7 @@ export default function Overlay() {
     if (isAudioSessionDetail) {
       setViewingAudioSession(null)
       setAudioSessionChatMessages([])
-      setPanelMode('audio_sessions')
+      setPanelMode('bar')
       return
     }
     setPanelMode('bar')
@@ -1634,15 +1546,6 @@ export default function Overlay() {
       return
     }
     setPanelMode('history')
-  }
-
-  const toggleAudioSessions = () => {
-    if (chatLoading || audioSessionChatLoading || isRecording || isSessionRecap) return
-    if (panelMode === 'audio_sessions') {
-      closeDropdownToNewChat()
-      return
-    }
-    setPanelMode('audio_sessions')
   }
 
   const openAudioSession = useCallback((session: StoredAudioSession) => {
@@ -1668,7 +1571,6 @@ export default function Overlay() {
         messages,
       })) as { sessions?: StoredAudioSession[] }
       if (Array.isArray(result?.sessions)) {
-        setAudioSessions(result.sessions)
         const updated = result.sessions.find((s) => s.id === sessionId)
         if (updated) {
           setViewingAudioSession(updated)
@@ -1678,56 +1580,8 @@ export default function Overlay() {
     [],
   )
 
-  const startAudioRename = (session: StoredAudioSession, event?: React.MouseEvent) => {
-    event?.stopPropagation()
-    setAudioRenamingId(session.id)
-    setAudioRenameDraft(session.title)
-  }
-
-  const cancelAudioRename = () => {
-    setAudioRenamingId(null)
-    setAudioRenameDraft('')
-  }
-
-  const saveAudioRename = async (id: string) => {
-    const title = audioRenameDraft.trim()
-    if (!title) {
-      cancelAudioRename()
-      return
-    }
-    const result = (await window.electronAPI.invoke('audio-sessions:rename', {
-      id,
-      title,
-    })) as { sessions?: StoredAudioSession[] }
-    if (Array.isArray(result?.sessions)) {
-      setAudioSessions(result.sessions)
-    }
-    cancelAudioRename()
-  }
-
-  const handleDeleteAudioSession = async (
-    session: StoredAudioSession,
-    event: React.MouseEvent,
-  ) => {
-    event.stopPropagation()
-    if (!window.confirm(`Delete "${session.title}"?`)) return
-    const result = (await window.electronAPI.invoke('audio-sessions:delete', {
-      id: session.id,
-    })) as { sessions?: StoredAudioSession[] }
-    if (Array.isArray(result?.sessions)) {
-      setAudioSessions(result.sessions)
-    }
-    if (viewingAudioSession?.id === session.id) {
-      setViewingAudioSession(null)
-      setAudioSessionChatMessages([])
-      setPanelMode('audio_sessions')
-    }
-  }
-
-  const isSalesMode = prefs?.activeModeId === 'sales'
-
   useEffect(() => {
-    if (!isRecording || panelMode !== 'live_session' || isSalesMode) return
+    if (!isRecording || panelMode !== 'live_session') return
 
     const initialTimer = window.setTimeout(() => {
       void runSessionAnalysis()
@@ -1741,7 +1595,7 @@ export default function Overlay() {
       window.clearTimeout(initialTimer)
       window.clearInterval(interval)
     }
-  }, [isRecording, panelMode, isSalesMode, runSessionAnalysis])
+  }, [isRecording, panelMode, runSessionAnalysis])
 
   useEffect(() => {
     if (!isLiveSession) return
@@ -1921,7 +1775,13 @@ export default function Overlay() {
         message,
         transcriptLines: contextTranscript,
         useScreenContext: screenContextEnabled,
-      })) as { reply?: string; error?: string }
+      })) as {
+        reply?: string
+        error?: string
+        gmailResults?: GmailSearchMessage[]
+        gmailQuery?: string
+        gmailNotConnected?: boolean
+      }
 
       let assistantMessage: ChatMessage | null = null
 
@@ -1958,6 +1818,9 @@ export default function Overlay() {
           role: 'assistant',
           content: result.reply,
           usedScreen: screenContextEnabled,
+          gmailResults: result.gmailResults,
+          gmailQuery: result.gmailQuery,
+          gmailNotConnected: result.gmailNotConnected,
         }
         setChatStatus('')
       } else {
@@ -2163,131 +2026,7 @@ export default function Overlay() {
     return renderTranscriptLines(entries, labels, opts)
   }
 
-  const renderSalesActionCard = (
-    action: SalesAssistAction,
-    index: number,
-    expandedIndex: number | null,
-    onToggle: (idx: number | null) => void,
-    keyPrefix: string,
-  ) => {
-    const expanded = expandedIndex === index
-    return (
-      <div key={`${keyPrefix}-${action.label}-${index}`} className="sales-action-wrap">
-        <button
-          type="button"
-          className={`live-action-row sales-action-row${expanded ? ' sales-action-row-expanded' : ''}`}
-          style={{ background: salesActionColors[action.kind] ?? salesActionColors.speak_now }}
-          onClick={() => onToggle(expanded ? null : index)}
-        >
-          <span className="suggestion-icon">{salesActionIcons[action.kind] ?? '💬'}</span>
-          <span className="suggestion-text">{action.label}</span>
-        </button>
-        {expanded ? (
-          <div className="sales-action-expanded">
-            <p className="sales-assist-speakable">{action.speakable}</p>
-            {action.context ? <p className="sales-assist-context">{action.context}</p> : null}
-          </div>
-        ) : null}
-      </div>
-    )
-  }
-
-  const renderSalesActionsBody = () => {
-    const hasContent =
-      salesOpening.length > 0 ||
-      salesAnswer !== null ||
-      salesDefines.length > 0 ||
-      salesSuggestions.length > 0
-
-    return (
-      <>
-        {salesOpening.length > 0 && !salesAnswer ? (
-          <section className="live-section">
-            <h3 className="live-section-title">Start call</h3>
-            {salesOpening.map((action, i) =>
-              renderSalesActionCard(action, i, expandedSalesAction, setExpandedSalesAction, 'open'),
-            )}
-          </section>
-        ) : null}
-
-        <section className="live-section">
-          <h3 className="live-section-title">Answer</h3>
-          {salesAnswer ? (
-            renderSalesActionCard(
-              salesAnswer,
-              0,
-              expandedSalesAction,
-              setExpandedSalesAction,
-              'answer',
-            )
-          ) : (
-            <p className={`live-muted${salesAssistError ? ' live-assist-error' : ''}`}>
-              {salesAssistError ||
-                (fullTranscript.length === 0
-                  ? 'Listening for the call…'
-                  : 'Waiting for a question or objection…')}
-            </p>
-          )}
-        </section>
-
-        {salesDefines.length > 0 ? (
-          <section className="live-section">
-            <h3 className="live-section-title">Define</h3>
-            {salesDefines.map((entry, i) => {
-              const expanded = expandedSalesDefine === i
-              return (
-                <div key={`define-${entry.term}-${i}`} className="sales-action-wrap">
-                  <button
-                    type="button"
-                    className={`live-action-row sales-action-row sales-define-row${expanded ? ' sales-action-row-expanded' : ''}`}
-                    onClick={() => setExpandedSalesDefine(expanded ? null : i)}
-                  >
-                    <span className="suggestion-icon">📘</span>
-                    <span className="suggestion-text">Define {entry.term}</span>
-                  </button>
-                  {expanded ? (
-                    <div className="sales-action-expanded">
-                      <p className="sales-assist-speakable">{entry.speakable}</p>
-                      {entry.context ? (
-                        <p className="sales-assist-context">{entry.context}</p>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-              )
-            })}
-          </section>
-        ) : null}
-
-        {salesSuggestions.length > 0 ? (
-          <section className="live-section">
-            <h3 className="live-section-title">Keep going</h3>
-            {salesSuggestions.map((action, i) =>
-              renderSalesActionCard(
-                action,
-                i + 100,
-                expandedSalesAction,
-                setExpandedSalesAction,
-                'suggest',
-              ),
-            )}
-          </section>
-        ) : null}
-
-        {!hasContent && !salesAssistError ? (
-          <p className="live-muted sales-panel-hint">
-            Terms, questions, and objections will appear in separate lanes as the call unfolds.
-          </p>
-        ) : null}
-      </>
-    )
-  }
-
   const renderLiveInsightsBody = () => {
-    if (isSalesMode) {
-      return renderSalesActionsBody()
-    }
-
     const intro =
       sessionInsights?.meetingIntro?.trim() ||
       sessionInsights?.runningSummary?.trim() ||
@@ -2295,6 +2034,28 @@ export default function Overlay() {
 
     return (
       <>
+        <section className="live-section">
+          <h3 className="live-section-title">Answer</h3>
+          {generalAnswer ? (
+            <div className="live-action-row sales-action-row" style={{ background: '#4a6fa5' }}>
+              <span className="suggestion-icon">💬</span>
+              <div className="sales-action-expanded" style={{ display: 'block' }}>
+                <p className="sales-assist-speakable">{generalAnswer.speakable}</p>
+                {generalAnswer.context ? (
+                  <p className="sales-assist-context">{generalAnswer.context}</p>
+                ) : null}
+              </div>
+            </div>
+          ) : (
+            <p className={`live-muted${generalAssistError ? ' live-assist-error' : ''}`}>
+              {generalAssistError ||
+                (fullTranscript.length === 0
+                  ? 'Listening for the call…'
+                  : 'Waiting for a question directed at you…')}
+            </p>
+          )}
+        </section>
+
         <section className="live-section">
           <h3 className="live-section-title">Meeting Introduction</h3>
           <p className="live-section-body">{intro}</p>
@@ -2434,47 +2195,23 @@ export default function Overlay() {
   const renderLiveSessionPanel = () => (
     <div className="live-session-panel" ref={livePanelRef}>
       <div className="live-session-header">
-        <span className="live-session-title">
-          {isSalesMode ? 'Sales Assist' : 'Live Insights'}
-        </span>
+        <span className="live-session-title">Meeting Notes</span>
         <div className="live-session-header-actions">
-          {insightsLoading && (
-            <span className="live-analyzing">{isSalesMode ? 'Assisting…' : 'Analyzing…'}</span>
-          )}
-          {isSalesMode ? (
-            <button
-              type="button"
-              className={`live-transcript-toggle ${showLiveTranscript ? 'active' : ''}`}
-              onClick={() => setShowLiveTranscript((v) => !v)}
-            >
-              <span className="live-wave-icon">〰</span>
-              {showLiveTranscript ? 'Hide Transcript' : 'Show Transcript'}
-            </button>
-          ) : (
-            <button
-              type="button"
-              className={`live-transcript-toggle ${showLiveInsights ? 'active' : ''}`}
-              onClick={() => setShowLiveInsights((v) => !v)}
-            >
-              <span className="live-wave-icon">〰</span>
-              {showLiveInsights ? 'Hide analysis' : 'Show analysis'}
-            </button>
-          )}
+          {insightsLoading && <span className="live-analyzing">Analyzing…</span>}
+          <button
+            type="button"
+            className={`live-transcript-toggle ${showLiveInsights ? 'active' : ''}`}
+            onClick={() => setShowLiveInsights((v) => !v)}
+          >
+            <span className="live-wave-icon">〰</span>
+            {showLiveInsights ? 'Hide analysis' : 'Show analysis'}
+          </button>
         </div>
       </div>
 
       <div className="live-session-body">
-        {isSalesMode ? (
-          <>
-            {renderSalesActionsBody()}
-            {showLiveTranscript ? renderLiveTranscriptSection() : null}
-          </>
-        ) : (
-          <>
-            {renderLiveTranscriptSection()}
-            {showLiveInsights ? renderLiveInsightsBody() : null}
-          </>
-        )}
+        {renderLiveTranscriptSection()}
+        {showLiveInsights ? renderLiveInsightsBody() : null}
       </div>
 
       <button type="button" className="live-session-footer" onClick={focusSessionInput}>
@@ -2535,25 +2272,7 @@ export default function Overlay() {
     const participants = collectParticipants(transcript, speakerLabels)
     const discussionPoints = recapDiscussionPoints(recap)
     const decisions = recapDecisions(recap)
-    const salesRecap = isSalesRecap(recap)
     const followUpEmail = recap.prospectFollowUpEmail?.trim() || recap.recapEmailDraft?.trim()
-
-    const renderObjectionsSection = () => {
-      if (!recap.objectionsRaised?.length) return null
-      return (
-        <section className="recap-section">
-          <h2 className="recap-section-heading">Objections</h2>
-          <div className="recap-section-body">
-            {recap.objectionsRaised.map((obj, i) => (
-              <p key={i} className="recap-line">
-                <strong>{obj.type}:</strong> {obj.summary}
-                {obj.handled ? ` — ${obj.handled}` : ''}
-              </p>
-            ))}
-          </div>
-        </section>
-      )
-    }
 
     return (
       <div className="recap-document">
@@ -2598,7 +2317,7 @@ export default function Overlay() {
           {recap.summary && (
             <div className="recap-summary-block">
               <div className="recap-summary-header">
-                <span className="recap-label">{salesRecap ? 'CALL SUMMARY' : 'SUMMARY'}</span>
+                <span className="recap-label">'SUMMARY'</span>
                 <button
                   type="button"
                   className="recap-copy-btn"
@@ -2624,46 +2343,17 @@ export default function Overlay() {
             </div>
           )}
 
-          {recap.dealSummary ? (
-            <section className="recap-section">
-              <h2 className="recap-section-heading">Deal summary</h2>
-              <div className="recap-section-body">
-                <p className="recap-line">{recap.dealSummary}</p>
-              </div>
-            </section>
-          ) : null}
-
-          {renderRecapSection('Pain points uncovered', recap.painPointsUncovered ?? [], 'pains')}
-          {renderRecapSection('Buying signals', recap.buyingSignals ?? [], 'buying')}
-          {renderObjectionsSection()}
-          {renderRecapSection('Competitors mentioned', recap.competitorsMentioned ?? [], 'competitors')}
-          {renderRecapSection('Budget & timeline', recap.budgetTimelineSignals ?? [], 'budget')}
-          {renderRecapSection('Stakeholders', recap.stakeholderMap ?? [], 'stakeholders')}
-          {renderRecapSection('Risk flags', recap.riskFlags ?? [], 'risks')}
-          {renderRecapSection(
-            'Mutual action plan',
-            recap.mutualActionPlan ?? [],
-            'map',
-          )}
           {renderRecapSection('Action Items', recap.actionItems, 'action-items')}
-          {renderRecapSection('Next call agenda', recap.nextCallAgenda ?? [], 'next-agenda')}
-          {!salesRecap && renderRecapSection('Discussion Points', discussionPoints, 'discussion')}
+          {renderRecapSection('Discussion Points', discussionPoints, 'discussion')}
           {renderRecapSection('Decisions / Agreements', decisions, 'decisions')}
           {renderRecapSection('Open Questions', recap.openQuestions, 'open-questions')}
 
           {followUpEmail ? (
             <section className="recap-section recap-email-section">
               <h2 className="recap-section-heading">
-                {salesRecap ? 'Prospect follow-up email' : 'Recap email draft'}
+                'Recap email draft'
               </h2>
               <pre className="live-email-draft">{followUpEmail}</pre>
-            </section>
-          ) : null}
-
-          {recap.internalCrmNote ? (
-            <section className="recap-section recap-email-section">
-              <h2 className="recap-section-heading">Internal CRM note</h2>
-              <pre className="live-email-draft">{recap.internalCrmNote}</pre>
             </section>
           ) : null}
 
@@ -2711,88 +2401,6 @@ export default function Overlay() {
           })
         ) : (
           <div className="overlay-empty">Session ended — no transcript captured</div>
-        )}
-      </div>
-    </div>
-  )
-
-  const renderAudioSessionsDropdown = (inChatPanel = false) => (
-    <div
-      className={`overlay-expanded overlay-expanded-history${inChatPanel ? ' overlay-expanded-in-chat' : ''}`}
-    >
-      <div className="expanded-section">
-        <div className="expanded-label">Audio sessions</div>
-        {audioSessions.length === 0 ? (
-          <div className="overlay-empty">No audio sessions yet — start one with the audio button</div>
-        ) : (
-          audioSessions.map((session) => (
-            <div key={session.id} className="history-session-row audio-session-row">
-              {audioRenamingId === session.id ? (
-                <div className="audio-session-row-rename">
-                  <input
-                    className="audio-session-rename-input"
-                    value={audioRenameDraft}
-                    onChange={(e) => setAudioRenameDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') void saveAudioRename(session.id)
-                      if (e.key === 'Escape') cancelAudioRename()
-                    }}
-                    autoFocus
-                  />
-                  <div className="audio-session-rename-actions">
-                    <button
-                      type="button"
-                      className="audio-session-rename-btn primary"
-                      onClick={() => void saveAudioRename(session.id)}
-                    >
-                      Save
-                    </button>
-                    <button
-                      type="button"
-                      className="audio-session-rename-btn"
-                      onClick={cancelAudioRename}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className="audio-session-row-open"
-                    onClick={() => openAudioSession(session)}
-                  >
-                    <span className="history-session-title">{session.title}</span>
-                    <span className="history-session-meta">
-                      <span className="history-session-time">
-                        {formatRelativeTime(session.createdAt)}
-                      </span>
-                      <span className="history-session-badge">Open</span>
-                    </span>
-                  </button>
-                  <div className="audio-session-row-actions">
-                    <button
-                      type="button"
-                      className="audio-session-action-btn"
-                      onClick={(e) => startAudioRename(session, e)}
-                      aria-label="Rename"
-                    >
-                      ✎
-                    </button>
-                    <button
-                      type="button"
-                      className="audio-session-action-btn audio-session-action-delete"
-                      onClick={(e) => void handleDeleteAudioSession(session, e)}
-                      aria-label="Delete"
-                    >
-                      ×
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          ))
         )}
       </div>
     </div>
@@ -3030,17 +2638,6 @@ export default function Overlay() {
           </button>
         )}
 
-        <ToolbarTooltip label="Audio sessions">
-          <button
-            type="button"
-            className={`toolbar-history ${panelMode === 'audio_sessions' ? 'active' : ''}${tourHighlight('sessions')}`}
-            onClick={toggleAudioSessions}
-          >
-            <span>Sessions</span>
-            <span className={`chevron ${panelMode === 'audio_sessions' ? 'chevron-up' : ''}`}>▼</span>
-          </button>
-        </ToolbarTooltip>
-
         <ToolbarTooltip label="History">
           <button
             type="button"
@@ -3162,7 +2759,9 @@ export default function Overlay() {
 
           {renderToolbar()}
 
-          {panelMode === 'audio_sessions' && renderAudioSessionsDropdown(true)}
+          <ProactiveActionTray onRunAction={runAction} />
+          <ProactiveFeaturePanel panel={proactivePanel} onClose={closeProactivePanel} />
+
           {panelMode === 'history' && renderHistoryDropdown(true)}
         </div>
       </div>
@@ -3228,10 +2827,12 @@ export default function Overlay() {
         {renderToolbar()}
       </div>
 
+      <ProactiveActionTray onRunAction={runAction} />
+      <ProactiveFeaturePanel panel={proactivePanel} onClose={closeProactivePanel} />
+
       {isLiveSession && renderLiveSessionPanel()}
       {isSessionRecap && renderSessionRecapPanel()}
 
-      {isExpanded && panelMode === 'audio_sessions' && !hasActiveChat && renderAudioSessionsDropdown()}
       {isExpanded && panelMode === 'history' && !hasActiveChat && renderHistoryDropdown()}
     </div>
   )

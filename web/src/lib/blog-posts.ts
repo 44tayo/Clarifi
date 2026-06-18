@@ -8,6 +8,13 @@ export type BlogBlock =
   | { type: 'cta'; text: string; href: string; label: string }
   | { type: 'hr' }
 
+export type BlogCategory = 'blog' | 'announcement' | 'press'
+
+export type BlogAuthor = {
+  name: string
+  avatar?: string
+}
+
 export type BlogPost = {
   slug: string
   title: string
@@ -18,307 +25,24 @@ export type BlogPost = {
   imageAlt: string
   metaDescription: string
   metaTitle: string
+  category: BlogCategory
+  author: BlogAuthor
+  featured?: boolean
+  externalUrl?: string
   blocks: BlogBlock[]
 }
 
 export const BLOG_POSTS: BlogPost[] = [
-  {
-    slug: 'real-time-ai-sales-coaching',
-    title: 'Real-Time AI Sales Coaching: What It Is, How It Works, and When You Need It',
-    excerpt:
-      'Post-call coaching tells you what went wrong. Real-time AI sales coaching helps you recover while the deal is still live — with live objection handlers, talk tracks, and next steps.',
-    date: 'June 15, 2026',
-    readTime: '10 min read',
-    image: '/blog/real-time-ai-sales-coaching.png',
-    imageAlt:
-      'Sales rep on a live video call receiving discreet real-time AI sales coaching prompts during a discovery call',
-    metaTitle: 'Real-Time AI Sales Coaching: Complete Guide (2026)',
-    metaDescription:
-      'Real-time AI sales coaching surfaces objection handlers, talk tracks, and next-step prompts during live sales calls — not after. Learn how it works, how it compares to Gong, and when to use it.',
-    blocks: [
-      {
-        type: 'p',
-        text: 'Short answer: Real-time AI sales coaching is software that listens to your live sales call and surfaces coaching — objection responses, discovery questions, competitor positioning, and next steps — while you are still on the line. If your deals are won or lost in the Q&A, that matters more than a perfect recap an hour later.',
-        strong: true,
-      },
-      {
-        type: 'p',
-        text: 'Most AI tools marketed to sales teams are built for after the call. They record, transcribe, score the conversation, and tell your manager what you should have said. That is useful for pipeline reviews. It does not help when a prospect pushes back on price in minute twelve and you have three seconds to respond.',
-      },
-      {
-        type: 'p',
-        text: 'Real-time AI sales coaching is the other category: live support during the conversation itself. This guide explains what it is, how it works, how it differs from conversation intelligence and AI notetakers, who it is for, and what to look for before you buy.',
-      },
-      {
-        type: 'p',
-        text: 'Already comparing categories? Read Do You Actually Need an AI Meeting Assistant in 2026? on the Clarifi blog. For the ethics question — is live AI coaching fair? — read Is Using AI in Meetings Cheating?',
-      },
-      { type: 'hr' },
-      { type: 'h2', id: 'what-is', text: 'What Is Real-Time AI Sales Coaching?' },
-      {
-        type: 'p',
-        text: 'Real-time AI sales coaching is AI that monitors a live sales conversation — on Zoom, Google Meet, Microsoft Teams, or a phone call — and gives the rep tactical guidance in the moment. That might be how to handle a pricing objection, what discovery question to ask next, how to position against a competitor, or which proof point to cite under pressure.',
-      },
-      {
-        type: 'p',
-        text: 'The coaching appears while the call is still happening, usually in a private overlay or side panel only the rep can see. A well-built tool does not join the meeting as a bot participant and stays invisible on screen share — so the buyer experiences a prepared rep, not a third guest named after a sea creature.',
-      },
-      {
-        type: 'p',
-        text: 'That distinction matters. Real-time sales coaching is execution support for the rep already on the call — not a replacement for judgment, and not a transcript you read tomorrow.',
-      },
-      { type: 'h2', id: 'how-it-works', text: 'How Real-Time AI Sales Coaching Works' },
-      {
-        type: 'p',
-        text: 'Most real-time AI sales coaches follow the same loop. Results vary wildly based on latency, sales-specific training, and whether answers are grounded in your product — not generic LLM filler.',
-      },
-      {
-        type: 'ol',
-        items: [
-          'Listen. The system captures live audio (microphone plus system audio) and transcribes it with low latency — ideally under two seconds.',
-          'Detect. AI identifies moments that matter: a pricing objection, competitor mention, buying signal, technical probe, or stalled discovery thread.',
-          'Coach. The system surfaces a short, speakable response — a rebuttal, clarifying question, talk track, or next-step nudge — tied to what was just said.',
-          'Capture. After the call, stronger tools also generate structured recaps, follow-up email drafts, action items, and CRM notes from the same session.',
-        ],
-      },
-      {
-        type: 'p',
-        text: 'The gap between a gimmick and a tool reps actually use comes down to speed and relevance. If the prompt arrives five seconds after the objection, the moment is gone. If the answer could apply to any SaaS product on earth, reps stop looking at it.',
-      },
-      {
-        type: 'h2',
-        id: 'vs-conversation-intelligence',
-        text: 'Real-Time AI Sales Coaching vs. Conversation Intelligence',
-      },
-      {
-        type: 'p',
-        text: 'This is the comparison that trips most teams up. Gong, Chorus, and similar platforms are often grouped with "AI for sales." They solve a different problem at a different time than live coaching.',
-      },
-      {
-        type: 'table',
-        headers: ['', 'Conversation intelligence', 'Real-time AI sales coaching'],
-        rows: [
-          ['When it helps', 'After the call', 'During the call'],
-          ['Primary output', 'Recording, transcript, scorecard, manager coaching', 'Live prompts, objection handlers, talk tracks'],
-          ['Best for', 'Pipeline reviews, win/loss analysis, coaching at scale', 'Reps who need help in the moment under pressure'],
-          ['Typical examples', 'Gong, Chorus, Avoma-style platforms', 'Desktop copilots and live assist overlays'],
-          ['What it cannot fix', 'A pause that already killed momentum', 'Long-term skill gaps without deliberate practice'],
-        ],
-      },
-      {
-        type: 'p',
-        text: 'Conversation intelligence answers: "What happened on that call, and how do we coach the rep afterward?" Real-time AI sales coaching answers: "What should I say right now before I lose this deal?"',
-      },
-      {
-        type: 'p',
-        text: 'Strong revenue teams often use both — post-call analytics for strategy, real-time coaching for execution. But if you only have budget for one and reps still freeze on live objections, real-time coaching is usually the higher-leverage pick.',
-      },
-      {
-        type: 'h2',
-        id: 'vs-notetaker',
-        text: 'Real-Time Sales Coaching vs. AI Notetakers',
-      },
-      {
-        type: 'p',
-        text: 'Otter, Fireflies, and Fathom are excellent at documentation. They join or record the meeting, transcribe it, and summarize what was said. That does not make them sales coaches.',
-      },
-      {
-        type: 'p',
-        text: 'A notetaker tells you what the prospect asked. Real-time AI sales coaching helps you answer while they are still waiting.',
-      },
-      {
-        type: 'table',
-        headers: ['Capability', 'AI notetaker', 'Real-time AI sales coach'],
-        rows: [
-          ['Live objection support', 'No', 'Yes'],
-          ['Joins meeting as visible bot', 'Often yes', 'Usually no — runs on your device'],
-          ['Invisible on screen share', 'N/A', 'Yes (well-built copilots)'],
-          ['Post-call summary', 'Yes', 'Often yes'],
-          ['Built for revenue workflows', 'No', 'Yes'],
-          ['CRM note and task sync', 'Sometimes', 'Increasingly yes'],
-        ],
-      },
-      { type: 'h2', id: 'who-needs', text: 'Who Needs Real-Time AI Sales Coaching?' },
-      {
-        type: 'p',
-        text: 'Not every rep. A tenured AE on a mature product with predictable calls may not need live prompts every day.',
-      },
-      {
-        type: 'p',
-        text: 'But if any of these sound familiar, real-time AI sales coaching is worth serious consideration:',
-      },
-      {
-        type: 'ul',
-        items: [
-          'Deals die in the Q&A. You nail the pitch; a pricing, competitor, or technical curveball stalls momentum.',
-          'You are ramping. New reps, new product, or new vertical — and you cannot afford months of learning purely from lost deals.',
-          'Enablement does not stick on live calls. Battlecards exist; nobody opens them mid-conversation.',
-          'Managers cannot scale coaching. There are not enough ride-alongs to cover every discovery call and demo.',
-          'You default to "let me follow up." That phrase is often a lost deal wearing a polite mask.',
-          'You want a higher floor. Live coaching does not replace skill — it narrows the gap between your best call and your tired-Tuesday call.',
-        ],
-      },
-      {
-        type: 'h2',
-        id: 'what-it-coaches',
-        text: 'What a Real-Time AI Sales Coach Surfaces on Live Calls',
-      },
-      {
-        type: 'p',
-        text: 'Good coaching is not a wall of text. It is short, speakable, and tied to what just happened. On a well-configured tool, expect prompts like these:',
-      },
-      {
-        type: 'ul',
-        items: [
-          'Objection handlers — price, timing, competitor, authority, status quo',
-          'Discovery follow-ups — the question you should ask after a pain point lands',
-          'Product answers — pricing tiers, integrations, security, implementation scope',
-          'Competitor positioning — how to reframe without trash-talking',
-          'Next-step nudges — trial close, mutual action plan, who else to loop in',
-          'Technical lookups — plain-language definitions when jargon or acronyms appear',
-        ],
-      },
-      {
-        type: 'p',
-        text: 'After the call, stronger platforms also generate structured recaps: deal summary, pain points uncovered, objections raised, action items, prospect follow-up email drafts, and internal CRM notes — so admin does not eat the hour after the hour.',
-      },
-      {
-        type: 'h2',
-        id: 'what-to-look-for',
-        text: 'What to Look for in Real-Time AI Sales Coaching Software',
-      },
-      {
-        type: 'p',
-        text: 'Use this checklist before you commit to an AI sales coach:',
-      },
-      { type: 'h3', text: '1. Latency under real call conditions' },
-      {
-        type: 'p',
-        text: 'Test on a real conversation, not a polished demo video. Coaching that arrives late is coaching that gets ignored.',
-      },
-      { type: 'h3', text: '2. Invisible to the buyer' },
-      {
-        type: 'p',
-        text: 'No bot on the guest list. No overlay on screen share. The prospect should experience a prepared rep — not an obvious AI participant.',
-      },
-      { type: 'h3', text: '3. Sales-specific, not generic meeting AI' },
-      {
-        type: 'p',
-        text: 'Generic summarizers do not understand objections, deal stages, or buying signals. Look for tools built for revenue conversations from day one.',
-      },
-      { type: 'h3', text: '4. Grounded in your product knowledge' },
-      {
-        type: 'p',
-        text: 'The best answers come from your positioning, pricing, and battlecards — not interchangeable LLM fluff. Prefer tools you can tune to your world.',
-      },
-      { type: 'h3', text: '5. Post-call workflow, not just live prompts' },
-      {
-        type: 'p',
-        text: 'Live coaching wins the moment; recap notes, follow-up drafts, and CRM sync win the hour after. One session should feed both.',
-      },
-      { type: 'h3', text: '6. Ethics you can defend' },
-      {
-        type: 'p',
-        text: 'Use coaching to be more accurate, not to bluff. If you would not stand behind the answer without AI, do not say it with AI.',
-      },
-      {
-        type: 'h2',
-        id: 'limitations',
-        text: 'The Honest Limitations of Real-Time AI Sales Coaching',
-      },
-      {
-        type: 'p',
-        text: 'Real-time AI sales coaching is not magic. Overselling it creates bad reps and bad deals:',
-      },
-      {
-        type: 'ul',
-        items: [
-          'It will not fix a rep who does not listen. Prompts are useless if you talk over the prospect.',
-          'It will not replace deep product expertise forever. You still need to learn your market.',
-          'It can surface wrong answers if the tool is generic or poorly configured. You still own what you say.',
-          'It adds cognitive load if the UI is noisy. The best tools show one relevant prompt, not a dashboard.',
-          'Some orgs restrict recording or AI tools on calls — check policy before you deploy anything live.',
-        ],
-      },
-      {
-        type: 'p',
-        text: 'Used well, real-time coaching is a performance multiplier. Used as a crutch to bluff past gaps you should honestly address, it is a liability.',
-        strong: true,
-      },
-      { type: 'h2', id: 'bottom-line', text: 'Bottom Line' },
-      {
-        type: 'p',
-        text: 'Real-time AI sales coaching is for reps whose outcomes depend on what they say in the next thirty seconds — not what they remember thirty minutes later.',
-      },
-      {
-        type: 'p',
-        text: 'If your stack already has conversation intelligence but reps still freeze on objections, you do not have a data problem. You have an execution problem. That is what live coaching solves.',
-      },
-      {
-        type: 'p',
-        text: 'Clarifi is a real-time AI sales copilot built for exactly that: live objection handlers, talk tracks, and next steps on every call — invisible on screen share, with post-call recaps and CRM sync when you are done.',
-        strong: true,
-      },
-      { type: 'h2', id: 'faq', text: 'FAQ' },
-      { type: 'h3', text: 'What is real-time AI sales coaching?' },
-      {
-        type: 'p',
-        text: 'Real-time AI sales coaching is software that listens to live sales calls and surfaces coaching prompts — objection responses, discovery questions, competitor positioning, and next steps — while the conversation is still happening, not after it ends.',
-      },
-      { type: 'h3', text: 'How is real-time AI sales coaching different from Gong?' },
-      {
-        type: 'p',
-        text: 'Gong and similar platforms are primarily conversation intelligence tools: they analyze calls after the fact for managers and pipeline reviews. Real-time AI sales coaching focuses on helping the rep during the call itself, when a fast answer can still save the deal.',
-      },
-      { type: 'h3', text: 'Can AI coach sales reps during a live Zoom call?' },
-      {
-        type: 'p',
-        text: 'Yes. Desktop sales copilots capture system audio from Zoom, Google Meet, or Microsoft Teams and show private coaching prompts to the rep without joining the meeting as a bot participant.',
-      },
-      { type: 'h3', text: 'Is real-time AI sales coaching the same as an AI notetaker?' },
-      {
-        type: 'p',
-        text: 'No. AI notetakers document what was said. Real-time AI sales coaches help you respond while the prospect is still on the line. Some tools do both; the live coaching layer is what changes call outcomes.',
-      },
-      { type: 'h3', text: 'Does real-time AI sales coaching help with objections?' },
-      {
-        type: 'p',
-        text: 'That is one of the highest-value use cases. Good tools detect objection language — price, timing, competitor, authority — and surface a structured response within seconds, grounded in your product knowledge where possible.',
-      },
-      { type: 'h3', text: 'Is real-time AI sales coaching worth it in 2026?' },
-      {
-        type: 'p',
-        text: 'If even one revenue conversation per week is decided under live pressure — discovery, demo, negotiation — yes. The ROI is rarely about saving note-taking time. It is about not losing deals in the pause before you answer.',
-      },
-      { type: 'h3', text: 'Is using real-time AI coaching on sales calls ethical?' },
-      {
-        type: 'p',
-        text: 'For most reps, yes — when the goal is accurate, helpful answers, not deception. It is closer to using a battlecard or looping in a sales engineer than to misrepresenting your product. The line is simple: use AI to inform, not to mislead.',
-      },
-      { type: 'h3', text: 'Who should not use real-time AI sales coaching?' },
-      {
-        type: 'p',
-        text: 'Reps in orgs that forbid AI or recording on calls, conversations requiring fully bespoke scoping with no assist, or anyone using it to fabricate capabilities they cannot defend. If you are still building foundational product knowledge, use coaching to augment learning — not skip it.',
-      },
-      {
-        type: 'cta',
-        text: 'Launching August 24, 2026.',
-        href: '/#join',
-        label: 'Join the waitlist →',
-      },
-      {
-        type: 'p',
-        text: 'Follow updates on X @Clarifi_ai.',
-      },
-    ],
-  },
-  {
+    {
     slug: 'ai-meeting-assistant',
+    featured: true,
     title: 'AI Meeting Assistant: Do You Actually Need One in 2026?',
     excerpt:
       'AI meeting assistants are everywhere — but do you need one? We compare notetakers vs real-time copilots, who they\'re for, and what to look for.',
     date: 'June 10, 2026',
     readTime: '8 min read',
+    category: 'blog',
+    author: { name: 'Clarifi Team' },
     image: '/blog/ai-meeting-assistant.png',
     imageAlt:
       'Illustration of a person overwhelmed by meeting notes and charts at a desk — representing the overload an AI meeting assistant can help solve',
@@ -501,7 +225,7 @@ export const BLOG_POSTS: BlogPost[] = [
       {
         type: 'cta',
         text: 'Launching August 24, 2026.',
-        href: '/#join',
+        href: '/#faq',
         label: 'Join the waitlist →',
       },
       {
@@ -517,6 +241,8 @@ export const BLOG_POSTS: BlogPost[] = [
       'Sales reps use AI copilots for real-time answers on live calls. Is that cheating — or just smart selling? The honest ethics breakdown.',
     date: 'June 9, 2026',
     readTime: '9 min read',
+    category: 'blog',
+    author: { name: 'Clarifi Team' },
     image: '/blog/is-using-ai-in-meetings-cheating.png',
     imageAlt:
       'Illustration of a sales rep presenting to a team with flowing ideas — representing real-time AI support during meetings',
@@ -731,7 +457,7 @@ export const BLOG_POSTS: BlogPost[] = [
       {
         type: 'cta',
         text: 'Launching August 24, 2026.',
-        href: '/#join',
+        href: '/#faq',
         label: 'Join the waitlist →',
       },
       {

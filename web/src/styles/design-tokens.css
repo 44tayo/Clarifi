@@ -1,0 +1,58 @@
+/* Clarifi design tokens — shared across app UI and marketing surfaces */
+
+:root {
+  /* Brand */
+  --ds-blue: #2b6cff;
+  --ds-blue-hover: #1a5ae8;
+  --ds-hero-accent: #60b4ff;
+  --ds-navy: #1a1a2e;
+  --ds-charcoal: #1c1c2e;
+
+  /* Neutrals */
+  --ds-muted: #6b7280;
+  --ds-muted-hero: #94a3b8;
+  --ds-lavender: #dde2ee;
+  --ds-lavender-soft: #eef1f8;
+  --ds-border: #e8ecf4;
+
+  /* Surfaces */
+  --ds-card: #f7f8fc;
+  --ds-surface-feature: #f4f4f5;
+  --ds-surface-visual: #ececef;
+  --ds-surface-mock: #ffffff;
+
+  /* Layout */
+  --ds-content-max: 1100px;
+  --ds-section-py: 5.5rem;
+  --ds-section-px: 2rem;
+
+  /* Radii */
+  --ds-radius-button: 0.75rem;
+  --ds-radius-card: 1rem;
+  --ds-radius-visual: 0.75rem;
+  --ds-radius-mock: 0.65rem;
+
+  /* Feature grid */
+  --ds-feature-grid-columns: 6;
+  --ds-feature-gap: 1rem;
+  --ds-feature-visual-height: 220px;
+  --ds-feature-visual-height-compact: 180px;
+  --ds-feature-visual-height-mobile: 200px;
+
+  /* Typography */
+  --ds-section-title-size: clamp(1.75rem, 4vw, 2.35rem);
+  --ds-section-subtitle-size: 1.05rem;
+  --ds-feature-title-size: 1.05rem;
+  --ds-feature-body-size: 0.875rem;
+
+  /* Aliases for legacy landing.css (--cl-*) */
+  --cl-blue: var(--ds-blue);
+  --cl-blue-hover: var(--ds-blue-hover);
+  --cl-navy: var(--ds-navy);
+  --cl-charcoal: var(--ds-charcoal);
+  --cl-lavender: var(--ds-lavender);
+  --cl-lavender-soft: var(--ds-lavender-soft);
+  --cl-muted: var(--ds-muted);
+  --cl-border: var(--ds-border);
+  --cl-card: var(--ds-card);
+}

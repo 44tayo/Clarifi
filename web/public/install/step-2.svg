@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 300 180" fill="none" aria-hidden="true">
+  <defs>
+    <filter id="s2iconShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000" flood-opacity="0.18"/>
+    </filter>
+    <clipPath id="s2iconClip">
+      <rect x="38" y="54" width="68" height="68" rx="16"/>
+    </clipPath>
+    <clipPath id="s2folderClip">
+      <rect x="194" y="54" width="68" height="68" rx="16"/>
+    </clipPath>
+  </defs>
+  <rect width="300" height="180" rx="12" fill="#f5f5f7"/>
+  <!-- Clarifi app icon -->
+  <g filter="url(#s2iconShadow)">
+    <image href="/dock/clarifi.png" x="38" y="54" width="68" height="68" clip-path="url(#s2iconClip)" preserveAspectRatio="xMidYMid slice"/>
+  </g>
+  <!-- Drag arrow -->
+  <path d="M118 88 H168" stroke="#9ca3af" stroke-width="2" stroke-dasharray="5 4" stroke-linecap="round"/>
+  <path d="M162 82 L172 88 L162 94" stroke="#9ca3af" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Applications folder -->
+  <g filter="url(#s2iconShadow)">
+    <image href="/dock/apps.png" x="194" y="54" width="68" height="68" clip-path="url(#s2folderClip)" preserveAspectRatio="xMidYMid slice"/>
+  </g>
+  <!-- Hand / grab cursor -->
+  <path d="M58 44 C58 40 62 38 65 40 C66 36 71 36 73 40 C75 37 80 38 81 42 C84 41 87 44 86 48 L84 62 C83 66 79 68 75 67 L62 62 C58 60 56 56 57 52 Z" fill="#fff" stroke="#374151" stroke-width="1.2" stroke-linejoin="round"/>
+</svg>

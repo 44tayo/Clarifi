@@ -41,6 +41,10 @@ export type UserPreferences = {
   showModelInToolbar: boolean
   /** Optional product/battlecard knowledge for Sales mode live assist and recaps */
   productKnowledge?: string
+  /** Optional work context for Meetings mode live assist and chat */
+  workKnowledge?: string
+  /** Optional personal context for General mode live assist and chat */
+  generalKnowledge?: string
 }
 
 export type PublicModelConfig = Omit<ModelConfig, never>
@@ -51,6 +55,8 @@ export type PublicPreferences = {
   modes: ModeConfig[]
   showModelInToolbar: boolean
   productKnowledge: string
+  workKnowledge: string
+  generalKnowledge: string
 }
 
 const PREFS_FILE = 'user-preferences.json'
@@ -74,6 +80,8 @@ function defaultPreferences(): UserPreferences {
     modes: DEFAULT_MODES.map((m) => ({ ...m })),
     showModelInToolbar: false,
     productKnowledge: '',
+    workKnowledge: '',
+    generalKnowledge: '',
   }
 }
 
@@ -81,13 +89,53 @@ let cached: UserPreferences | null = null
 
 function mergeModes(stored: ModeConfig[]): ModeConfig[] {
   const byId = new Map(stored.map((m) => [m.id, m]))
-  return DEFAULT_MODES.map((defaults) => {
+  const builtinIds = new Set(DEFAULT_MODES.map((m) => m.id))
+  const merged = DEFAULT_MODES.map((defaults) => {
     const existing = byId.get(defaults.id)
     return {
       ...defaults,
       isActive: existing?.isActive ?? defaults.isActive,
     }
   })
+  const custom = stored.filter((m) => !builtinIds.has(m.id) && !m.builtin)
+  return [...merged, ...custom]
+}
+
+function resolveActiveModeId(
+  parsed: Partial<UserPreferences>,
+  defaults: UserPreferences,
+): string {
+  const storedModes = Array.isArray(parsed.modes) ? parsed.modes : []
+  const hadLegacyMeetingsAsGeneral =
+    storedModes.length <= 1 &&
+    storedModes.some(
+      (m) =>
+        m.id === 'general' &&
+        !storedModes.some((other) => other.id === 'meetings') &&
+        (m.label === 'Meetings' || m.category === 'Meetings'),
+    )
+
+  let activeModeId =
+    typeof parsed.activeModeId === 'string' ? parsed.activeModeId : defaults.activeModeId
+
+  if (activeModeId === 'sales') {
+    activeModeId = 'meetings'
+  }
+
+  if (hadLegacyMeetingsAsGeneral && activeModeId === 'general') {
+    activeModeId = 'meetings'
+  }
+
+  const validIds = new Set(DEFAULT_MODES.map((m) => m.id))
+  for (const mode of storedModes) {
+    if (!mode.builtin) validIds.add(mode.id)
+  }
+
+  if (!validIds.has(activeModeId)) {
+    activeModeId = defaults.activeModeId
+  }
+
+  return activeModeId
 }
 
 function mergeModels(stored: ModelConfig[]): ModelConfig[] {
@@ -117,10 +165,7 @@ export function loadUserPreferences(): UserPreferences {
     cached = {
       activeModelId,
       models,
-      activeModeId:
-        typeof parsed.activeModeId === 'string'
-          ? parsed.activeModeId
-          : defaults.activeModeId,
+      activeModeId: resolveActiveModeId(parsed, defaults),
       modes: Array.isArray(parsed.modes)
         ? mergeModes(parsed.modes)
         : defaults.modes,
@@ -130,6 +175,9 @@ export function loadUserPreferences(): UserPreferences {
           : defaults.showModelInToolbar,
       productKnowledge:
         typeof parsed.productKnowledge === 'string' ? parsed.productKnowledge : '',
+      workKnowledge: typeof parsed.workKnowledge === 'string' ? parsed.workKnowledge : '',
+      generalKnowledge:
+        typeof parsed.generalKnowledge === 'string' ? parsed.generalKnowledge : '',
     }
     syncActiveModeFlag(cached)
     return cached
@@ -171,7 +219,33 @@ export function toPublicPreferences(prefs: UserPreferences): PublicPreferences {
     modes: prefs.modes.map((m) => ({ ...m })),
     showModelInToolbar: prefs.showModelInToolbar,
     productKnowledge: prefs.productKnowledge?.trim() ?? '',
+    workKnowledge: prefs.workKnowledge?.trim() ?? '',
+    generalKnowledge: prefs.generalKnowledge?.trim() ?? '',
   }
+}
+
+export function getWorkKnowledge(prefs = loadUserPreferences()): string {
+  return prefs.workKnowledge?.trim() ?? ''
+}
+
+export function setWorkKnowledge(knowledge: string): PublicPreferences {
+  const prefs = loadUserPreferences()
+  const trimmed = knowledge.trim()
+  prefs.workKnowledge = trimmed.slice(0, 80_000)
+  saveUserPreferences(prefs)
+  return toPublicPreferences(prefs)
+}
+
+export function getGeneralKnowledge(prefs = loadUserPreferences()): string {
+  return prefs.generalKnowledge?.trim() ?? ''
+}
+
+export function setGeneralKnowledge(knowledge: string): PublicPreferences {
+  const prefs = loadUserPreferences()
+  const trimmed = knowledge.trim()
+  prefs.generalKnowledge = trimmed.slice(0, 80_000)
+  saveUserPreferences(prefs)
+  return toPublicPreferences(prefs)
 }
 
 export function getProductKnowledge(prefs = loadUserPreferences()): string {
@@ -263,11 +337,12 @@ export function setActiveModel(modelId: string): PublicPreferences {
 
 export function setActiveMode(modeId: string): PublicPreferences {
   const prefs = loadUserPreferences()
-  const mode = prefs.modes.find((m) => m.id === modeId)
+  const resolvedId = modeId === 'sales' ? 'meetings' : modeId
+  const mode = prefs.modes.find((m) => m.id === resolvedId)
   if (!mode || mode.transcriptionMode) {
     return toPublicPreferences(prefs)
   }
-  prefs.activeModeId = modeId
+  prefs.activeModeId = resolvedId
   saveUserPreferences(prefs)
   return toPublicPreferences(prefs)
 }

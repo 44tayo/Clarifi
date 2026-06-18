@@ -3,6 +3,7 @@ import { isProxyConfigured, proxyChat, proxySuggest } from './proxyClient'
 import {
   CLARIFI_AUDIO_SESSION_CHAT_PROMPT,
   CLARIFI_ENTERPRISE_SYSTEM_PROMPT,
+  CLARIFI_GENERAL_ANSWER_PROMPT,
   CLARIFI_SALES_DEFINE_PROMPT,
   CLARIFI_SALES_ANSWER_PROMPT,
   CLARIFI_SALES_LIVE_ASSIST_PROMPT,
@@ -28,13 +29,17 @@ import {
   getActiveMode,
   getActiveModel,
   getModelApiKey,
+  getGeneralKnowledge,
   getProductKnowledge,
+  getWorkKnowledge,
+  type ModeConfig,
   type ModelConfig,
 } from './userPreferences'
 import {
   detectAnswerTrigger,
   detectSuggestionTrigger,
 } from './salesAssistTrigger'
+import { getMemoryContextForPrompt } from './memory/memoryHandlers'
 
 export interface Suggestion {
   text: string
@@ -45,6 +50,9 @@ let lastTranscript = ''
 let isProcessing = false
 let lastAnalysisTranscript = ''
 let isAnalyzing = false
+let lastGeneralAnswerTriggerKey = ''
+let lastGeneralStickyAnswer: SalesAssistAction | null = null
+let isGeneralAnswering = false
 let lastAnswerTriggerKey = ''
 let lastStickyAnswer: SalesAssistAction | null = null
 let lastSuggestionTriggerKey = ''
@@ -60,6 +68,9 @@ export function resetSuggestionState(): void {
   isProcessing = false
   lastAnalysisTranscript = ''
   isAnalyzing = false
+  lastGeneralAnswerTriggerKey = ''
+  lastGeneralStickyAnswer = null
+  isGeneralAnswering = false
   lastAnswerTriggerKey = ''
   lastStickyAnswer = null
   lastSuggestionTriggerKey = ''
@@ -456,11 +467,52 @@ export function getSalesCallOpeningActions(): SalesAssistAction[] {
   ]
 }
 
-function buildSalesAssistSystemPrompt(basePrompt: string): string {
+function buildWorkKnowledgeBlock(workKnowledge: string): string {
+  if (workKnowledge) {
+    return `\n\n<work_knowledge>\n${workKnowledge}\n</work_knowledge>`
+  }
+  return `\n\n<work_knowledge>\nNo work context provided. Use only the live transcript.\n</work_knowledge>`
+}
+
+function buildGeneralKnowledgeBlock(generalKnowledge: string): string {
+  if (generalKnowledge) {
+    return `\n\n<general_context>\n${generalKnowledge}\n</general_context>`
+  }
+  return `\n\n<general_context>\nNo personal context provided. Use only the live transcript and screen.\n</general_context>`
+}
+
+function buildModeKnowledgeBlock(activeMode: ModeConfig): string {
+  if (activeMode.id === 'meetings') {
+    return buildWorkKnowledgeBlock(getWorkKnowledge())
+  }
+  if (activeMode.id === 'general') {
+    return buildGeneralKnowledgeBlock(getGeneralKnowledge())
+  }
+  return ''
+}
+
+function buildMemoryBlock(queryText?: string): string {
+  try {
+    return getMemoryContextForPrompt({ queryText })
+  } catch {
+    return ''
+  }
+}
+
+function buildGeneralAssistSystemPrompt(basePrompt: string, queryText?: string): string {
+  const activeMode = getActiveMode()
+  const knowledgeBlock = buildModeKnowledgeBlock(activeMode)
+  const memoryBlock = buildMemoryBlock(queryText)
+  const outputLanguageHint = getOutputLanguageInstruction()
+  return `${basePrompt}\n\nActive mode:\n${activeMode.systemPrompt}${knowledgeBlock}${memoryBlock}${outputLanguageHint}`
+}
+
+function buildSalesAssistSystemPrompt(basePrompt: string, queryText?: string): string {
   const activeMode = getActiveMode()
   const productKnowledge = getProductKnowledge()
+  const memoryBlock = buildMemoryBlock(queryText)
   const outputLanguageHint = getOutputLanguageInstruction()
-  return `${basePrompt}\n\nActive mode:\n${activeMode.systemPrompt}${buildSalesKnowledgeBlock(productKnowledge)}${outputLanguageHint}`
+  return `${basePrompt}\n\nActive mode:\n${activeMode.systemPrompt}${buildSalesKnowledgeBlock(productKnowledge)}${memoryBlock}${outputLanguageHint}`
 }
 
 async function requireSalesLlmConfig(): Promise<LlmCallConfig | SalesAssistError> {
@@ -502,7 +554,7 @@ export async function generateSalesAnswerAssist(
   try {
     const completion = await completeWithLlmConfig(
       llmResult,
-      buildSalesAssistSystemPrompt(CLARIFI_SALES_ANSWER_PROMPT),
+      buildSalesAssistSystemPrompt(CLARIFI_SALES_ANSWER_PROMPT, tail),
       `Active moment (${trigger.kind}): ${trigger.summary}\n\nTranscript (most recent at bottom):\n${tail}`,
       500,
     )
@@ -546,6 +598,64 @@ export async function generateSalesAnswerAssist(
   }
 }
 
+export async function generateGeneralAnswerAssist(
+  transcriptLines: string[],
+): Promise<{ answer?: SalesAssistAction; error?: SalesAssistError } | null> {
+  if (isGeneralAnswering) return null
+  if (transcriptLines.length === 0) return null
+
+  const tailLines = transcriptLines.slice(-30)
+  const tail = tailLines.join('\n')
+  const trigger = detectAnswerTrigger(tailLines)
+  if (!trigger) return null
+  if (trigger.key === lastGeneralAnswerTriggerKey && lastGeneralStickyAnswer) return null
+
+  const llmResult = await requireSalesLlmConfig()
+  if ('error' in llmResult) return { error: llmResult }
+
+  isGeneralAnswering = true
+  try {
+    const completion = await completeWithLlmConfig(
+      llmResult,
+      buildGeneralAssistSystemPrompt(CLARIFI_GENERAL_ANSWER_PROMPT, tail),
+      `Active moment (${trigger.kind}): ${trigger.summary}\n\nTranscript (most recent at bottom):\n${tail}`,
+      500,
+    )
+    if (!completion.ok) {
+      return { error: { error: 'assist_failed', message: completion.message } }
+    }
+
+    const parsed = parseJsonPayload<{
+      action?: Partial<SalesAssistAction> & { headline?: string }
+    }>(completion.text)
+    if (!parsed) {
+      return {
+        error: {
+          error: 'assist_failed',
+          message: 'Could not parse answer — try again in a few seconds.',
+        },
+      }
+    }
+
+    const action = normalizeSingleAction(parsed.action, 'speak_now')
+    if (!action) return null
+
+    lastGeneralAnswerTriggerKey = trigger.key
+    lastGeneralStickyAnswer = action
+    return { answer: action }
+  } catch (err) {
+    console.error('General answer assist error:', err)
+    return {
+      error: {
+        error: 'assist_failed',
+        message: 'Assist error — check the terminal log or your API key.',
+      },
+    }
+  } finally {
+    isGeneralAnswering = false
+  }
+}
+
 export async function generateSalesSuggestionAssist(
   transcriptLines: string[],
 ): Promise<{ suggestions?: SalesAssistAction[] } | null> {
@@ -565,7 +675,7 @@ export async function generateSalesSuggestionAssist(
   try {
     const completion = await completeWithLlmConfig(
       llmResult,
-      buildSalesAssistSystemPrompt(CLARIFI_SALES_SUGGESTIONS_PROMPT),
+      buildSalesAssistSystemPrompt(CLARIFI_SALES_SUGGESTIONS_PROMPT, tail),
       `Active moment (${trigger.kind}): ${trigger.summary}\n\nTranscript (most recent at bottom):\n${tail}`,
       400,
     )
@@ -659,6 +769,7 @@ export interface ChatRequest {
   transcriptLines: string[]
   useScreenContext: boolean
   screenImage?: ScreenContextImage
+  emailContext?: string
 }
 
 export type ChatResult = { reply: string } | { error: string }
@@ -673,7 +784,7 @@ type AnthropicContentBlock =
 export async function chatWithMeetingContext(
   request: ChatRequest,
 ): Promise<ChatResult> {
-  const { message, transcriptLines, useScreenContext, screenImage } = request
+  const { message, transcriptLines, useScreenContext, screenImage, emailContext } = request
 
   if (useScreenContext && !screenImage) {
     return { error: 'capture_failed' }
@@ -701,14 +812,20 @@ export async function chatWithMeetingContext(
     ? '\n\nReply concisely using screen context reply style. No backticks. No em-dashes. Max 6 visible details bullets. Max 6 tab names. One summary sentence with **bold** key names only. Total response under 1200 characters for simple screen questions.'
     : ''
 
+  const emailBlock = emailContext?.trim()
+    ? `\n\nConnected Gmail context:\n${emailContext.trim()}`
+    : ''
+
   const userText = screenImage
-    ? `Live meeting transcript:\n${transcript}\n\nUser typed question:\n${message}${screenStyleHint}`
-    : `Live meeting transcript:\n${transcript}\n\nUser question:\n${message}`
+    ? `Live meeting transcript:\n${transcript}\n\nUser typed question:\n${message}${emailBlock}${screenStyleHint}`
+    : `Live meeting transcript:\n${transcript}\n\nUser question:\n${message}${emailBlock}`
 
   const outputLanguageHint = getOutputLanguageInstruction()
+  const knowledgeBlock = buildModeKnowledgeBlock(activeMode)
+  const memoryBlock = buildMemoryBlock(message)
   const systemPrompt = screenImage
-    ? `${activeMode.systemPrompt}\n\n${CLARIFI_ENTERPRISE_SYSTEM_PROMPT}${outputLanguageHint}`
-    : `${activeMode.systemPrompt}${outputLanguageHint}`
+    ? `${activeMode.systemPrompt}${knowledgeBlock}${memoryBlock}\n\n${CLARIFI_ENTERPRISE_SYSTEM_PROMPT}${outputLanguageHint}`
+    : `${activeMode.systemPrompt}${knowledgeBlock}${memoryBlock}${outputLanguageHint}`
 
   const userContent: AnthropicContentBlock[] = screenImage
     ? [
@@ -758,7 +875,9 @@ export async function generateSuggestions(
 
     const activeMode = getActiveMode()
     const outputLanguageHint = getOutputLanguageInstruction()
-    const systemPrompt = `${CLARIFI_SUGGESTIONS_SYSTEM_PROMPT}\n\nActive mode:\n${activeMode.systemPrompt}${outputLanguageHint}${playbook ? `\n\nUser context/playbook:\n${playbook}` : ''}`
+    const knowledgeBlock = buildModeKnowledgeBlock(activeMode)
+    const memoryBlock = buildMemoryBlock(transcriptLines.slice(-8).join(' '))
+    const systemPrompt = `${CLARIFI_SUGGESTIONS_SYSTEM_PROMPT}\n\nActive mode:\n${activeMode.systemPrompt}${knowledgeBlock}${memoryBlock}${outputLanguageHint}${playbook ? `\n\nUser context/playbook:\n${playbook}` : ''}`
 
     const text = await completeWithActiveModel(
       systemPrompt,
@@ -793,7 +912,8 @@ export async function analyzeLiveSession(
   try {
     const activeMode = getActiveMode()
     const outputLanguageHint = getOutputLanguageInstruction()
-    const systemPrompt = `${CLARIFI_SESSION_ANALYSIS_PROMPT}\n\nActive mode:\n${activeMode.systemPrompt}${outputLanguageHint}`
+    const knowledgeBlock = buildModeKnowledgeBlock(activeMode)
+    const systemPrompt = `${CLARIFI_SESSION_ANALYSIS_PROMPT}\n\nActive mode:\n${activeMode.systemPrompt}${knowledgeBlock}${outputLanguageHint}`
 
     const text = await completeWithActiveModel(
       systemPrompt,

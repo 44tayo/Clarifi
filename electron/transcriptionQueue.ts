@@ -33,12 +33,14 @@ type TranscriptionQueueOptions = {
 
 let queueMic: QueuedChunk[] = []
 let queueSystem: QueuedChunk[] = []
-let processingMic = false
-let processingSystem = false
+let activeMicJobs = 0
+let activeSystemJobs = 0
 let draining = false
 let options: TranscriptionQueueOptions | null = null
 
-const SYSTEM_FIRST_WAIT_MS = 2_500
+const SYSTEM_FIRST_WAIT_MS = 500
+const MAX_CONCURRENT_MIC = 2
+const MAX_CONCURRENT_SYSTEM = 2
 const MIC_BLEED_WINDOW_MS = 25_000
 const ACTIVITY_SILENCE_MS = 6000
 
@@ -73,8 +75,8 @@ export function configureTranscriptionQueue(next: TranscriptionQueueOptions): vo
 export function clearTranscriptionQueue(): void {
   queueMic = []
   queueSystem = []
-  processingMic = false
-  processingSystem = false
+  activeMicJobs = 0
+  activeSystemJobs = 0
   draining = false
   recentSystemSpeech = []
   recentMicSpeech = []
@@ -115,9 +117,8 @@ export function enqueueTranscription(
     queueMic.push(chunk)
     void drainMicQueue()
   } else {
-    recentSystemChunks.push({ at: chunk.enqueuedAt, rms: 0, hadEnergy: false })
-    if (recentSystemChunks.length > 24) {
-      recentSystemChunks = recentSystemChunks.slice(-24)
+    if (rms !== undefined) {
+      updateSystemChunkWindow(chunk.enqueuedAt, rms, rms >= SYSTEM_SPEECH_RMS_MIN)
     }
     queueSystem.push(chunk)
     void drainSystemQueue()
@@ -128,8 +129,8 @@ export async function flushTranscriptionQueue(): Promise<void> {
   draining = true
   for (let attempt = 0; attempt < 200; attempt += 1) {
     const busy =
-      processingMic ||
-      processingSystem ||
+      activeMicJobs > 0 ||
+      activeSystemJobs > 0 ||
       queueMic.length > 0 ||
       queueSystem.length > 0
     if (!busy) break
@@ -139,9 +140,10 @@ export async function flushTranscriptionQueue(): Promise<void> {
 }
 
 async function waitForSystemDrain(maxMs = SYSTEM_FIRST_WAIT_MS): Promise<void> {
+  if (maxMs <= 0) return
   const deadline = Date.now() + maxMs
   while (Date.now() < deadline) {
-    if (!processingSystem && queueSystem.length === 0) return
+    if (activeSystemJobs === 0 && queueSystem.length === 0) return
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
 }
@@ -224,7 +226,7 @@ function isClearlyUserMicSpeech(
 function resolveMicEntryTarget(chunk: QueuedChunk): {
   speaker: string
   source: TranscriptSource
-} {
+} | null {
   if (!isDualCallMode()) {
     return { speaker: 'Me', source: 'mic' }
   }
@@ -237,11 +239,23 @@ function resolveMicEntryTarget(chunk: QueuedChunk): {
     return { speaker: 'Me', source: 'mic' }
   }
 
+  // Remote audio is owned by the system stream — skip mic bleed entirely.
   if (captureActive || hasRecentSystemEnergy(chunk.enqueuedAt)) {
-    return { speaker: 'Them', source: 'system' }
+    return null
   }
 
   return { speaker: 'Me', source: 'mic' }
+}
+
+function shouldSkipMicChunkBeforeTranscribe(chunk: QueuedChunk): boolean {
+  if (!isDualCallMode()) return false
+
+  const micRms = chunk.rms ?? 0
+  const captureActive = isSystemCaptureSessionActive(chunk.enqueuedAt)
+  const maxSystemRms = getMaxRecentSystemRms(chunk.enqueuedAt)
+
+  if (!captureActive && !hasRecentSystemEnergy(chunk.enqueuedAt)) return false
+  return !isClearlyUserMicSpeech(micRms, maxSystemRms, captureActive)
 }
 
 function micMatchesRecentThem(
@@ -268,7 +282,7 @@ function hasRecentSpeech(): boolean {
 
 function updateActivityState(): void {
   if (!options?.onActivity) return
-  if (processingMic || processingSystem) {
+  if (activeMicJobs > 0 || activeSystemJobs > 0) {
     options.onActivity('transcribing')
     return
   }
@@ -304,38 +318,40 @@ function pruneMicBleedFromSession(systemEntry: TranscriptEntry): void {
   }
 }
 
-async function drainMicQueue(): Promise<void> {
-  if (processingMic || !options) return
-  processingMic = true
-  updateActivityState()
-  try {
-    while (queueMic.length > 0 && options) {
-      await processMicChunk(queueMic.shift()!)
-    }
-  } finally {
-    processingMic = false
+function pumpMicQueue(): void {
+  if (!options) return
+  while (queueMic.length > 0 && activeMicJobs < MAX_CONCURRENT_MIC) {
+    const chunk = queueMic.shift()!
+    activeMicJobs += 1
     updateActivityState()
-    if (queueMic.length > 0) {
-      void drainMicQueue()
-    }
+    void processMicChunk(chunk).finally(() => {
+      activeMicJobs -= 1
+      updateActivityState()
+      pumpMicQueue()
+    })
   }
 }
 
-async function drainSystemQueue(): Promise<void> {
-  if (processingSystem || !options) return
-  processingSystem = true
-  updateActivityState()
-  try {
-    while (queueSystem.length > 0 && options) {
-      await processSystemChunk(queueSystem.shift()!)
-    }
-  } finally {
-    processingSystem = false
+function pumpSystemQueue(): void {
+  if (!options) return
+  while (queueSystem.length > 0 && activeSystemJobs < MAX_CONCURRENT_SYSTEM) {
+    const chunk = queueSystem.shift()!
+    activeSystemJobs += 1
     updateActivityState()
-    if (queueSystem.length > 0) {
-      void drainSystemQueue()
-    }
+    void processSystemChunk(chunk).finally(() => {
+      activeSystemJobs -= 1
+      updateActivityState()
+      pumpSystemQueue()
+    })
   }
+}
+
+async function drainMicQueue(): Promise<void> {
+  pumpMicQueue()
+}
+
+async function drainSystemQueue(): Promise<void> {
+  pumpSystemQueue()
 }
 
 function emitEntry(
@@ -400,6 +416,11 @@ async function processMicChunk(chunk: QueuedChunk): Promise<void> {
     return
   }
 
+  if (shouldSkipMicChunkBeforeTranscribe(chunk)) {
+    updateActivityState()
+    return
+  }
+
   if (isDualCallMode()) {
     await waitForSystemDrain()
   }
@@ -416,6 +437,10 @@ async function processMicChunk(chunk: QueuedChunk): Promise<void> {
     return
   }
   const target = resolveMicEntryTarget(chunk)
+  if (!target) {
+    updateActivityState()
+    return
+  }
 
   if (shouldSkipMicBleed(transcript, chunk, entries)) {
     updateActivityState()

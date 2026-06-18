@@ -2,7 +2,9 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { MarketingNav } from '@/components/marketing/MarketingNav'
 import { BlogPostContent } from '@/components/blog/BlogPostContent'
+import { WaitlistSiteFooter } from '@/components/waitlist/WaitlistPageSections'
 import { BLOG_POST_SLUGS, getBlogPost } from '@/lib/blog-posts'
+import '@/components/waitlist/waitlist.css'
 import '../../landing-blog.css'
 
 type PageProps = { params: Promise<{ slug: string }> }
@@ -82,7 +84,7 @@ export default async function BlogPostPage({ params }: PageProps) {
   if (!post) notFound()
 
   return (
-    <div className="blog-root">
+    <div className="blog-root landing-root waitlist-page">
       <FaqJsonLd slug={slug} />
       <MarketingNav active="blog" showBack />
       <article className="blog-post" data-reveal>
@@ -95,6 +97,7 @@ export default async function BlogPostPage({ params }: PageProps) {
           <Link href="/blog">← All posts</Link>
         </p>
       </article>
+      <WaitlistSiteFooter />
     </div>
   )
 }

@@ -3,6 +3,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { clearAudioSessions } from './audioSessionHistory'
 import { clearChatSessions } from './chatHistory'
+import { clearAllMemoryData } from './memory/exportService'
 import { createOnboardingWindow } from './onboarding'
 import { resetOnboarding } from './onboardingState'
 import { destroyOverlayWindow } from './overlay'
@@ -33,6 +34,7 @@ export async function eraseLocalAccountData(): Promise<void> {
   await resetOnboarding()
   clearChatSessions()
   clearAudioSessions()
+  clearAllMemoryData()
   removeLocalAvatar()
 
   const userData = app.getPath('userData')

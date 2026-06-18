@@ -48,7 +48,8 @@ export default async function proxy(request: NextRequest) {
   if (
     searchParams.get('code') &&
     pathname !== '/auth/callback' &&
-    !pathname.startsWith('/api/integrations/hubspot/callback')
+    !pathname.startsWith('/api/integrations/hubspot/callback') &&
+    !pathname.startsWith('/api/integrations/gmail/callback')
   ) {
     const authNext = request.cookies.get('clarifi_auth_next')?.value ?? null
     const target = authCallbackRedirectPath(searchParams, authNext)

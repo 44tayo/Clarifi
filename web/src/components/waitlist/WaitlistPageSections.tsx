@@ -1,3 +1,5 @@
+'use client'
+
 import Image from 'next/image'
 import Link from 'next/link'
 import { useState } from 'react'
@@ -75,24 +77,6 @@ const PRODUCT_BENEFITS = [
   },
 ] as const
 
-const EARLY_BENEFITS = [
-  {
-    num: '01',
-    title: 'Early Access',
-    text: 'Be first in line when Clarifi launches on August 24, 2026.',
-  },
-  {
-    num: '02',
-    title: 'Founding Price',
-    text: "Waitlist members lock in the lowest price we'll ever offer.",
-  },
-  {
-    num: '03',
-    title: 'Shape the Product',
-    text: 'Early users get direct input into features and roadmap.',
-  },
-] as const
-
 function ClarifiLogoMark() {
   return (
     <Image
@@ -123,23 +107,6 @@ export function WaitlistProductSections() {
                 <h3 className="waitlist-benefit-title">{benefit.title}</h3>
                 <p className="waitlist-benefit-desc">{benefit.description}</p>
               </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="waitlist-early" aria-labelledby="why-join-early-heading" data-reveal>
-        <div className="waitlist-early-inner">
-          <h2 id="why-join-early-heading" className="waitlist-section-heading" data-reveal>
-            Why join early?
-          </h2>
-          <div className="waitlist-early-row" data-reveal-group>
-            {EARLY_BENEFITS.map((item) => (
-              <div key={item.num} className="waitlist-early-item" data-reveal>
-                <span className="waitlist-early-num">{item.num}</span>
-                <h3 className="waitlist-early-title">{item.title}</h3>
-                <p className="waitlist-early-text">{item.text}</p>
-              </div>
             ))}
           </div>
         </div>

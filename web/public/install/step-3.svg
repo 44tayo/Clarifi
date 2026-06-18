@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 300 180" fill="none" aria-hidden="true">
+  <defs>
+    <clipPath id="s3rowIcon">
+      <rect x="16" y="66" width="18" height="18" rx="4"/>
+    </clipPath>
+  </defs>
+  <rect width="300" height="180" rx="12" fill="#fff" stroke="#e5e7eb" stroke-width="1"/>
+  <!-- Title bar -->
+  <rect width="300" height="32" rx="12" fill="#f8fafc"/>
+  <rect y="20" width="300" height="12" fill="#f8fafc"/>
+  <text x="16" y="21" fill="#6b7280" font-family="system-ui,-apple-system,sans-serif" font-size="11" font-weight="600">Applications</text>
+  <!-- Clock row -->
+  <circle cx="25" cy="50" r="7" fill="#e5e7eb"/>
+  <text x="40" y="54" fill="#9ca3af" font-family="system-ui,-apple-system,sans-serif" font-size="10">Clock</text>
+  <!-- Clarifi row (selected) -->
+  <rect x="8" y="62" width="284" height="26" rx="6" fill="#dbeafe"/>
+  <image href="/dock/clarifi.png" x="16" y="66" width="18" height="18" clip-path="url(#s3rowIcon)" preserveAspectRatio="xMidYMid slice"/>
+  <text x="40" y="79" fill="#1d4ed8" font-family="system-ui,-apple-system,sans-serif" font-size="10" font-weight="600">Clarifi</text>
+  <!-- Cursor on row -->
+  <path d="M218 74 L218 66 L224 66 L224 60 L236 72 L224 84 L224 78 Z" fill="#fff" stroke="#1a1a2e" stroke-width="0.9"/>
+  <!-- Contacts row -->
+  <circle cx="25" cy="104" r="7" fill="#e5e7eb"/>
+  <text x="40" y="108" fill="#9ca3af" font-family="system-ui,-apple-system,sans-serif" font-size="10">Contacts</text>
+  <!-- Dictionary row -->
+  <circle cx="25" cy="128" r="7" fill="#e5e7eb"/>
+  <text x="40" y="132" fill="#9ca3af" font-family="system-ui,-apple-system,sans-serif" font-size="10">Dictionary</text>
+</svg>

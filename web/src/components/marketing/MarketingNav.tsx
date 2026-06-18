@@ -2,40 +2,55 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useCallback, useEffect, useState } from 'react'
-import { previewHref } from '@/lib/launch-preview'
-import { useLaunchCountdown } from '@/hooks/useLaunchCountdown'
-import '@/components/landing/landing.css'
+import { useCallback, useMemo } from 'react'
+
+import { DownloadWithInstallModal } from '@/components/DownloadWithInstallModal'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 type MarketingNavProps = {
   active?: 'blog' | 'pricing'
   showBack?: boolean
+  variant?: 'default' | 'hero'
 }
 
-export function MarketingNav({ active, showBack = false }: MarketingNavProps) {
-  const [scrolled, setScrolled] = useState(false)
-  const countdown = useLaunchCountdown()
-  const isLive = countdown?.isLive ?? false
+export function MarketingNav({ active, showBack = false, variant = 'default' }: MarketingNavProps) {
+  const links = useMemo(
+    () => [
+      { label: 'Demo', href: '/#demo', active: false },
+      { label: 'Features', href: '/#features', active: false },
+      { label: 'FAQ', href: '/#faq', active: false },
+      { label: 'Blog', href: '/blog', active: active === 'blog' },
+      { label: 'Pricing', href: '/pricing', active: active === 'pricing' },
+    ],
+    [active],
+  )
 
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 40)
-    onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
+  const handleSectionClick = useCallback(
+    (event: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+      if (!href.startsWith('/#')) return
+      if (window.location.pathname !== '/') return
 
-  const scrollToJoin = useCallback(() => {
-    if (typeof window !== 'undefined' && window.location.pathname === '/') {
-      document.getElementById('join')?.scrollIntoView({ behavior: 'smooth' })
-      return
-    }
-    window.location.href = '/#join'
-  }, [])
+      const id = href.slice(2)
+      const target = document.getElementById(id)
+      if (!target) return
+
+      event.preventDefault()
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      window.history.pushState(null, '', href)
+    },
+    [],
+  )
 
   return (
-    <nav className={`landing-nav ${scrolled ? 'scrolled' : ''}`}>
+    <header
+      className={cn(
+        'landing-nav landing-nav-static',
+        variant === 'hero' && 'landing-nav-hero',
+      )}
+    >
       <div className="landing-nav-inner">
-        {showBack && (
+        {showBack ? (
           <Link href="/" className="landing-nav-back" aria-label="Back to home">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
               <path
@@ -47,12 +62,13 @@ export function MarketingNav({ active, showBack = false }: MarketingNavProps) {
               />
             </svg>
           </Link>
-        )}
+        ) : null}
+
         <Link href="/" className="landing-nav-logo">
           <span className="landing-nav-logo-icon">
             <Image
               src="/clarifi-logo.png"
-              alt="Clarifi"
+              alt=""
               width={32}
               height={32}
               className="landing-logo-img"
@@ -60,34 +76,35 @@ export function MarketingNav({ active, showBack = false }: MarketingNavProps) {
           </span>
           Clarifi
         </Link>
-        <div className="landing-nav-links">
-          <Link
-            href="/blog"
-            className={`landing-nav-link${active === 'blog' ? ' landing-nav-link-active' : ''}`}
+
+        <nav className="landing-nav-links" aria-label="Main">
+          {links.map((link) => (
+            <Link
+              key={link.label}
+              href={link.href}
+              onClick={(event) => handleSectionClick(event, link.href)}
+              className={cn('landing-nav-link', link.active && 'landing-nav-link-active')}
+            >
+              {link.label}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="landing-nav-cta-group">
+          <Button
+            variant="outline"
+            size="default"
+            className={cn(
+              variant === 'hero' &&
+                'border-white/35 bg-white/[0.08] text-white hover:bg-white/[0.14] hover:text-white',
+            )}
+            asChild
           >
-            Blog
-          </Link>
-          <Link
-            href="/pricing"
-            className={`landing-nav-link${active === 'pricing' ? ' landing-nav-link-active' : ''}`}
-          >
-            Pricing
-          </Link>
+            <Link href="/sign-in?next=/dashboard">Login</Link>
+          </Button>
+          <DownloadWithInstallModal variant="compact" buttonStyle="shadcn" />
         </div>
-        {isLive ? (
-          <Link href={previewHref('/dashboard')} className="landing-cta landing-nav-cta">
-            Dashboard
-          </Link>
-        ) : (
-          <button
-            type="button"
-            className="landing-cta landing-nav-cta"
-            onClick={scrollToJoin}
-          >
-            Join the waitlist
-          </button>
-        )}
       </div>
-    </nav>
+    </header>
   )
 }

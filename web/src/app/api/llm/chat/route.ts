@@ -1,4 +1,10 @@
 import {
+  buildGmailContextText,
+  extractGmailSearchQuery,
+  messageRequestsGmailContext,
+  searchGmailMessages,
+} from '@/lib/gmail'
+import {
   getUserIdFromRequest,
   planLimitResponse,
   unauthorizedResponse,
@@ -33,6 +39,7 @@ export async function POST(req: Request) {
     transcriptLines?: string[]
     useScreenContext?: boolean
     screenImage?: { imageBase64: string; mimeType: 'image/png' }
+    emailContext?: string
   }
 
   if (!payload.message || typeof payload.message !== 'string') {
@@ -43,11 +50,22 @@ export async function POST(req: Request) {
     ? payload.transcriptLines.filter((line): line is string => typeof line === 'string')
     : []
 
+  let emailContext =
+    typeof payload.emailContext === 'string' ? payload.emailContext.trim() : ''
+  if (!emailContext && messageRequestsGmailContext(payload.message)) {
+    const query = extractGmailSearchQuery(payload.message)
+    if (query) {
+      const messages = await searchGmailMessages(userId, query, 5)
+      emailContext = buildGmailContextText(messages)
+    }
+  }
+
   const result = await chatWithMeetingContext({
     message: payload.message,
     transcriptLines,
     useScreenContext: Boolean(payload.useScreenContext),
     screenImage: payload.screenImage,
+    emailContext: emailContext || undefined,
   })
 
   if ('error' in result) {

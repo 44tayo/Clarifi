@@ -3,15 +3,6 @@
 .landing-root,
 .blog-root,
 .legal-root {
-  --cl-blue: #2b6cff;
-  --cl-blue-hover: #1a5ae8;
-  --cl-navy: #1a1a2e;
-  --cl-charcoal: #1c1c2e;
-  --cl-lavender: #dde2ee;
-  --cl-lavender-soft: #eef1f8;
-  --cl-muted: #6b7280;
-  --cl-border: #e8ecf4;
-  --cl-card: #f7f8fc;
   font-family: var(--font-inter, 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
   color: var(--cl-navy);
   overflow-x: hidden;
@@ -70,6 +61,13 @@
   background: rgba(255, 255, 255, 0.78);
   border-bottom-color: var(--cl-border);
   box-shadow: 0 4px 24px rgba(26, 26, 46, 0.06);
+}
+
+.landing-nav-static {
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
 }
 
 .landing-nav-inner {
@@ -170,43 +168,278 @@
   flex-shrink: 0;
 }
 
-/* ── CTA ── */
+.landing-nav-cta-group {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-shrink: 0;
+}
+
+.landing-nav-login {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.5rem;
+  padding: 0 1.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--cl-navy, #1a1a2e);
+  background: #fff;
+  color: var(--cl-navy, #1a1a2e);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.2s, color 0.2s;
+}
+
+.landing-nav-login:hover {
+  background: rgba(26, 26, 46, 0.06);
+}
+
+.landing-nav-download.download-mac-btn {
+  font-size: 0.875rem;
+}
+
+/* ── CTA (matches Button default — rounded-xl, bordered) ── */
 .landing-cta {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 2.5rem;
+  padding: 0 1.25rem;
   background: var(--cl-blue);
   color: #fff;
-  font-weight: 600;
+  font-weight: 500;
   font-size: 0.875rem;
-  padding: 0.55rem 1.15rem;
-  border-radius: 9999px;
-  border: none;
+  border-radius: 0.75rem;
+  border: 1px solid transparent;
   cursor: pointer;
   text-decoration: none;
-  box-shadow: 0 4px 20px rgba(43, 108, 255, 0.35);
-  transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+  box-shadow: none;
+  transition: background 0.15s ease;
   font-family: inherit;
 }
 
 .landing-cta:hover {
   background: var(--cl-blue-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 28px rgba(43, 108, 255, 0.45);
+  transform: none;
+  box-shadow: none;
 }
 
 .landing-cta-large {
-  font-size: 0.95rem;
-  padding: 0.7rem 1.5rem;
+  height: 2.75rem;
+  padding: 0 1.5rem;
+  font-size: 0.875rem;
 }
 
 .landing-cta-dark {
   background: var(--cl-navy);
-  box-shadow: 0 4px 20px rgba(26, 26, 46, 0.25);
+  border-color: transparent;
 }
 
 .landing-cta-dark:hover {
   background: #2a2a42;
+}
+
+/* ── Download buttons (same design system as Button) ── */
+.download-mac-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 2.5rem;
+  padding: 0 1.25rem;
+  background: var(--cl-blue);
+  color: #fff;
+  font-weight: 500;
+  font-size: 0.875rem;
+  border-radius: 0.75rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+  box-shadow: none;
+  transition: background 0.15s ease;
+  line-height: 1.2;
+}
+
+.download-mac-btn:hover {
+  background: var(--cl-blue-hover);
+  transform: none;
+  box-shadow: none;
+}
+
+.download-mac-btn-secondary {
+  background: var(--cl-blue);
+}
+
+.download-mac-btn-outline {
+  background: #fff;
+  color: var(--cl-navy, #1a1a2e);
+  border: 1px solid var(--cl-navy, #1a1a2e);
+}
+
+.download-mac-btn-outline:hover {
+  background: rgba(26, 26, 46, 0.06);
+  color: var(--cl-navy, #1a1a2e);
+}
+
+.landing-install-title {
+  font-size: clamp(1.75rem, 3.2vw, 2.25rem);
+  font-weight: 700;
+  text-align: center;
+  margin: 0;
+  color: #1a1a2e;
+  letter-spacing: -0.02em;
+}
+
+.landing-install-header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.landing-install-step {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.landing-install-illustration-wrap {
+  position: relative;
+  margin-bottom: 1.25rem;
+}
+
+.landing-install-step-num {
+  position: absolute;
+  top: -14px;
+  left: -14px;
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #2b6cff;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  font-weight: 700;
+  box-shadow: 0 2px 10px rgba(43, 108, 255, 0.35);
+}
+
+.landing-install-step-text {
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  text-align: center;
+  color: #4b5563;
+  margin: 0;
+  padding: 0 0.35rem;
+}
+
+.landing-install-link {
+  color: #2b6cff;
+  font-weight: 600;
+}
+
+.landing-install-step-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 14px;
+}
+
+.landing-install-troubleshoot {
+  margin-top: 1.5rem;
+  padding: 1.1rem 1.25rem;
+  border-radius: 0.85rem;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: #374151;
+}
+
+.landing-install-troubleshoot ol {
+  margin: 0.6rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.landing-install-troubleshoot code {
+  font-size: 0.8rem;
+}
+
+.landing-install-footer {
+  text-align: center;
+  margin-top: 2.25rem;
+  font-size: 1rem;
+  color: #6b7280;
+}
+
+.landing-install-download-again {
+  background: none;
+  border: none;
+  color: #2b6cff;
+  cursor: pointer;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 0;
+}
+
+.landing-install-overlay {
+  z-index: 10000;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  overscroll-behavior: none;
+}
+
+.landing-install-modal {
+  max-width: 1180px;
+  width: min(1180px, calc(100vw - 2.5rem));
+  padding: 3.25rem 3rem 2.75rem;
+  border-radius: 1.5rem;
+  box-shadow:
+    0 28px 96px rgba(15, 23, 42, 0.24),
+    0 0 0 1px rgba(255, 255, 255, 0.65) inset;
+}
+
+.landing-install-modal .landing-install-illustration {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  aspect-ratio: 300 / 180;
+  width: 100%;
+}
+
+.landing-install-modal .landing-modal-close {
+  top: 1.25rem;
+  right: 1.25rem;
+  font-size: 1.5rem;
+}
+
+.landing-downloaded-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #16a34a;
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.85rem;
+}
+
+.landing-downloaded-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #dcfce7;
+  font-size: 0.8rem;
+  line-height: 1;
 }
 
 /* ── Hero ── */
@@ -214,7 +447,12 @@
   position: relative;
   padding: 7.5rem 2rem 5rem;
   text-align: center;
-  background: linear-gradient(180deg, var(--cl-lavender) 0%, #e8edf6 40%, #fff 100%);
+  background: linear-gradient(
+    180deg,
+    hsl(198 28% 84%) 0%,
+    hsl(210 20% 96%) 45%,
+    #fff 100%
+  );
   overflow: hidden;
 }
 
@@ -228,7 +466,7 @@
 .landing-hero-glow-a {
   width: 500px;
   height: 500px;
-  background: rgba(196, 181, 253, 0.35);
+  background: hsl(195 40% 72% / 0.28);
   top: 10%;
   left: -10%;
 }
@@ -236,7 +474,7 @@
 .landing-hero-glow-b {
   width: 400px;
   height: 400px;
-  background: rgba(251, 207, 232, 0.3);
+  background: hsl(208 35% 88% / 0.24);
   top: 20%;
   right: -5%;
 }
@@ -273,8 +511,89 @@
 }
 
 .landing-hero-demo-wrap {
-  max-width: 1040px;
-  margin-top: 3rem;
+  width: auto;
+  max-width: none;
+  margin: 1.5rem 3.5cm 0;
+  padding: 0;
+}
+
+.landing-hero-scroll {
+  display: block;
+  padding-top: 0.5rem;
+  overflow: visible;
+}
+
+.landing-hero-scroll .hero-sales-demo {
+  padding: 0 !important;
+  transform: none;
+  height: calc(14cm * 13 / 10);
+}
+
+.landing-hero-demo-wrap .hero-sales-screen {
+  max-width: none;
+  width: 100%;
+  height: calc(14cm * 13 / 10) !important;
+  min-height: calc(14cm * 13 / 10) !important;
+  max-height: calc(14cm * 13 / 10) !important;
+  margin: 0 auto;
+  overflow: hidden;
+  box-sizing: border-box;
+  border-radius: 16px;
+  box-shadow: 0 8px 40px rgba(15, 23, 42, 0.12);
+}
+
+.landing-hero-demo-wrap .hero-desktop-stage {
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  aspect-ratio: unset !important;
+}
+
+.landing-hero-demo-wrap .hero-desktop-scene {
+  transform: none;
+}
+
+.landing-hero-demo-wrap .hero-desktop-window {
+  width: calc(15.4cm * 10 / 9.9 * 14 / 10);
+  height: calc(10cm * 14 / 10);
+}
+
+.landing-hero-demo-wrap .hero-desktop-window .vcd-root--hero {
+  width: 15.4cm;
+  height: 9.9cm;
+  transform: scale(calc(10 / 9.9 * 14 / 10));
+  transform-origin: center center;
+}
+
+.landing-hero-demo-wrap .hero-desktop-clarifi {
+  top: calc(24px * 10 / 9.9 * 14 / 10);
+  width: min(88%, calc(360px * 10 / 9.9 * 14 / 10));
+}
+
+.landing-hero-demo-wrap .hero-desktop-clarifi .od-root.size-sm .od-stack {
+  transform: scale(calc(0.58 * 10 / 9.9 * 14 / 10));
+  transform-origin: top center;
+}
+
+.landing-hero-demo-wrap .hero-desktop-clarifi .od-bar,
+.landing-hero-demo-wrap .hero-desktop-clarifi .od-expanded {
+  background: rgba(12, 12, 16, 0.84);
+  backdrop-filter: blur(4px) saturate(1.05);
+  -webkit-backdrop-filter: blur(4px) saturate(1.05);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+}
+
+.landing-hero-demo-wrap .hero-desktop-clarifi .od-input {
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+@media (max-width: 640px) {
+  .landing-hero-demo-wrap {
+    margin-left: 1rem;
+    margin-right: 1rem;
+  }
 }
 
 .landing-hero-widget-wrap .od-chat-body {
@@ -1674,7 +1993,7 @@
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 100;
+  z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1715,34 +2034,8 @@
 
 .landing-install-steps {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.5rem;
-  margin-top: 2rem;
-}
-
-.landing-install-step-num {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--cl-blue);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.8rem;
-  font-weight: 700;
-  margin-bottom: 0.75rem;
-}
-
-.landing-install-illustration {
-  background: var(--cl-card);
-  border-radius: 0.75rem;
-  height: 120px;
-  margin-bottom: 0.75rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2.5rem;
 }
 
 .landing-coming-soon {
@@ -1758,16 +2051,6 @@
 @keyframes bounce {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-12px); }
-}
-
-.landing-downloaded-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  color: #16a34a;
-  font-size: 0.875rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
 }
 
 /* ── Responsive ── */
@@ -1812,8 +2095,19 @@
     justify-content: space-between;
   }
 
-  .landing-nav-cta {
+  .landing-nav-cta,
+  .landing-nav-cta-group {
     margin-left: 0;
+  }
+
+  .landing-nav-login {
+    padding: 0.5rem 0.85rem;
+    font-size: 0.8125rem;
+  }
+
+  .landing-nav-download.download-mac-btn {
+    font-size: 0.8125rem;
+    padding: 0.5rem 0.95rem;
   }
 
   .landing-hero {
@@ -1836,13 +2130,23 @@
   }
 }
 
+@media (max-width: 768px) {
+  .landing-install-modal {
+    padding: 2.25rem 1.25rem 1.75rem;
+  }
+
+  .landing-install-steps {
+    gap: 1.5rem;
+  }
+}
+
 @media (max-width: 640px) {
   .landing-install-steps {
     grid-template-columns: 1fr;
   }
 }
 
-/* ── Clarifi bento (Otter-style product showcase) ── */
+/* ── Clarifi bento (product showcase — styles in marketing/design-system.css) ── */
 .clarifi-bento-section {
   background: transparent;
 }

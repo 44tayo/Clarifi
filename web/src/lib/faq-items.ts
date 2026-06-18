@@ -1,11 +1,11 @@
 export const FAQ_ITEMS = [
   {
-    q: 'Why real-time vs. a regular AI notetaker?',
-    a: 'Clarifi helps you during the call — suggesting what to say, answering questions, and capturing context live — not just after the meeting ends.',
+    q: 'Why Clarifi vs. a regular AI notetaker?',
+    a: 'Clarifi captures your meeting through system audio — no bot joins the call — and gives you live transcription, instant answers in a floating overlay, and structured notes when you hang up.',
   },
   {
     q: 'Who is Clarifi for?',
-    a: 'Sales calls, interviews, client meetings, lectures — anyone who wants an invisible AI co-pilot in the moment.',
+    a: 'Anyone in meetings: team syncs, client calls, interviews, lectures, and 1:1s. Clarifi is an invisible overlay that works on top of Zoom, Meet, Teams, and any desktop app.',
   },
   {
     q: 'Is there a free trial?',

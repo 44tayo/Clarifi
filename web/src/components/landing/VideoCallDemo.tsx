@@ -66,8 +66,8 @@ export function VideoCallDemo({
   localSrc,
   remoteSrc,
   localName = 'You',
-  remoteName = 'Prospect',
-  meetingTitle = 'Sales discovery call',
+  remoteName = 'Them',
+  meetingTitle = 'Team meeting',
   variant = 'full',
   layout = 'default',
 }: VideoCallDemoProps) {

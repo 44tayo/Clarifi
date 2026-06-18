@@ -11,7 +11,11 @@ export function FaqSection({ className = '' }: FaqSectionProps) {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
 
   return (
-    <section className={`landing-section landing-faq-section ${className}`.trim()} data-reveal>
+    <section
+      id="faq"
+      className={`landing-section landing-faq-section ${className}`.trim()}
+      data-reveal
+    >
       <div className="landing-section-header">
         <h2>Frequently asked questions</h2>
       </div>

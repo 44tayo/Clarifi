@@ -19,7 +19,7 @@ export function HeroSalesDemo() {
               defaultStealth
               defaultFollow
               defaultPanelMode="history"
-              defaultModeLabel="Sales"
+              defaultModeLabel="Meetings"
             />
           }
         >
@@ -28,6 +28,8 @@ export function HeroSalesDemo() {
             layout="hero"
             localSrc="/demo/you.mp4"
             remoteSrc="/demo/them.mp4"
+            remoteName="Them"
+            meetingTitle="Weekly team sync"
           />
         </DesktopStage>
       </div>

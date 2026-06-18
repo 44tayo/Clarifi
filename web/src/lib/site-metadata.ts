@@ -2,32 +2,31 @@ export const SITE_NAME = 'Clarifi'
 
 /** ~155 chars — optimized for Google SERP snippets (Cluely / LockedIn style). */
 export const SITE_DESCRIPTION =
-  'Clarifi is an undetectable AI sales copilot for live calls. Get real-time objection handlers, talk tracks, and next steps on every discovery, demo, and close — invisible on screen share.'
+  'Clarifi is an invisible AI notetaker and chat overlay for meetings. Perfect notes, real-time answers, and transcripts — completely undetectable on screen share. No meeting bot.'
 
-export const SITE_TITLE = 'Clarifi — AI Sales Copilot for Live Calls'
+export const SITE_TITLE = 'Clarifi — Invisible AI Notetaker & Meeting Overlay'
 
 export const SITE_TAGLINE =
-  'Live sales coaching on every call — objection handlers, talk tracks, and next steps, completely undetectable.'
+  'Perfect meeting notes and real-time answers — invisible on your screen and on screen share.'
 
 export const SITE_KEYWORDS = [
   'Clarifi',
-  'AI sales copilot',
-  'sales call AI',
-  'undetectable AI sales assistant',
-  'real-time sales coaching',
-  'sales objection handler',
-  'discovery call AI',
-  'sales demo assistant',
-  'Zoom sales AI',
-  'Google Meet sales AI',
-  'Microsoft Teams sales AI',
+  'AI meeting notetaker',
   'invisible AI overlay',
+  'undetectable AI for meetings',
+  'AI meeting assistant',
+  'meeting transcription',
   'screen share invisible',
+  'Zoom meeting notes',
+  'Google Meet AI notes',
+  'Microsoft Teams notetaker',
+  'real-time meeting answers',
+  'desktop AI overlay',
 ]
 
 export const SITE_OG_IMAGE = {
   url: '/clarifi-logo.png',
   width: 1024,
   height: 1024,
-  alt: 'Clarifi — AI sales copilot for live calls',
+  alt: 'Clarifi — invisible AI notetaker for meetings',
 } as const
