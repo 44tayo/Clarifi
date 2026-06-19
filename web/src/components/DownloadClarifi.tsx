@@ -56,6 +56,7 @@ export function DownloadClarifi({
   variant = 'dashboard',
   onDownloaded,
   className,
+  buttonStyle = 'shadcn',
 }: DownloadClarifiProps) {
   const platform = useCustomerPlatform()
   const secondary: CustomerPlatform = platform === 'mac' ? 'windows' : 'mac'
@@ -74,6 +75,19 @@ export function DownloadClarifi({
   const isMac = platform === 'mac'
 
   if (variant === 'compact') {
+    if (buttonStyle === 'landing') {
+      return (
+        <button
+          type="button"
+          className={cn('download-mac-btn', className)}
+          onClick={() => download(platform)}
+        >
+          {isMac ? <AppleLogo size={14} /> : null}
+          {label}
+        </button>
+      )
+    }
+
     return (
       <Button type="button" className={cn('gap-2', className)} onClick={() => download(platform)}>
         {isMac ? <AppleLogo size={14} /> : null}

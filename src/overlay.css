@@ -2198,3 +2198,183 @@ body {
   color: white;
   cursor: pointer;
 }
+
+/* ── Simple recording session UI (v1) ── */
+.overlay-root-simple {
+  width: 100%;
+  height: 100%;
+}
+
+.overlay-bar-simple {
+  width: 100%;
+  background: rgba(18, 18, 18, 0.92);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  overflow: visible;
+}
+
+.session-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.session-card-body {
+  position: relative;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.session-assist-pill {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(43, 108, 255, 0.9);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.session-viewed-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  margin-bottom: 8px;
+}
+
+.session-description {
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.88);
+  max-width: 92%;
+  margin-bottom: 12px;
+}
+
+.session-productivity-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+.session-productivity-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.session-productivity-dot {
+  color: rgba(255, 255, 255, 0.25);
+  font-size: 12px;
+  padding: 0 2px;
+  user-select: none;
+}
+
+.session-productivity-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.session-productivity-chip:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.session-productivity-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.session-reply {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.session-reply-loading {
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+}
+
+.session-composer {
+  padding: 10px 12px;
+}
+
+.session-composer-input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+  outline: none;
+}
+
+.session-composer-input-solo {
+  margin-bottom: 0;
+}
+
+.session-composer-input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.toolbar-record-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  -webkit-app-region: no-drag;
+}
+
+.toolbar-record-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toolbar-record-pause {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.voice-spin-rect {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: #fff;
+  animation: voice-spin 3s linear infinite;
+}
+
+@keyframes voice-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.history-transcript-line {
+  margin: 0 0 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.75);
+}

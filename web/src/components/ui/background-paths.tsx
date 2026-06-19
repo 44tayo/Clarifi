@@ -53,7 +53,7 @@ function FloatingPaths({ position }: { position: number }) {
   )
 }
 
-/** Notto-style hero: sharp sky photo + blue tint + white fade at bottom. */
+/** Clarifi hero: ice landscape photo + cyan tint + white fade at bottom. */
 export function HeroBackgroundPaths({ className }: { className?: string }) {
   return (
     <div
@@ -64,17 +64,17 @@ export function HeroBackgroundPaths({ className }: { className?: string }) {
       aria-hidden
     >
       <Image
-        src="/images/hero-sky.jpg"
+        src="/images/hero-ice.jpg"
         alt=""
         fill
         priority
         quality={95}
         sizes="100vw"
-        className="hero-sky-photo object-cover object-[center_18%]"
+        className="hero-ice-photo object-cover object-[center_32%]"
       />
 
       <div
-        className="absolute inset-0 bg-blue-600/20 mix-blend-multiply"
+        className="absolute inset-0 bg-sky-600/18 mix-blend-multiply"
         aria-hidden
       />
 
@@ -82,7 +82,7 @@ export function HeroBackgroundPaths({ className }: { className?: string }) {
         className="absolute inset-0"
         style={{
           background:
-            'linear-gradient(180deg, rgba(37,99,235,0.52) 0%, rgba(59,130,246,0.22) 38%, transparent 62%)',
+            'linear-gradient(180deg, rgba(30,64,175,0.5) 0%, rgba(14,165,233,0.24) 38%, transparent 62%)',
         }}
       />
 

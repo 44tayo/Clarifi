@@ -3,7 +3,7 @@
 import { AnimatedHero } from '@/components/ui/animated-hero'
 import { HeroBackgroundPaths } from '@/components/ui/background-paths'
 import { Logos3 } from '@/components/ui/logos3'
-import { SectionWithMockup } from '@/components/ui/section-with-mockup'
+import { StackedCards } from '@/components/StackedCards'
 import { HeroSalesDemo } from '@/components/landing/HeroSalesDemo'
 import { MeetingNotesSection } from '@/components/landing/MeetingNotesSection'
 import { DownloadWithInstallModal } from '@/components/DownloadWithInstallModal'
@@ -47,27 +47,7 @@ export function HeroScrollSection() {
         <Logos3 />
       </section>
 
-      <SectionWithMockup
-        title={
-          <>
-            Intelligence,
-            <br />
-            delivered to you.
-          </>
-        }
-        description={
-          <>
-            Get a tailored Monday morning brief directly in
-            <br />
-            your inbox, crafted by your virtual personal
-            <br />
-            analyst, spotlighting essential watchlist stories
-            <br />
-            and earnings for the week ahead.
-          </>
-        }
-        primaryImageSrc="https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1200&q=80"
-      />
+      <StackedCards />
 
       <MeetingNotesSection />
     </>

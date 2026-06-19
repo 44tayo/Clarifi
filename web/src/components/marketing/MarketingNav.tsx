@@ -15,6 +15,8 @@ type MarketingNavProps = {
 }
 
 export function MarketingNav({ active, showBack = false, variant = 'default' }: MarketingNavProps) {
+  const isHero = variant === 'hero'
+
   const links = useMemo(
     () => [
       { label: 'Demo', href: '/#demo', active: false },
@@ -43,12 +45,7 @@ export function MarketingNav({ active, showBack = false, variant = 'default' }: 
   )
 
   return (
-    <header
-      className={cn(
-        'landing-nav landing-nav-static',
-        variant === 'hero' && 'landing-nav-hero',
-      )}
-    >
+    <header className={cn('landing-nav', isHero && 'landing-nav-hero')}>
       <div className="landing-nav-inner">
         {showBack ? (
           <Link href="/" className="landing-nav-back" aria-label="Back to home">
@@ -91,18 +88,25 @@ export function MarketingNav({ active, showBack = false, variant = 'default' }: 
         </nav>
 
         <div className="landing-nav-cta-group">
-          <Button
-            variant="outline"
-            size="default"
-            className={cn(
-              variant === 'hero' &&
-                'border-white/35 bg-white/[0.08] text-white hover:bg-white/[0.14] hover:text-white',
-            )}
-            asChild
-          >
-            <Link href="/sign-in?next=/dashboard">Login</Link>
-          </Button>
-          <DownloadWithInstallModal variant="compact" buttonStyle="shadcn" />
+          {isHero ? (
+            <Button
+              variant="outline"
+              size="default"
+              className="border-white/35 bg-white/[0.08] text-white hover:bg-white/[0.14] hover:text-white"
+              asChild
+            >
+              <Link href="/sign-in?next=/dashboard">Login</Link>
+            </Button>
+          ) : (
+            <Link href="/sign-in?next=/dashboard" className="landing-nav-login">
+              Login
+            </Link>
+          )}
+          <DownloadWithInstallModal
+            variant="compact"
+            buttonStyle={isHero ? 'shadcn' : 'landing'}
+            className={isHero ? undefined : 'landing-nav-download'}
+          />
         </div>
       </div>
     </header>

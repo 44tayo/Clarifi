@@ -87,6 +87,17 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.landing-hero h1,
+.waitlist-hero-title {
+  font-family: var(--font-geist-sans), ui-sans-serif, sans-serif;
+}
+
 /* Scroll reveal — visible until React enables animations (no hydration mismatch) */
 [data-reveal] {
   opacity: 1;

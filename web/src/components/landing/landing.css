@@ -12,9 +12,8 @@
   background: #fff;
 }
 
-/* Shared marketing header — blog, pricing, legal (not homepage) */
+/* Shared marketing header — blog & pricing (frosted glass, matches homepage feel) */
 .blog-root .landing-nav,
-.legal-root .landing-nav,
 .pricing-page .landing-nav {
   background: rgba(255, 255, 255, 0.22);
   backdrop-filter: blur(28px) saturate(1.8);
@@ -24,8 +23,23 @@
 }
 
 .blog-root .landing-nav.scrolled,
-.legal-root .landing-nav.scrolled,
 .pricing-page .landing-nav.scrolled {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(32px) saturate(1.8);
+  -webkit-backdrop-filter: blur(32px) saturate(1.8);
+  border-bottom-color: rgba(255, 255, 255, 0.5);
+}
+
+/* Legal pages keep frosted subpage nav */
+.legal-root .landing-nav {
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(28px) saturate(1.8);
+  -webkit-backdrop-filter: blur(28px) saturate(1.8);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 4px 30px rgba(26, 26, 46, 0.04);
+}
+
+.legal-root .landing-nav.scrolled {
   background: rgba(255, 255, 255, 0.65);
   backdrop-filter: blur(32px) saturate(1.8);
   -webkit-backdrop-filter: blur(32px) saturate(1.8);

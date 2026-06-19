@@ -12,6 +12,7 @@ interface AIVoiceInputProps {
   demoMode?: boolean
   demoInterval?: number
   className?: string
+  variant?: 'default' | 'on-blue' | 'on-black'
 }
 
 export function AIVoiceInput({
@@ -21,7 +22,9 @@ export function AIVoiceInput({
   demoMode = false,
   demoInterval = 3000,
   className,
+  variant = 'default',
 }: AIVoiceInputProps) {
+  const onDark = variant === 'on-blue' || variant === 'on-black'
   const [submitted, setSubmitted] = useState(false)
   const [time, setTime] = useState(0)
   const [isClient, setIsClient] = useState(false)
@@ -87,25 +90,38 @@ export function AIVoiceInput({
         <button
           className={cn(
             'group flex h-16 w-16 items-center justify-center rounded-xl transition-colors',
-            submitted ? 'bg-none' : 'bg-none hover:bg-accent',
+            submitted
+              ? 'bg-none'
+              : onDark
+                ? 'bg-none hover:bg-white/10'
+                : 'bg-none hover:bg-accent',
           )}
           type="button"
           onClick={handleClick}
         >
           {submitted ? (
             <div
-              className="pointer-events-auto h-6 w-6 cursor-pointer animate-spin rounded-sm bg-primary"
+              className={cn(
+                'pointer-events-auto h-6 w-6 cursor-pointer animate-spin rounded-sm',
+                onDark ? 'bg-white' : 'bg-primary',
+              )}
               style={{ animationDuration: '3s' }}
             />
           ) : (
-            <Mic className="h-6 w-6 text-muted-foreground" />
+            <Mic className={cn('h-6 w-6', onDark ? 'text-white/70' : 'text-muted-foreground')} />
           )}
         </button>
 
         <span
           className={cn(
             'font-mono text-sm transition-opacity duration-300',
-            submitted ? 'text-foreground' : 'text-muted-foreground/50',
+            onDark
+              ? submitted
+                ? 'text-white/70'
+                : 'text-white/30'
+              : submitted
+                ? 'text-foreground'
+                : 'text-muted-foreground/50',
           )}
         >
           {formatTime(time)}
@@ -118,8 +134,12 @@ export function AIVoiceInput({
               className={cn(
                 'w-0.5 rounded-full transition-all duration-300',
                 submitted
-                  ? 'animate-pulse bg-primary/50'
-                  : 'h-1 bg-muted-foreground/20',
+                  ? onDark
+                    ? 'animate-pulse bg-white/50'
+                    : 'animate-pulse bg-primary/50'
+                  : onDark
+                    ? 'h-1 bg-white/10'
+                    : 'h-1 bg-muted-foreground/20',
               )}
               style={
                 submitted && isClient
@@ -133,7 +153,7 @@ export function AIVoiceInput({
           ))}
         </div>
 
-        <p className="h-4 text-xs text-muted-foreground">
+        <p className={cn('h-4 text-xs', onDark ? 'text-white/70' : 'text-muted-foreground')}>
           {submitted ? 'Listening...' : 'Click to speak'}
         </p>
       </div>

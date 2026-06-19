@@ -1,5 +1,6 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata } from 'next'
+import { GeistSans } from 'geist/font/sans'
 import { Inter } from 'next/font/google'
 import {
   SITE_DESCRIPTION,
@@ -56,7 +57,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${inter.variable} ${GeistSans.variable}`}>
       <body className="font-sans antialiased">
         <ScrollRevealProvider>{children}</ScrollRevealProvider>
         <Analytics />
