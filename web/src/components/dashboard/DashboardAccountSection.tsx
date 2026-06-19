@@ -2,6 +2,9 @@ import Link from 'next/link'
 import { AccountSettingsForm } from '@/components/dashboard/AccountSettingsForm'
 import { ManageBillingButton } from '@/components/billing/ManageBillingButton'
 import { SignOutButton } from '@/components/auth/SignOutButton'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 import { PLAN_LIMITS, isPaidPlan, type Plan } from '@/lib/plans'
 
 type DashboardAccountSectionProps = {
@@ -27,53 +30,53 @@ export function DashboardAccountSection({
   const billingStatus = plan === 'free' ? 'Free tier' : 'Active subscription'
 
   return (
-    <section className="p-6 border border-white/10 rounded-2xl mb-6">
-      <h2 className="font-semibold mb-1">Account</h2>
-      <p className="text-sm text-white/50 mb-5">Your Clarifi profile and subscription</p>
+    <Card className="mb-6">
+      <CardHeader>
+        <CardTitle className="text-lg">Account</CardTitle>
+        <CardDescription>Your Clarifi profile and subscription</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <dl className="mb-2 grid gap-4 sm:grid-cols-3">
+          <div>
+            <dt className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Name</dt>
+            <dd className="text-sm font-medium">{displayName}</dd>
+          </div>
+          <div>
+            <dt className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Email</dt>
+            <dd className="break-all text-sm font-medium">{email ?? '—'}</dd>
+          </div>
+          <div>
+            <dt className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Plan</dt>
+            <dd className="text-sm font-medium">
+              {planLabel}
+              <span className="mt-0.5 block text-xs text-muted-foreground">{billingStatus}</span>
+            </dd>
+          </div>
+        </dl>
 
-      <dl className="grid gap-4 sm:grid-cols-3 mb-2">
-        <div>
-          <dt className="text-xs uppercase tracking-wide text-white/40 mb-1">Name</dt>
-          <dd className="text-sm font-medium">{displayName}</dd>
+        <AccountSettingsForm
+          firstName={firstName}
+          lastName={lastName}
+          email={email}
+          hasEmailAuth={hasEmailAuth}
+          hasGoogleAuth={hasGoogleAuth}
+        />
+
+        <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-border pt-6">
+          <ManageBillingButton className={cn(buttonVariants({ variant: 'default' }))} />
+          {!isPaidPlan(plan) ? (
+            <Button variant="outline" asChild>
+              <Link href="/billing">Upgrade to Pro</Link>
+            </Button>
+          ) : null}
+          <SignOutButton className="px-2 text-sm text-muted-foreground hover:text-foreground" />
         </div>
-        <div>
-          <dt className="text-xs uppercase tracking-wide text-white/40 mb-1">Email</dt>
-          <dd className="text-sm font-medium break-all">{email ?? '—'}</dd>
-        </div>
-        <div>
-          <dt className="text-xs uppercase tracking-wide text-white/40 mb-1">Plan</dt>
-          <dd className="text-sm font-medium">
-            {planLabel}
-            <span className="block text-white/40 text-xs mt-0.5">{billingStatus}</span>
-          </dd>
-        </div>
-      </dl>
 
-      <AccountSettingsForm
-        firstName={firstName}
-        lastName={lastName}
-        email={email}
-        hasEmailAuth={hasEmailAuth}
-        hasGoogleAuth={hasGoogleAuth}
-      />
-
-      <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-6 mt-6">
-        <ManageBillingButton className="inline-block bg-white text-black px-6 py-2 rounded-lg text-sm font-medium hover:bg-white/90 disabled:opacity-60" />
-        {!isPaidPlan(plan) ? (
-          <Link
-            href="/billing"
-            className="inline-block border border-white/20 px-6 py-2 rounded-lg text-sm hover:bg-white/5"
-          >
-            Upgrade to Pro
-          </Link>
-        ) : null}
-        <SignOutButton className="text-sm text-white/50 hover:text-white px-2" />
-      </div>
-
-      <p className="text-xs text-white/40 mt-4">
-        Manage billing opens Stripe&apos;s secure portal to update your card, view invoices, or
-        cancel anytime.
-      </p>
-    </section>
+        <p className="mt-4 text-xs text-muted-foreground">
+          Manage billing opens Stripe&apos;s secure portal to update your card, view invoices, or
+          cancel anytime.
+        </p>
+      </CardContent>
+    </Card>
   )
 }

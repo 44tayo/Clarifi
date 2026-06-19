@@ -20,6 +20,7 @@ xattr -cr "$APP_PATH" 2>/dev/null || true
 sign_target() {
   local target="$1"
   [[ -e "$target" ]] || return 0
+  xattr -cr "$target" 2>/dev/null || true
   codesign --force --sign - "${ENT_ARGS[@]}" "$target" 2>/dev/null || \
     codesign --force --sign - "$target"
 }

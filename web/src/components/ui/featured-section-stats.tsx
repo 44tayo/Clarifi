@@ -16,9 +16,9 @@ export function FeaturedSectionStats() {
   return (
     <section className="mx-auto w-full max-w-6xl py-32 text-left">
       <div className="px-4">
-        <h3 className="mb-16 text-lg font-medium text-gray-900 sm:text-xl lg:text-4xl dark:text-white">
+        <h3 className="mb-16 text-lg font-medium text-[var(--cl-navy)] sm:text-xl lg:text-4xl">
           Powering teams with real-time insights.{' '}
-          <span className="text-sm text-gray-500 sm:text-base lg:text-4xl dark:text-gray-400">
+          <span className="text-sm text-[var(--cl-muted)] sm:text-base lg:text-4xl">
             Our next-gen analytics dashboard helps you track performance, manage clients, and make
             data-driven decisions in seconds.
           </span>

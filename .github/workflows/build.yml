@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 env:
-  NODE_VERSION: 20
+  NODE_VERSION: 22
   SKIP_NATIVE_REBUILD: '1'
 
 jobs:
@@ -67,6 +67,7 @@ jobs:
         run: |
           APP="release/mac-arm64/Clarifi.app"
           test -d "$APP"
+          xattr -cr "$APP" || true
           bash scripts/adhoc-sign-mac-app.sh "$APP"
           codesign --verify --deep "$APP"
 

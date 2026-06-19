@@ -8,7 +8,7 @@ type ManageBillingButtonProps = {
 }
 
 export function ManageBillingButton({
-  className = 'inline-block border border-white/20 px-6 py-2 rounded-lg text-sm hover:bg-white/5',
+  className = 'inline-flex items-center justify-center rounded-lg bg-primary px-6 py-2 text-sm font-medium text-primary-foreground shadow-sm shadow-black/5 hover:bg-primary/90 disabled:opacity-60',
   label = 'Manage billing',
 }: ManageBillingButtonProps) {
   const [loading, setLoading] = useState(false)
@@ -54,7 +54,7 @@ export function ManageBillingButton({
       >
         {loading ? 'Opening…' : label}
       </button>
-      {error ? <p className="text-sm text-red-400 mt-2">{error}</p> : null}
+      {error ? <p className="mt-2 text-sm text-destructive">{error}</p> : null}
     </div>
   )
 }

@@ -1,5 +1,40 @@
 /* Clarifi marketing design system — feature grids, cards, and mock visuals */
 
+.ds-feature-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-feature-gap);
+  box-sizing: border-box;
+  width: var(--ds-feature-row-inner-w);
+  max-width: 100%;
+  margin-inline: auto;
+  padding: 0;
+}
+
+.ds-feature-row {
+  display: grid;
+  gap: var(--ds-feature-gap);
+  width: 100%;
+}
+
+.ds-feature-row--wide-narrow {
+  grid-template-columns: var(--ds-feature-wide-w) var(--ds-feature-narrow-w);
+}
+
+.ds-feature-row--narrow-wide {
+  grid-template-columns: var(--ds-feature-narrow-w) var(--ds-feature-wide-w);
+}
+
+.ds-feature-row--thirds {
+  grid-template-columns: repeat(3, var(--ds-feature-narrow-w));
+  gap: var(--ds-feature-gap);
+}
+
+.ds-feature-row--thirds > :only-child {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+
 .ds-feature-grid {
   display: grid;
   grid-template-columns: repeat(var(--ds-feature-grid-columns), minmax(0, 1fr));
@@ -13,38 +48,42 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
   background: var(--ds-surface-feature);
   border-radius: var(--ds-radius-card);
-  padding: 0.85rem;
-  border: 1px solid rgba(15, 23, 42, 0.06);
-}
-
-.ds-feature-wide {
-  grid-column: span 4;
-}
-
-.ds-feature-narrow {
-  grid-column: span 2;
-}
-
-.ds-feature-third {
-  grid-column: span 2;
-}
-
-.ds-feature-visual {
-  margin-bottom: 1rem;
-  min-height: var(--ds-feature-visual-height);
-  border-radius: var(--ds-radius-visual);
-  background: var(--ds-surface-visual);
+  padding: 0;
+  border: none;
   overflow: hidden;
 }
 
-.ds-feature-narrow .ds-feature-visual {
-  min-height: var(--ds-feature-visual-height);
+.ds-feature-wide,
+.ds-feature-narrow,
+.ds-feature-third {
+  width: 100%;
+  max-width: none;
+  height: auto;
+  grid-column: auto;
 }
 
+.ds-feature-visual {
+  flex: none;
+  width: 100%;
+  margin-bottom: 0;
+  border-radius: var(--ds-radius-card) var(--ds-radius-card) 0 0;
+  background: var(--ds-surface-feature);
+  border: none;
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.ds-feature-wide .ds-feature-visual {
+  height: var(--ds-feature-wide-h);
+}
+
+.ds-feature-narrow .ds-feature-visual,
 .ds-feature-third .ds-feature-visual {
-  min-height: var(--ds-feature-visual-height-compact);
+  height: var(--ds-feature-narrow-h);
 }
 
 .ds-feature-card h3 {
@@ -52,16 +91,22 @@
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--ds-navy);
-  margin: 0 0 0.4rem;
-  padding: 0 0.15rem;
+  margin: 0;
+  padding: 0.65rem 0.85rem 0.25rem;
+  flex-shrink: 0;
 }
 
 .ds-feature-card p {
   margin: 0;
-  padding: 0 0.15rem 0.15rem;
+  padding: 0 0.85rem 0.85rem;
   color: var(--ds-muted);
   font-size: var(--ds-feature-body-size);
-  line-height: 1.55;
+  line-height: 1.45;
+  flex-shrink: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* Mock visual primitives — use inside MarketingFeatureVisual */
@@ -82,11 +127,11 @@
 
 .ds-mock-doc {
   width: min(100%, 320px);
-  background: var(--ds-surface-mock);
+  background: transparent;
   border-radius: var(--ds-radius-mock);
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border: none;
   padding: 1rem 1.1rem;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  box-shadow: none;
 }
 
 .ds-mock-doc-title {
@@ -129,7 +174,8 @@
 .ds-mock-chat-prompt {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(15, 23, 42, 0.1);
+  border: none;
+  box-shadow: none;
   padding: 0.45rem 0.75rem;
   font-size: 0.72rem;
   color: var(--ds-muted);
@@ -138,9 +184,9 @@
 .ds-mock-chat-bubble {
   border-radius: 0.85rem;
   background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border: none;
   padding: 0.65rem 0.75rem;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+  box-shadow: none;
 }
 
 .ds-mock-chat-brand {
@@ -179,7 +225,7 @@
   min-width: 7.5rem;
   border-radius: 0.45rem;
   padding: 0.35rem 0.45rem;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+  box-shadow: none;
 }
 
 .ds-mock-note-chip span {
@@ -239,20 +285,54 @@
   background: var(--ds-accent-blue, #60a5fa);
 }
 
+@media (max-width: 1160px) and (min-width: 901px) {
+  .ds-feature-row--wide-narrow {
+    grid-template-columns: 2fr 1fr;
+  }
+
+  .ds-feature-row--narrow-wide {
+    grid-template-columns: 1fr 2fr;
+  }
+}
+
 @media (max-width: 900px) {
-  .ds-feature-grid {
+  .ds-feature-stack {
+    width: auto;
+    max-width: none;
+    margin-inline: auto;
+    padding: 0;
+  }
+
+  .ds-feature-row--wide-narrow,
+  .ds-feature-row--narrow-wide,
+  .ds-feature-row--thirds {
     grid-template-columns: 1fr;
   }
 
   .ds-feature-wide,
   .ds-feature-narrow,
   .ds-feature-third {
-    grid-column: span 1;
+    width: 100%;
+    height: auto;
   }
 
-  .ds-feature-visual,
+  .ds-feature-wide .ds-feature-visual,
   .ds-feature-narrow .ds-feature-visual,
   .ds-feature-third .ds-feature-visual {
+    height: var(--ds-feature-visual-height-mobile);
+  }
+
+  .ds-feature-visual {
     min-height: var(--ds-feature-visual-height-mobile);
+  }
+
+  .ds-feature-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ds-feature-grid .ds-feature-wide,
+  .ds-feature-grid .ds-feature-narrow,
+  .ds-feature-grid .ds-feature-third {
+    grid-column: span 1;
   }
 }

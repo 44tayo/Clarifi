@@ -961,7 +961,258 @@
   color: rgba(255, 255, 255, 0.55);
 }
 
-/* ── Meeting notes ── */
+/* ── Meeting notes showcase (hero placement) ── */
+.landing-notes-showcase-section {
+  background: #fff;
+  padding: 6rem 2rem;
+  max-width: none;
+  margin: 0 auto;
+}
+
+.landing-notes-showcase-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.landing-notes-showcase-frame {
+  background: var(--cl-lavender);
+  border-radius: 32px;
+  padding: 1.5rem;
+  box-shadow: 0 12px 40px rgba(26, 26, 46, 0.06);
+  min-height: 620px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.landing-notes-showcase-window {
+  width: 94%;
+  max-width: 1040px;
+  min-height: 540px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(26, 26, 46, 0.1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.landing-notes-showcase-chrome {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 1.25rem;
+  border-bottom: 1px solid var(--cl-border);
+  flex-shrink: 0;
+}
+
+.landing-notes-showcase-dots {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.landing-notes-showcase-dots span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #e5e7eb;
+}
+
+.landing-notes-showcase-dots span:nth-child(1) {
+  background: #ff5f57;
+}
+
+.landing-notes-showcase-dots span:nth-child(2) {
+  background: #febc2e;
+}
+
+.landing-notes-showcase-dots span:nth-child(3) {
+  background: #28c840;
+}
+
+.landing-notes-showcase-search {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 280px;
+  margin: 0 auto;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  background: var(--cl-lavender-soft);
+  color: var(--cl-muted);
+  font-size: 0.8rem;
+}
+
+.landing-notes-showcase-search-icon {
+  width: 14px;
+  height: 14px;
+  opacity: 0.55;
+}
+
+.landing-notes-showcase-chrome-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-shrink: 0;
+}
+
+.landing-notes-showcase-start {
+  border: none;
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: inherit;
+  color: #fff;
+  background: var(--cl-navy);
+  cursor: default;
+}
+
+.landing-notes-showcase-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #c4b5fd, #93c5fd);
+  flex-shrink: 0;
+}
+
+.landing-notes-showcase-body {
+  flex: 1;
+  padding: 1.5rem 1.75rem 1.25rem;
+  font-size: 0.85rem;
+}
+
+.landing-notes-showcase-body .landing-notes-title {
+  font-size: 1.15rem;
+  margin-bottom: 0.35rem;
+}
+
+.landing-notes-showcase-body .landing-notes-meta {
+  font-size: 0.8rem;
+  margin-bottom: 0.35rem;
+}
+
+.landing-notes-showcase-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 0.75rem 0 1.25rem;
+}
+
+.landing-notes-showcase-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.landing-notes-showcase-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--cl-border);
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--cl-navy);
+  background: #fff;
+  cursor: default;
+}
+
+.landing-notes-showcase-summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.65rem;
+}
+
+.landing-notes-showcase-copy {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--cl-muted);
+  cursor: default;
+}
+
+.landing-notes-showcase-list {
+  margin: 0;
+  padding-left: 1.15rem;
+  color: #374151;
+  line-height: 1.75;
+  font-size: 0.82rem;
+}
+
+.landing-notes-showcase-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1.25rem;
+  border-top: 1px solid var(--cl-border);
+  background: #fafbfc;
+  flex-shrink: 0;
+}
+
+.landing-notes-showcase-resume {
+  border: 1px solid var(--cl-border);
+  border-radius: 999px;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--cl-navy);
+  background: #fff;
+  cursor: default;
+  flex-shrink: 0;
+}
+
+.landing-notes-showcase-footer .landing-notes-ask {
+  flex: 1;
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .landing-notes-showcase-section {
+    padding: 4rem 1.25rem;
+  }
+
+  .landing-notes-showcase-frame {
+    min-height: auto;
+    padding: 1rem;
+  }
+
+  .landing-notes-showcase-window {
+    width: 100%;
+    min-height: 460px;
+  }
+
+  .landing-notes-showcase-chrome {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .landing-notes-showcase-search {
+    order: 3;
+    width: 100%;
+    max-width: none;
+  }
+
+  .landing-notes-showcase-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* ── Meeting notes (legacy stack) ── */
 .landing-notes-stack {
   position: relative;
   height: 420px;
@@ -2147,8 +2398,42 @@
 }
 
 /* ── Clarifi bento (product showcase — styles in marketing/design-system.css) ── */
+.clarifi-bento-section.landing-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+  max-width: none;
+  padding-left: var(--ds-feature-side-padding);
+  padding-right: var(--ds-feature-side-padding);
+}
+
+.clarifi-bento-section .landing-section-header {
+  max-width: 1100px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 2rem;
+  padding-right: 2rem;
+  box-sizing: border-box;
+}
+
+.clarifi-bento-section .ds-feature-stack {
+  width: var(--ds-feature-row-inner-w);
+  max-width: 100%;
+  margin-inline: auto;
+}
+
 .clarifi-bento-section {
   background: transparent;
+}
+
+@media (max-width: 900px) {
+  .clarifi-bento-section.landing-section {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
 }
 
 .clarifi-bento {

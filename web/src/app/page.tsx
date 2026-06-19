@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
-import { WaitlistPage } from '@/components/waitlist/WaitlistPage'
+import { MarketingHomePage } from '@/components/landing/MarketingHomePage'
 import { redirectOAuthCodeIfPresent } from '@/lib/prelaunch-page'
 import {
   SITE_DESCRIPTION,
@@ -8,8 +8,6 @@ import {
   SITE_OG_IMAGE,
   SITE_TITLE,
 } from '@/lib/site-metadata'
-import { getSupabaseEnv } from '@/lib/supabase/env'
-import { getSiteOrigin } from '@/lib/site-url'
 
 export const metadata: Metadata = {
   title: SITE_TITLE,
@@ -37,11 +35,9 @@ export default async function Home({ searchParams }: HomeProps) {
   const params = await searchParams
   await redirectOAuthCodeIfPresent(params)
 
-  const supabaseConfig = getSupabaseEnv()
-
   return (
     <Suspense fallback={null}>
-      <WaitlistPage supabaseConfig={supabaseConfig} siteOrigin={getSiteOrigin()} />
+      <MarketingHomePage />
     </Suspense>
   )
 }

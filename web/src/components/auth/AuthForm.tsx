@@ -2,6 +2,10 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
+
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { authNextCookieValue } from '@/lib/auth-next'
 import { createClient } from '@/lib/supabase/client'
 import { authCallbackUrl } from '@/lib/site-url'
@@ -125,31 +129,37 @@ export function AuthForm({
         <p className="auth-subtitle">{subtitle}</p>
 
         <form className="auth-form" onSubmit={(e) => void handleEmail(e)}>
-          <input
-            type="email"
-            className="auth-input"
-            placeholder="you@email.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete="email"
-          />
-          <button type="submit" className="auth-btn auth-btn-primary" disabled={status === 'loading'}>
+          <div className="space-y-2">
+            <Label htmlFor="auth-email">Email</Label>
+            <Input
+              id="auth-email"
+              type="email"
+              placeholder="you@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+            />
+          </div>
+          <Button type="submit" className="w-full" disabled={status === 'loading'}>
             {mode === 'sign-up' ? 'Create account' : 'Continue with email'}
-          </button>
+          </Button>
         </form>
 
-        <div className="auth-divider">or</div>
+        <div className="auth-divider">
+          <span>Or</span>
+        </div>
 
-        <button
+        <Button
           type="button"
-          className="auth-btn auth-btn-google"
+          variant="outline"
+          className="w-full"
           onClick={() => void handleGoogle()}
           disabled={status === 'loading'}
         >
           <GoogleIcon />
           Continue with Google
-        </button>
+        </Button>
 
         {message ? (
           <p

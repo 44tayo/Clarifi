@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react'
 
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+
 type GmailStatus = {
   connected: boolean
   configured: boolean
@@ -70,56 +73,53 @@ export function DashboardGmailSection({
 
   if (!status.configured) {
     return (
-      <section className="p-6 border border-white/10 rounded-2xl mb-6">
-        <h2 className="font-semibold mb-1">Gmail</h2>
-        <p className="text-sm text-white/50">
-          Gmail is not configured on the server yet. Add GOOGLE_GMAIL_CLIENT_ID and
-          GOOGLE_GMAIL_CLIENT_SECRET to enable inbox search and summaries.
-        </p>
-      </section>
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-lg">Gmail</CardTitle>
+          <CardDescription>
+            Gmail is not configured on the server yet. Add GOOGLE_GMAIL_CLIENT_ID and
+            GOOGLE_GMAIL_CLIENT_SECRET to enable inbox search and summaries.
+          </CardDescription>
+        </CardHeader>
+      </Card>
     )
   }
 
   return (
-    <section className="p-6 border border-white/10 rounded-2xl mb-6">
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-        <div>
-          <h2 className="font-semibold mb-1">Gmail</h2>
-          <p className="text-sm text-white/50">
-            Connect Gmail so Clarifi can find, read, and summarize emails on request.
-          </p>
+    <Card className="mb-6">
+      <CardHeader>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-lg">Gmail</CardTitle>
+            <CardDescription>
+              Connect Gmail so Clarifi can find, read, and summarize emails on request.
+            </CardDescription>
+          </div>
+          {!status.connected ? (
+            <Button asChild>
+              <a href={connectUrl}>Connect Gmail</a>
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={() => void disconnect()} disabled={saving}>
+              Disconnect
+            </Button>
+          )}
         </div>
-        {!status.connected ? (
-          <a
-            href={connectUrl}
-            className="inline-block bg-white text-black px-6 py-2 rounded-lg text-sm font-medium hover:bg-white/90"
-          >
-            Connect Gmail
-          </a>
+      </CardHeader>
+      <CardContent>
+        {status.connected ? (
+          <p className="text-sm text-foreground">
+            Connected{status.emailAddress ? ` as ${status.emailAddress}` : ''}. Ask things like
+            &quot;Summarize my last email from Sarah&quot; in Clarifi chat.
+          </p>
         ) : (
-          <button
-            type="button"
-            onClick={() => void disconnect()}
-            disabled={saving}
-            className="inline-block border border-white/20 px-6 py-2 rounded-lg text-sm hover:bg-white/5 disabled:opacity-60"
-          >
-            Disconnect
-          </button>
+          <p className="text-sm text-muted-foreground">
+            Read-only access. Clarifi only loads emails when you ask about them.
+          </p>
         )}
-      </div>
 
-      {status.connected ? (
-        <p className="text-sm text-white/70">
-          Connected{status.emailAddress ? ` as ${status.emailAddress}` : ''}. Ask things like
-          &quot;Summarize my last email from Sarah&quot; in Clarifi chat.
-        </p>
-      ) : (
-        <p className="text-sm text-white/50">
-          Read-only access. Clarifi only loads emails when you ask about them.
-        </p>
-      )}
-
-      {message ? <p className="text-sm text-white/60 mt-4">{message}</p> : null}
-    </section>
+        {message ? <p className="mt-4 text-sm text-muted-foreground">{message}</p> : null}
+      </CardContent>
+    </Card>
   )
 }

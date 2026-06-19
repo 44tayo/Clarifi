@@ -2,6 +2,9 @@
 
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { createClient } from '@/lib/supabase/client'
 
 type AccountSettingsFormProps = {
@@ -120,37 +123,33 @@ export function AccountSettingsForm({
   }
 
   return (
-    <div className="space-y-6 border-t border-white/10 pt-6 mt-6">
+    <div className="mt-6 space-y-6 border-t border-border pt-6">
       <div>
-        <h3 className="text-sm font-semibold mb-1">Profile</h3>
-        <p className="text-xs text-white/40 mb-4">Update how your name appears in Clarifi</p>
+        <h3 className="mb-1 text-sm font-semibold">Profile</h3>
+        <p className="mb-4 text-xs text-muted-foreground">Update how your name appears in Clarifi</p>
         <form className="grid gap-3 sm:grid-cols-2" onSubmit={(e) => void saveName(e)}>
-          <input
+          <Input
             type="text"
-            className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm"
             placeholder="First name"
             value={firstName}
             onChange={(e) => setFirstName(e.target.value)}
             autoComplete="given-name"
           />
-          <input
+          <Input
             type="text"
-            className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm"
             placeholder="Last name"
             value={lastName}
             onChange={(e) => setLastName(e.target.value)}
             autoComplete="family-name"
           />
-          <div className="sm:col-span-2 flex items-center gap-3">
-            <button
-              type="submit"
-              disabled={nameLoading}
-              className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/5 disabled:opacity-60"
-            >
+          <div className="flex items-center gap-3 sm:col-span-2">
+            <Button type="submit" variant="outline" size="sm" disabled={nameLoading}>
               {nameLoading ? 'Saving…' : 'Save name'}
-            </button>
+            </Button>
             {nameStatus ? (
-              <p className={`text-xs ${nameStatus === 'Name updated' ? 'text-emerald-400' : 'text-red-400'}`}>
+              <p
+                className={`text-xs ${nameStatus === 'Name updated' ? 'text-green-600' : 'text-destructive'}`}
+              >
                 {nameStatus}
               </p>
             ) : null}
@@ -161,14 +160,13 @@ export function AccountSettingsForm({
       {hasEmailAuth ? (
         <>
           <div>
-            <h3 className="text-sm font-semibold mb-1">Email</h3>
-            <p className="text-xs text-white/40 mb-4">
+            <h3 className="mb-1 text-sm font-semibold">Email</h3>
+            <p className="mb-4 text-xs text-muted-foreground">
               We&apos;ll send a confirmation link to your new address
             </p>
             <form className="space-y-3" onSubmit={(e) => void saveEmail(e)}>
-              <input
+              <Input
                 type="email"
-                className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm"
                 placeholder="you@company.com"
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
@@ -176,15 +174,13 @@ export function AccountSettingsForm({
                 required
               />
               <div className="flex items-center gap-3">
-                <button
-                  type="submit"
-                  disabled={emailLoading}
-                  className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/5 disabled:opacity-60"
-                >
+                <Button type="submit" variant="outline" size="sm" disabled={emailLoading}>
                   {emailLoading ? 'Saving…' : 'Update email'}
-                </button>
+                </Button>
                 {emailStatus ? (
-                  <p className={`text-xs ${emailStatus.includes('inbox') ? 'text-emerald-400' : 'text-red-400'}`}>
+                  <p
+                    className={`text-xs ${emailStatus.includes('inbox') ? 'text-green-600' : 'text-destructive'}`}
+                  >
                     {emailStatus}
                   </p>
                 ) : null}
@@ -193,23 +189,21 @@ export function AccountSettingsForm({
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold mb-1">Password</h3>
-            <p className="text-xs text-white/40 mb-4">
+            <h3 className="mb-1 text-sm font-semibold">Password</h3>
+            <p className="mb-4 text-xs text-muted-foreground">
               Set a password to sign in with email instead of magic links
             </p>
             <form className="space-y-3" onSubmit={(e) => void savePassword(e)}>
-              <input
+              <Input
                 type="password"
-                className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm"
                 placeholder="New password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="new-password"
                 minLength={8}
               />
-              <input
+              <Input
                 type="password"
-                className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm"
                 placeholder="Confirm password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
@@ -217,15 +211,13 @@ export function AccountSettingsForm({
                 minLength={8}
               />
               <div className="flex items-center gap-3">
-                <button
-                  type="submit"
-                  disabled={passwordLoading}
-                  className="rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/5 disabled:opacity-60"
-                >
+                <Button type="submit" variant="outline" size="sm" disabled={passwordLoading}>
                   {passwordLoading ? 'Saving…' : 'Set password'}
-                </button>
+                </Button>
                 {passwordStatus ? (
-                  <p className={`text-xs ${passwordStatus === 'Password updated' ? 'text-emerald-400' : 'text-red-400'}`}>
+                  <p
+                    className={`text-xs ${passwordStatus === 'Password updated' ? 'text-green-600' : 'text-destructive'}`}
+                  >
                     {passwordStatus}
                   </p>
                 ) : null}
@@ -236,7 +228,7 @@ export function AccountSettingsForm({
       ) : null}
 
       {hasGoogleAuth && !hasEmailAuth ? (
-        <p className="text-xs text-white/40">
+        <p className="text-xs text-muted-foreground">
           You sign in with Google. Email and password are managed in your Google account.
         </p>
       ) : null}

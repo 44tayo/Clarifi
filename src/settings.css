@@ -4,6 +4,14 @@
   box-sizing: border-box;
 }
 
+:root {
+  --ds-primary: #2b6cff;
+  --ds-primary-hover: #1a5ae8;
+  --ds-radius-lg: 8px;
+  --ds-border: rgba(255, 255, 255, 0.12);
+  --ds-ring: rgba(43, 108, 255, 0.5);
+}
+
 html,
 body,
 #root {
@@ -65,7 +73,7 @@ body,
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  background: linear-gradient(135deg, var(--ds-primary), #8b5cf6);
 }
 
 .settings-nav-btn {
@@ -112,7 +120,7 @@ body,
 }
 
 .settings-nav-btn.active {
-  background: rgba(59, 130, 246, 0.18);
+  background: rgba(43, 108, 255, 0.18);
   color: white;
 }
 
@@ -779,12 +787,12 @@ body,
 
 .settings-btn {
   background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--ds-border);
   color: white;
   font-size: 12px;
   font-weight: 500;
   padding: 8px 14px;
-  border-radius: 8px;
+  border-radius: var(--ds-radius-lg);
   cursor: pointer;
 }
 
@@ -793,12 +801,12 @@ body,
 }
 
 .settings-btn.primary {
-  background: rgba(59, 130, 246, 0.25);
-  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(43, 108, 255, 0.25);
+  border-color: rgba(43, 108, 255, 0.4);
 }
 
 .settings-btn.primary:hover {
-  background: rgba(59, 130, 246, 0.35);
+  background: rgba(43, 108, 255, 0.35);
 }
 
 .settings-btn.danger {
@@ -834,22 +842,24 @@ body,
 
 .settings-textarea:focus {
   outline: none;
-  border-color: rgba(59, 130, 246, 0.5);
+  border-color: var(--ds-ring);
 }
 
 .settings-input {
   width: 100%;
   background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-lg);
   color: white;
   font-size: 13px;
   padding: 9px 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .settings-input:focus {
   outline: none;
-  border-color: rgba(59, 130, 246, 0.5);
+  border-color: var(--ds-ring);
+  box-shadow: 0 0 0 3px rgba(43, 108, 255, 0.2);
 }
 
 .settings-field-label {

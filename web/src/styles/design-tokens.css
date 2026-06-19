@@ -33,8 +33,17 @@
   --ds-radius-mock: 0.65rem;
 
   /* Feature grid */
+  --ds-feature-side-padding: 2.5cm;
+  --ds-feature-gap: 0.5cm;
+  --ds-feature-wide-w: 16cm;
+  --ds-feature-narrow-w: 8cm;
+  --ds-feature-wide-h: 7cm;
+  --ds-feature-narrow-h: 7.5cm;
+  --ds-feature-row-inner-w: calc(
+    var(--ds-feature-wide-w) + var(--ds-feature-gap) + var(--ds-feature-narrow-w)
+  );
+  --ds-feature-row-max-w: var(--ds-feature-row-inner-w);
   --ds-feature-grid-columns: 6;
-  --ds-feature-gap: 1rem;
   --ds-feature-visual-height: 220px;
   --ds-feature-visual-height-compact: 180px;
   --ds-feature-visual-height-mobile: 200px;

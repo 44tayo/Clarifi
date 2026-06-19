@@ -69,11 +69,11 @@ Centered title + subtitle with scroll-reveal.
 
 Wrapper for card visuals. Layout presets: `default` | `summary` | `chat` | `notes` | `share`.
 
-Use `ds-mock-*` classes inside for doc bubbles, chips, etc. See `ClarifiBentoSection.tsx` for examples.
+Use `ds-mock-*` classes inside for doc bubbles, chips, etc. See `MeetingNotesSection.tsx` for examples.
 
 ## Adding a new feature card
 
-1. Add an entry to the `FEATURES` array in `ClarifiBentoSection.tsx` (or your section’s data).
+1. Add a `MarketingFeatureCard` to a `MarketingFeatureRow` in `WaitlistModelsSection.tsx` (or your section’s data).
 2. Pick `variant`: `wide` (4 cols), `narrow` (2 cols), or `third` (2 cols).
 3. Build a visual with `MarketingFeatureMock` + `ds-mock-*` classes, or compose custom content inside `MarketingFeatureVisual`.
 4. For accent colors in mocks, import from `featureAccentColors` in `@/lib/design-tokens`.
@@ -82,9 +82,22 @@ Use `ds-mock-*` classes inside for doc bubbles, chips, etc. See `ClarifiBentoSec
 
 | Component | When to use |
 |-----------|-------------|
-| `Button` (`@/components/ui/button`) | App UI, forms, modals — `rounded-xl`, bordered |
+| `Button` (`@/components/ui/button`) | Default app UI — shadcn `rounded-lg`, CVA variants (`default`, `outline`, `secondary`, `ghost`, `link`, `destructive`) |
+| `ButtonWithArrow` (`@/components/ui/button-with-arrow`) | Primary marketing / conversion CTAs — `Button` + trailing `ArrowRight` with hover slide |
 | `.landing-cta` | Marketing pages (legacy CSS in `landing.css`) |
 | `.download-mac-btn` | Download CTAs (matches `Button` sizing) |
+
+### Primary CTA pattern
+
+```tsx
+import { ButtonWithArrow } from '@/components/ui/button-with-arrow'
+
+<ButtonWithArrow size="lg" onClick={handleClick}>
+  Get early access
+</ButtonWithArrow>
+```
+
+Dependencies: `@radix-ui/react-slot`, `class-variance-authority`, `lucide-react` (already installed).
 
 ## Section layout
 
