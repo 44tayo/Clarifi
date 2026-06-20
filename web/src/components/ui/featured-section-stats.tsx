@@ -56,7 +56,7 @@ export function FeaturedSectionStats() {
                 </linearGradient>
               </defs>
               <Tooltip
-                formatter={(value: number) => [`${value} suggestions`, 'Assist activity']}
+                formatter={(value) => [`${value ?? 0} suggestions`, 'Assist activity']}
                 labelFormatter={(label) => `${label} into call`}
               />
               <Area
