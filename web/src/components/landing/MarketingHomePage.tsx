@@ -11,6 +11,7 @@ import { WaitlistProductSections, WaitlistSiteFooter } from '@/components/waitli
 
 import '@/components/landing/landing.css'
 import '@/components/waitlist/waitlist.css'
+import '@/components/waitlist/waitlist-page-sections.css'
 
 export function MarketingHomePage() {
   const searchParams = useSearchParams()

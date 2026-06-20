@@ -10,7 +10,7 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "electron:dev": "cross-env NODE_ENV=development vite",
+    "electron:dev": "cross-env NODE_ENV=development ELECTRON_RUN_AS_NODE= vite",
     "electron:onboarding": "cross-env NODE_ENV=development FORCE_ONBOARDING=1 vite",
     "electron:dev-shell": "cross-env NODE_ENV=development CLARIFI_DEV_SHELL=1 vite",
     "build": "tsc --noEmit && vite build",

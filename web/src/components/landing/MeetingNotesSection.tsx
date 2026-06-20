@@ -13,6 +13,21 @@ const ACTION_ITEMS = [
   'Confirm the default landing page layout',
 ] as const
 
+const NOTES_HIGHLIGHTS = [
+  {
+    title: 'Access Anywhere',
+    description: 'Overlay appears only when you need it and vanishes when you don\u2019t.',
+  },
+  {
+    title: "Speak, Don't Type",
+    description: 'Watch raw voice dictation turn into perfectly formatted text in real-time.',
+  },
+  {
+    title: 'Instant Recall',
+    description: 'Chat with your notes to quickly find past meeting details. (coming soon)',
+  },
+] as const
+
 export function MeetingNotesSection() {
   return (
     <section className="landing-notes-showcase-section" data-reveal>
@@ -85,6 +100,15 @@ export function MeetingNotesSection() {
               <div className="landing-notes-ask">Ask Clarifi about this meeting…</div>
             </footer>
           </div>
+        </div>
+
+        <div className="landing-notes-highlights" data-reveal>
+          {NOTES_HIGHLIGHTS.map((item) => (
+            <div key={item.title} className="landing-notes-highlight">
+              <h3>{item.title}</h3>
+              <p>{item.description}</p>
+            </div>
+          ))}
         </div>
       </div>
     </section>

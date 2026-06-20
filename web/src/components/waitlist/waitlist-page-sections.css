@@ -83,7 +83,7 @@
   isolation: isolate;
 }
 
-.waitlist-page .landing-hero-scroll > *:not(.landing-hero-bg) {
+.waitlist-page .landing-hero-scroll > *:not(.landing-hero-bg):not(.hero-meteor-bg) {
   position: relative;
   z-index: 1;
 }

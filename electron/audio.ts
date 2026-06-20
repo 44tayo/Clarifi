@@ -86,12 +86,10 @@ export function wavHasSpeechEnergy(buffer: Buffer, minRms = SYSTEM_SPEECH_RMS_MI
   return wavRms(buffer) >= minRms
 }
 
-export async function processAudioChunk(
+async function transcribeAudioBuffer(
   audioBase64: string,
   options: TranscribeOptions = {},
 ): Promise<string | null> {
-  if ((!isRecording || isPaused) && !isTranscriptionDrainMode()) return null
-
   try {
     const audioBuffer = Buffer.from(audioBase64, 'base64')
     const format = detectAudioFormat(audioBuffer)
@@ -163,4 +161,20 @@ export async function processAudioChunk(
     console.error('Audio processing error:', err)
     return null
   }
+}
+
+export async function processAudioChunk(
+  audioBase64: string,
+  options: TranscribeOptions = {},
+): Promise<string | null> {
+  if ((!isRecording || isPaused) && !isTranscriptionDrainMode()) return null
+  return transcribeAudioBuffer(audioBase64, options)
+}
+
+/** One-shot dictation — not tied to an active audio session. */
+export async function transcribeDictationAudio(
+  audioBase64: string,
+  options: TranscribeOptions = {},
+): Promise<string | null> {
+  return transcribeAudioBuffer(audioBase64, options)
 }

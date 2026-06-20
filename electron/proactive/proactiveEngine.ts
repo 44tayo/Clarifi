@@ -11,6 +11,7 @@ import {
   getFrontmostAppName,
   shouldWatchApp,
 } from './textExtraction'
+import { trackExternalFrontmostApp } from '../dictationInsert'
 import type {
   ProactiveEngineState,
   ProactiveSettings,
@@ -100,6 +101,7 @@ async function logAnalysisToMemory(
 async function runAnalysisTick(): Promise<void> {
   if (!settings.enabled || analyzing) return
 
+  trackExternalFrontmostApp()
   analyzing = true
   state.lastError = null
 

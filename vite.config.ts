@@ -57,6 +57,9 @@ export default defineConfig(({ mode }) => {
               outDir: 'dist-electron',
               rollupOptions: {
                 external: ['electron', 'keytar', 'form-data', 'node-fetch', 'better-sqlite3'],
+                output: {
+                  inlineDynamicImports: true,
+                },
               },
             },
           },

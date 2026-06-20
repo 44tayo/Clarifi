@@ -7,6 +7,8 @@ const INVOKE_CHANNELS = [
   'audio:resume',
   'audio:stop',
   'audio:chunk',
+  'dictation:compose',
+  'dictation:get-target-app',
   'screen:capture',
   'screen:context-enabled',
   'screen:context-status',
@@ -151,6 +153,7 @@ const INVOKE_CHANNELS = [
 
 const EVENT_CHANNELS = [
   'general-assist:update',
+  'live-assist:update',
   'suggestions:update',
   'transcript:update',
   'transcription:activity',

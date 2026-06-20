@@ -3,15 +3,14 @@
 import { Mic } from 'lucide-react'
 import { useState } from 'react'
 
+import { ClarifiAssistPreview } from '@/components/landing/ClarifiAssistPreview'
 import { AIVoiceInput } from '@/components/ui/ai-voice-input'
 import { cn } from '@/lib/utils'
 
 type StackedCard =
   | {
       id: string
-      variant: 'image'
-      imageSrc: string
-      imageAlt: string
+      variant: 'assist-preview'
       heading: string
       body: string
     }
@@ -31,11 +30,9 @@ const cards: StackedCard[] = [
   },
   {
     id: 'card-2',
-    variant: 'image',
-    imageSrc: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1200&q=80',
-    imageAlt: 'Team collaborating in a meeting',
-    heading: 'PLACEHOLDER HEADING 2',
-    body: 'PLACEHOLDER BODY COPY 2 — replace this text.',
+    variant: 'assist-preview',
+    heading: 'Always one step ahead',
+    body: 'No prompting needed — Clarifi surfaces help the moment you need it.',
   },
 ]
 
@@ -55,14 +52,11 @@ function VoiceCardPreview() {
 }
 
 function CardContent({ card, isActive }: { card: StackedCard; isActive: boolean }) {
-  if (card.variant === 'image') {
+  if (card.variant === 'assist-preview') {
     return (
-      <img
-        src={card.imageSrc}
-        alt={card.imageAlt}
-        className="h-full w-full object-cover"
-        draggable={false}
-      />
+      <div className="flex h-full w-full items-center justify-center p-5 md:p-7">
+        <ClarifiAssistPreview className="h-auto w-full max-w-[88%] max-h-[90%]" />
+      </div>
     )
   }
 
@@ -110,7 +104,10 @@ export function StackedCards() {
                   role={isActive ? undefined : 'button'}
                   tabIndex={isActive ? -1 : 0}
                   className={cn(
-                    'absolute inset-0 overflow-hidden rounded-2xl border border-[var(--ds-border)] shadow-[0_8px_40px_rgba(26,26,46,0.08)] transition-all duration-500 ease-in-out',
+                    'absolute inset-0 overflow-hidden transition-all duration-500 ease-in-out',
+                    card.variant === 'assist-preview'
+                      ? 'rounded-3xl bg-[var(--ds-lavender)] shadow-[0_8px_40px_rgba(26,26,46,0.1)]'
+                      : 'rounded-2xl border border-[var(--ds-border)] shadow-[0_8px_40px_rgba(26,26,46,0.08)]',
                     isActive
                       ? 'pointer-events-none z-20 translate-x-0 translate-y-0 scale-100 opacity-100'
                       : 'z-10 translate-x-[16%] translate-y-[16%] scale-95 cursor-pointer opacity-90 hover:scale-100 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ds-blue)] focus-visible:ring-offset-2',

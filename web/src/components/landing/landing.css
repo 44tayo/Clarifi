@@ -461,13 +461,12 @@
   position: relative;
   padding: 7.5rem 2rem 5rem;
   text-align: center;
-  background: linear-gradient(
-    180deg,
-    hsl(198 28% 84%) 0%,
-    hsl(210 20% 96%) 45%,
-    #fff 100%
-  );
   overflow: hidden;
+}
+
+.landing-hero-scroll > *:not(.landing-hero-bg):not(.hero-meteor-bg) {
+  position: relative;
+  z-index: 1;
 }
 
 .landing-hero-glow {
@@ -1194,6 +1193,30 @@
   margin: 0;
 }
 
+.landing-notes-highlights {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2.5rem;
+  margin-top: 3.5rem;
+  text-align: center;
+}
+
+.landing-notes-highlight h3 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--cl-blue);
+  letter-spacing: -0.02em;
+  margin-bottom: 0.65rem;
+}
+
+.landing-notes-highlight p {
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--cl-muted);
+  max-width: 18rem;
+  margin: 0 auto;
+}
+
 @media (max-width: 768px) {
   .landing-notes-showcase-section {
     padding: 4rem 1.25rem;
@@ -1223,6 +1246,12 @@
   .landing-notes-showcase-footer {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .landing-notes-highlights {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+    margin-top: 2.5rem;
   }
 }
 

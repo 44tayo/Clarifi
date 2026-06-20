@@ -13,6 +13,12 @@ import {
   wavHasSpeechEnergy,
   wavRms,
 } from '../audio'
+import { composeDictationFromAudio } from '../dictation'
+import {
+  getDictationTargetApp,
+  startDictationTargetTracking,
+  trackExternalFrontmostApp,
+} from '../dictationInsert'
 import {
   getOverlayWindow,
   isContentProtectionEnabled,
@@ -33,14 +39,17 @@ import {
   chatWithMeetingContext,
   chatWithStoredAudioSession,
   generateGeneralAnswerAssist,
+  generateSalesSuggestionAssist,
+  generateSalesTermDefine,
   generateSessionRecap,
   generateSuggestions,
+  getCachedSalesDefines,
   inferSpeakerLabels,
   resetSuggestionState,
-  type SalesPanelBroadcast,
+  type SalesAssistAction,
   type SessionRecap,
 } from '../llm'
-import { salesTailNeedsFastAnswer } from '../salesAssistTrigger'
+import { extractAllJargonTerms, salesTailNeedsFastAnswer } from '../salesAssistTrigger'
 import {
   deleteAudioSession,
   getAudioSessionById,
@@ -194,10 +203,104 @@ const GENERAL_ANSWER_MIN_INTERVAL_MS = 1_000
 const GENERAL_ANSWER_FAST_MIN_INTERVAL_MS = 700
 
 let lastGeneralAnswerRunAt = 0
-let generalAnswerDirty = false
-let generalAnswerInFlight = false
-let generalAnswerDebounceTimer: NodeJS.Timeout | null = null
-let stickyGeneralPanel: SalesPanelBroadcast = {}
+let liveAssistDirty = false
+let liveAssistInFlight = false
+let liveAssistDebounceTimer: NodeJS.Timeout | null = null
+let stickyLiveActions: SalesAssistAction[] = []
+
+function normalizeAnswerLabel(action: SalesAssistAction): SalesAssistAction {
+  let label = action.label.trim()
+  if (/^question\b/i.test(label)) {
+    label = label.replace(/^question:?\s*/i, '').trim()
+  }
+
+  const isAnswerLane =
+    action.kind === 'product_info' ||
+    action.kind === 'objection' ||
+    /^answer\b/i.test(label)
+
+  if (!isAnswerLane) return action
+
+  if (action.kind === 'objection' && !/^rebuttal\b/i.test(label)) {
+    label = label.startsWith('Rebuttal:') ? label : `Rebuttal: ${label}`
+  } else if (!/^answer\b/i.test(label)) {
+    label = `Answer: ${label}`
+  }
+
+  return {
+    ...action,
+    kind: action.kind === 'objection' ? 'objection' : 'product_info',
+    label,
+  }
+}
+
+function defineToAction(term: string, speakable: string, context?: string): SalesAssistAction {
+  return {
+    kind: 'technical_lookup',
+    label: `Define ${term}`,
+    speakable,
+    context,
+  }
+}
+
+function mergeLiveActions(
+  existing: SalesAssistAction[],
+  incoming: SalesAssistAction[],
+): SalesAssistAction[] {
+  const byKey = new Map(existing.map((a) => [`${a.kind}:${a.label.toLowerCase()}`, a]))
+  for (const action of incoming) {
+    byKey.set(`${action.kind}:${action.label.toLowerCase()}`, action)
+  }
+  return Array.from(byKey.values()).slice(-6)
+}
+
+async function buildLiveAssistActions(lines: string[]): Promise<SalesAssistAction[]> {
+  const fresh: SalesAssistAction[] = []
+
+  const answerResult = await generateGeneralAnswerAssist(lines)
+  if (answerResult?.answer) {
+    fresh.push(normalizeAnswerLabel(answerResult.answer))
+  }
+
+  const terms = extractAllJargonTerms(lines)
+  const uncached = terms.filter((t) => {
+    const cached = getCachedSalesDefines().some((d) => d.term.toLowerCase() === t.toLowerCase())
+    return !cached
+  })
+  if (uncached.length > 0) {
+    const def = await generateSalesTermDefine(uncached[uncached.length - 1], lines)
+    if (def) {
+      fresh.push(defineToAction(def.term, def.speakable, def.context))
+    }
+  }
+
+  for (const def of getCachedSalesDefines()) {
+    fresh.push(defineToAction(def.term, def.speakable, def.context))
+  }
+
+  const suggestResult = await generateSalesSuggestionAssist(lines)
+  if (suggestResult?.suggestions) {
+    fresh.push(...suggestResult.suggestions)
+  }
+
+  return fresh
+}
+
+function broadcastLiveAssistUpdate(actions: SalesAssistAction[], error?: string): void {
+  const overlay = getOverlayWindow()
+  if (!overlay || overlay.isDestroyed()) return
+  overlay.webContents.send('live-assist:update', {
+    actions,
+    error: error ?? null,
+  })
+}
+
+function resetLiveAssistScheduler(): void {
+  liveAssistDirty = false
+  stickyLiveActions = []
+  if (liveAssistDebounceTimer) clearTimeout(liveAssistDebounceTimer)
+  liveAssistDebounceTimer = null
+}
 
 type RateLimitBucket = {
   count: number
@@ -365,32 +468,11 @@ async function queryAnthropic(prompt: string, apiKey: string): Promise<unknown> 
 }
 
 function resetGeneralAssistScheduler(): void {
-  generalAnswerDirty = false
-  stickyGeneralPanel = {}
-  if (generalAnswerDebounceTimer) clearTimeout(generalAnswerDebounceTimer)
-  generalAnswerDebounceTimer = null
+  resetLiveAssistScheduler()
 }
 
-function broadcastGeneralPanelUpdate(patch: Partial<SalesPanelBroadcast>): void {
-  if (patch.error) {
-    stickyGeneralPanel = { ...stickyGeneralPanel, error: patch.error }
-  } else {
-    stickyGeneralPanel = {
-      answer: patch.answer !== undefined ? patch.answer : stickyGeneralPanel.answer,
-      error: stickyGeneralPanel.error,
-    }
-    if (patch.answer !== undefined) {
-      delete stickyGeneralPanel.error
-    }
-  }
-
-  const overlay = getOverlayWindow()
-  if (!overlay || overlay.isDestroyed()) return
-  overlay.webContents.send('general-assist:update', stickyGeneralPanel)
-}
-
-async function flushGeneralAnswerUpdate(): Promise<void> {
-  if (!generalAnswerDirty) return
+async function flushLiveAssistUpdate(): Promise<void> {
+  if (!liveAssistDirty) return
 
   const lines = getSessionTranscript()
   const fast = salesTailNeedsFastAnswer(lines)
@@ -398,61 +480,49 @@ async function flushGeneralAnswerUpdate(): Promise<void> {
   const minInterval = fast ? GENERAL_ANSWER_FAST_MIN_INTERVAL_MS : GENERAL_ANSWER_MIN_INTERVAL_MS
   const now = Date.now()
 
-  if (generalAnswerInFlight) {
-    generalAnswerDebounceTimer = setTimeout(() => void flushGeneralAnswerUpdate(), debounceMs)
+  if (liveAssistInFlight) {
+    liveAssistDebounceTimer = setTimeout(() => void flushLiveAssistUpdate(), debounceMs)
     return
   }
   if (now - lastGeneralAnswerRunAt < minInterval) {
-    generalAnswerDebounceTimer = setTimeout(
-      () => void flushGeneralAnswerUpdate(),
+    liveAssistDebounceTimer = setTimeout(
+      () => void flushLiveAssistUpdate(),
       minInterval - (now - lastGeneralAnswerRunAt),
     )
     return
   }
 
-  generalAnswerDirty = false
-  generalAnswerInFlight = true
+  liveAssistDirty = false
+  liveAssistInFlight = true
   lastGeneralAnswerRunAt = now
 
   try {
-    const result = await generateGeneralAnswerAssist(lines)
-    if (result?.error) {
-      broadcastGeneralPanelUpdate({ error: result.error })
-      return
+    const fresh = await buildLiveAssistActions(lines)
+    if (fresh.length > 0) {
+      stickyLiveActions = mergeLiveActions(stickyLiveActions, fresh)
     }
-    if (result?.answer) {
-      broadcastGeneralPanelUpdate({ answer: result.answer })
-    }
+    broadcastLiveAssistUpdate(stickyLiveActions)
+  } catch (err) {
+    console.error('Live assist error:', err)
+    broadcastLiveAssistUpdate(stickyLiveActions, 'Assist is temporarily unavailable.')
   } finally {
-    generalAnswerInFlight = false
-    if (generalAnswerDirty) scheduleGeneralAnswerUpdate()
+    liveAssistInFlight = false
+    if (liveAssistDirty) scheduleLiveAssistUpdate()
   }
 }
 
-function scheduleGeneralAnswerUpdate(): void {
-  generalAnswerDirty = true
+function scheduleLiveAssistUpdate(): void {
+  liveAssistDirty = true
   const lines = getSessionTranscript()
   const debounceMs = salesTailNeedsFastAnswer(lines)
     ? GENERAL_ANSWER_FAST_DEBOUNCE_MS
     : GENERAL_ANSWER_DEBOUNCE_MS
-  if (generalAnswerDebounceTimer) clearTimeout(generalAnswerDebounceTimer)
-  generalAnswerDebounceTimer = setTimeout(() => void flushGeneralAnswerUpdate(), debounceMs)
-}
-
-function scheduleGeneralPanelUpdates(): void {
-  scheduleGeneralAnswerUpdate()
+  if (liveAssistDebounceTimer) clearTimeout(liveAssistDebounceTimer)
+  liveAssistDebounceTimer = setTimeout(() => void flushLiveAssistUpdate(), debounceMs)
 }
 
 async function updateLiveAssistForOverlay(lines: string[]): Promise<void> {
-  const overlay = getOverlayWindow()
-  if (!overlay || overlay.isDestroyed()) return
-
-  scheduleGeneralPanelUpdates()
-
-  const suggestions = await generateSuggestions(lines)
-  if (suggestions.length > 0) {
-    overlay.webContents.send('suggestions:update', suggestions)
-  }
+  scheduleLiveAssistUpdate()
 }
 
 function broadcastTranscriptUpdate(): void {
@@ -903,7 +973,7 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
     if (overlay && !overlay.isDestroyed()) {
       overlay.webContents.send('transcript:update', { recent: [], full: [] })
       overlay.webContents.send('suggestions:update', [])
-      overlay.webContents.send('general-assist:update', { answer: null })
+      overlay.webContents.send('live-assist:update', { actions: [], error: null })
     }
 
     startRecording(() => {
@@ -973,6 +1043,30 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
       return { status: 'queued' }
     },
   )
+
+  registerValidatedHandler(
+    'dictation:compose',
+    { requiresInput: true, rateLimitKey: 'llm:chat', rateLimit: LLM_RATE_LIMIT },
+    async (data) => {
+      const payload = data as {
+        audioBase64?: string
+        target?: 'auto' | 'overlay' | 'focused_field'
+        targetApp?: string | null
+      }
+      if (!payload.audioBase64 || typeof payload.audioBase64 !== 'string') {
+        throw new Error('audioBase64 is required')
+      }
+      return composeDictationFromAudio(payload.audioBase64, {
+        target: payload.target,
+        targetApp: payload.targetApp,
+      })
+    },
+  )
+
+  registerValidatedHandler('dictation:get-target-app', {}, () => {
+    trackExternalFrontmostApp()
+    return { app: getDictationTargetApp() }
+  })
 
   registerValidatedHandler(
     'screen:capture',
@@ -1709,6 +1803,27 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
     'memory:apply-retention',
   ] as const
 
+  const PROACTIVE_IPC_CHANNELS = [
+    'proactive:status',
+    'proactive:settings-get',
+    'proactive:settings-update',
+    'proactive:enable',
+    'proactive:disable',
+    'proactive:suggestions-get',
+    'proactive:dismiss',
+    'proactive:run-action',
+    'proactive:panel-close',
+    'proactive:writing-transform',
+    'proactive:summarise',
+    'proactive:extract-actions',
+    'proactive:draft-generate',
+    'proactive:draft-export-gmail',
+    'proactive:clipboard-get',
+    'proactive:action-item-complete',
+    'proactive:summarise-transcript',
+    'proactive:clear-history',
+  ] as const
+
   for (const channel of MEMORY_IPC_CHANNELS) {
     ipcMain.handle(channel, async (_event, data) => {
       const result = handleMemoryIpc(channel, data)
@@ -1724,4 +1839,5 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
   }
 
   handlersRegistered = true
+  startDictationTargetTracking()
 }

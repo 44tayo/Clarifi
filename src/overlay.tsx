@@ -4,9 +4,7 @@ import { entriesToDisplayLines, type SpeakerLabels } from './lib/transcriptSpeak
 import './overlay.css'
 import {
   RecordingSessionCard,
-  type ProductivityAction,
 } from './components/RecordingSessionCard'
-import { VoiceRecordButton } from './components/VoiceRecordButton'
 
 function ToolbarTooltip({
   label,
@@ -271,6 +269,30 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary)
 }
 
+async function getDictationMicStream(preferredDeviceId?: string): Promise<MediaStream> {
+  const audioConstraints = (deviceId?: string): MediaTrackConstraints => ({
+    channelCount: 1,
+    echoCancellation: true,
+    noiseSuppression: true,
+    ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+  })
+
+  if (preferredDeviceId) {
+    try {
+      return await navigator.mediaDevices.getUserMedia({ audio: audioConstraints(preferredDeviceId) })
+    } catch {
+      // Preferred mic unavailable — fall back to system default
+    }
+  }
+
+  return navigator.mediaDevices.getUserMedia({ audio: audioConstraints() })
+}
+
+function showTransientStatus(setStatus: (value: string) => void, message: string, ms = 3000): void {
+  setStatus(message)
+  window.setTimeout(() => setStatus(''), ms)
+}
+
 type PanelMode =
   | 'bar'
   | 'chat'
@@ -325,7 +347,7 @@ type PublicPreferences = {
 
 const OVERLAY_HEIGHT_COLLAPSED = 168
 const OVERLAY_HEIGHT_CONNECT = 204
-const OVERLAY_HEIGHT_RECORDING = 340
+const OVERLAY_HEIGHT_RECORDING = 400
 const OVERLAY_HEIGHT_EXPANDED = 360
 
 const OVERLAY_MIN_WIDTH = 480
@@ -467,6 +489,7 @@ export default function Overlay() {
   const [query, setQuery] = useState('')
   const [followEnabled, setFollowEnabled] = useState(true)
   const [stealthEnabled, setStealthEnabled] = useState(true)
+  const [stealthFlash, setStealthFlash] = useState(false)
   const [screenContextEnabled, setScreenContextEnabled] = useState(false)
   const [, setChatStatus] = useState('')
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
@@ -479,8 +502,8 @@ export default function Overlay() {
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const [fullTranscript, setFullTranscript] = useState<TranscriptEntry[]>([])
   const [, setSessionInsights] = useState<LiveSessionInsights | null>(null)
-  const [, setGeneralAnswer] = useState<SalesAssistAction | null>(null)
-  const [, setGeneralAssistError] = useState('')
+  const [liveActions, setLiveActions] = useState<SalesAssistAction[]>([])
+  const [liveAssistError, setLiveAssistError] = useState('')
   const [, setSessionRecap] = useState<SessionRecap | null>(null)
   const [, setShowLiveInsights] = useState(true)
   const [, setInsightsLoading] = useState(false)
@@ -493,13 +516,20 @@ export default function Overlay() {
   const [, setAudioSessionChatStatus] = useState('')
   const [liveSpeakerLabels, setLiveSpeakerLabels] = useState<SpeakerLabels>({})
   const [transcriptionMode, setTranscriptionMode] = useState<'dual' | 'group'>('dual')
-  const [, setTranscriptionActivity] = useState<
+  const [transcriptionActivity, setTranscriptionActivity] = useState<
     'silent' | 'listening' | 'transcribing'
   >('listening')
   const [sessionReply, setSessionReply] = useState('')
   const [sessionLoading, setSessionLoading] = useState(false)
+  const [isDictating, setIsDictating] = useState(false)
+  const [dictationLoading, setDictationLoading] = useState(false)
   const [tourStep, setTourStep] = useState<string | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const dictationRecorderRef = useRef<MediaRecorder | null>(null)
+  const dictationStreamRef = useRef<MediaStream | null>(null)
+  const dictationChunksRef = useRef<Blob[]>([])
+  const dictationMimeRef = useRef('audio/webm')
+  const dictationTargetAppRef = useRef<string | null>(null)
   const prevPanelForTourRef = useRef<PanelMode>('bar')
   const streamRef = useRef<MediaStream | null>(null)
   const isCapturingRef = useRef(false)
@@ -617,26 +647,19 @@ export default function Overlay() {
         setSuggestions([...(s as Suggestion[])])
       }
     })
-    window.electronAPI.on('general-assist:update', (payload) => {
+    window.electronAPI.on('live-assist:update', (payload) => {
       if (!payload || typeof payload !== 'object') return
       const data = payload as {
-        answer?: SalesAssistAction | null
-        error?: { error: string; message?: string } | string
-        message?: string
+        actions?: SalesAssistAction[]
+        error?: string | null
       }
       if (data.error) {
-        const errObj =
-          typeof data.error === 'object' && data.error && 'error' in data.error
-            ? data.error
-            : { error: String(data.error), message: data.message }
-        setGeneralAssistError(
-          errObj.message?.trim() || 'Assist is temporarily unavailable.',
-        )
+        setLiveAssistError(data.error)
         return
       }
-      if (data.answer !== undefined) {
-        setGeneralAnswer(data.answer)
-        setGeneralAssistError('')
+      if (Array.isArray(data.actions)) {
+        setLiveActions([...data.actions])
+        setLiveAssistError('')
       }
     })
 
@@ -824,6 +847,8 @@ export default function Overlay() {
   const toggleStealth = async () => {
     const next = !stealthEnabled
     setStealthEnabled(next)
+    setStealthFlash(true)
+    window.setTimeout(() => setStealthFlash(false), 600)
     try {
       const result = (await window.electronAPI.invoke('overlay:toggle-protection', {
         enabled: next,
@@ -1049,9 +1074,9 @@ export default function Overlay() {
       setTranscript([])
       setFullTranscript([])
       setSuggestions([])
+      setLiveActions([])
+      setLiveAssistError('')
       setSessionInsights(null)
-      setGeneralAnswer(null)
-      setGeneralAssistError('')
       setSessionRecap(null)
       setShowLiveInsights(true)
       setTranscriptSearch('')
@@ -1283,6 +1308,140 @@ export default function Overlay() {
     })
   }, [])
 
+  const stopDictationCapture = useCallback(() => {
+    dictationRecorderRef.current = null
+    dictationStreamRef.current?.getTracks().forEach((track) => track.stop())
+    dictationStreamRef.current = null
+    dictationChunksRef.current = []
+  }, [])
+
+  const toggleDictation = async () => {
+    if (needsConnect) {
+      showTransientStatus(setStatus, 'Connect your account on the website first')
+      return
+    }
+    if (isRecording) {
+      showTransientStatus(setStatus, 'Stop the audio session to use dictation')
+      return
+    }
+    if (dictationLoading) return
+
+    if (isDictating) {
+      const recorder = dictationRecorderRef.current
+      if (!recorder || recorder.state === 'inactive') {
+        setIsDictating(false)
+        stopDictationCapture()
+        return
+      }
+
+      setDictationLoading(true)
+      setIsDictating(false)
+      setStatus('Transcribing…')
+
+      const blob = await new Promise<Blob | null>((resolve) => {
+        recorder.onstop = () => {
+          const chunks = dictationChunksRef.current
+          resolve(chunks.length > 0 ? new Blob(chunks, { type: dictationMimeRef.current }) : null)
+        }
+        try {
+          recorder.stop()
+        } catch {
+          resolve(null)
+        }
+      })
+
+      stopDictationCapture()
+
+      if (!blob || blob.size < 500) {
+        setDictationLoading(false)
+        showTransientStatus(setStatus, 'Speak a bit longer, then tap the mic again')
+        return
+      }
+
+      try {
+        const base64 = arrayBufferToBase64(await blob.arrayBuffer())
+        const result = (await window.electronAPI.invoke('dictation:compose', {
+          audioBase64: base64,
+          target: 'auto',
+          targetApp: dictationTargetAppRef.current,
+        })) as {
+          text?: string
+          error?: string
+          destination?: 'overlay' | 'focused_field'
+          targetApp?: string | null
+        }
+
+        if (result.error === 'no_speech') {
+          showTransientStatus(setStatus, 'No speech detected — try again')
+        } else if (result.destination === 'focused_field' && result.text) {
+          const appLabel = result.targetApp?.split(' ')[0] ?? 'your app'
+          showTransientStatus(setStatus, `Dictation inserted into ${appLabel}`, 2500)
+        } else if (result.error === 'accessibility_required') {
+          setQuery((prev) =>
+            result.text
+              ? prev.trim()
+                ? `${prev.trim()} ${result.text}`
+                : result.text
+              : prev,
+          )
+          setStatus('Enable Accessibility for Clarifi to dictate into other apps')
+        } else if (result.text) {
+          setQuery((prev) => (prev.trim() ? `${prev.trim()} ${result.text}` : result.text!))
+          setStatus('')
+        } else if (result.error === 'insert_failed') {
+          showTransientStatus(setStatus, 'Could not insert dictation — text added to chat instead')
+          if (result.text) {
+            setQuery((prev) => (prev.trim() ? `${prev.trim()} ${result.text}` : result.text!))
+          }
+        }
+      } catch (err) {
+        console.error('Dictation error:', err)
+        showTransientStatus(setStatus, 'Dictation failed — try again')
+      } finally {
+        setDictationLoading(false)
+      }
+      return
+    }
+
+    try {
+      const target = (await window.electronAPI.invoke('dictation:get-target-app')) as {
+        app?: string | null
+      }
+      dictationTargetAppRef.current = target.app ?? null
+
+      const audioPrefs = (await window.electronAPI.invoke('audio:prefs-load')) as {
+        preferredMicrophoneId?: string
+      }
+      const deviceId = audioPrefs?.preferredMicrophoneId?.trim()
+      const stream = await getDictationMicStream(deviceId || undefined)
+      dictationStreamRef.current = stream
+      dictationChunksRef.current = []
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm'
+      dictationMimeRef.current = mimeType
+      const recorder = new MediaRecorder(stream, { mimeType })
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) dictationChunksRef.current.push(event.data)
+      }
+      recorder.start()
+      dictationRecorderRef.current = recorder
+      setIsDictating(true)
+      setStatus('Dictating… tap mic when done')
+    } catch (err) {
+      console.error('Dictation mic error:', err)
+      stopDictationCapture()
+      setIsDictating(false)
+      showTransientStatus(setStatus, 'Microphone access denied — check System Settings')
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      stopDictationCapture()
+    }
+  }, [stopDictationCapture])
+
   const submitSessionQuery = async (message: string) => {
     if (!message.trim() || sessionLoading || needsConnect) return
 
@@ -1322,32 +1481,22 @@ export default function Overlay() {
     }
   }
 
-  const runProductivityAction = async (action: ProductivityAction) => {
+  const runRecap = async () => {
     if (needsConnect) {
       setSessionReply('Connect your account on the website first.')
       return
     }
 
-    if (action === 'recap') {
-      setSessionLoading(true)
-      setSessionReply('')
-      try {
-        const recap = (await window.electronAPI.invoke('llm:session-recap')) as SessionRecap | null
-        setSessionReply(recap?.summary?.trim() || 'No recap yet — keep recording.')
-      } catch {
-        setSessionReply('Recap is temporarily unavailable.')
-      } finally {
-        setSessionLoading(false)
-      }
-      return
+    setSessionLoading(true)
+    setSessionReply('')
+    try {
+      const recap = (await window.electronAPI.invoke('llm:session-recap')) as SessionRecap | null
+      setSessionReply(recap?.summary?.trim() || 'No recap yet — keep recording.')
+    } catch {
+      setSessionReply('Recap is temporarily unavailable.')
+    } finally {
+      setSessionLoading(false)
     }
-
-    const prompts: Record<Exclude<ProductivityAction, 'recap'>, string> = {
-      assist: 'Assist me based on this meeting so far.',
-      'what-to-say': 'What should I say next?',
-      'follow-up': 'Suggest follow-up questions for this conversation.',
-    }
-    await submitSessionQuery(prompts[action])
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1552,12 +1701,12 @@ export default function Overlay() {
           </button>
         </ToolbarTooltip>
 
-        <ToolbarTooltip label={stealthEnabled ? 'Hidden from share' : 'Detectable'}>
+        <ToolbarTooltip label={stealthEnabled ? 'Hidden from screen share' : 'Visible on screen share'}>
           <button
             type="button"
             className={`toolbar-icon stealth-btn ${stealthEnabled ? 'active' : ''}${tourHighlight('stealth')}`}
             aria-pressed={stealthEnabled}
-            aria-label={stealthEnabled ? 'Hidden from share' : 'Detectable on share'}
+            aria-label={stealthEnabled ? 'Hidden from screen share' : 'Visible on screen share'}
             onClick={() => void toggleStealth()}
           >
             {stealthEnabled ? (
@@ -1594,17 +1743,36 @@ export default function Overlay() {
       <div className="toolbar-divider" />
 
       <div className="toolbar-right">
+        {isRecording && (
+          <ToolbarTooltip label={isPaused ? 'Resume session' : 'Pause session'}>
+            <button
+              type="button"
+              className={`toolbar-icon pause-btn ${isPaused ? 'paused' : ''}`}
+              onClick={togglePauseSession}
+            >
+              {isPaused ? '▶' : '⏸'}
+            </button>
+          </ToolbarTooltip>
+        )}
+
         <ToolbarTooltip
           label={isRecording ? 'Stop Audio Session' : 'Start Audio Session'}
         >
-          <VoiceRecordButton
-            isRecording={isRecording}
-            isPaused={isPaused}
-            onToggle={toggleRecording}
-            onTogglePause={togglePauseSession}
+          <button
+            type="button"
+            className={`toolbar-icon audio-btn ${isRecording ? 'active' : ''}${tourHighlight('audio')}`}
+            onClick={toggleRecording}
             disabled={needsConnect}
-            className={tourHighlight('audio')}
-          />
+          >
+            <span
+              className={`waveform ${isRecording && !isPaused ? 'waveform-active' : ''}`}
+            >
+              <span />
+              <span />
+              <span />
+              <span />
+            </span>
+          </button>
         </ToolbarTooltip>
 
         {(hasActiveChat || panelMode === 'chat') && (
@@ -1630,18 +1798,32 @@ export default function Overlay() {
   return (
     <div className="overlay-root overlay-root-simple">
       <ResizeHandles onResize={applyBounds} />
-      <div className="overlay-bar overlay-bar-simple">
+      <div
+        className={`overlay-bar overlay-bar-simple${stealthEnabled ? ' overlay-stealth-active' : ''}${stealthFlash ? ' overlay-stealth-flash' : ''}`}
+      >
         {renderConnectBanner()}
         <RecordingSessionCard
           isRecording={isRecording}
+          isPaused={isPaused}
           query={query}
           onQueryChange={setQuery}
           onSubmit={(e) => void handleSubmit(e)}
-          onProductivityAction={(action) => void runProductivityAction(action)}
           screenContextEnabled={screenContextEnabled}
           loading={sessionLoading}
           reply={sessionReply}
           disabled={needsConnect}
+          isDictating={isDictating}
+          dictationLoading={dictationLoading}
+          onDictationToggle={() => void toggleDictation()}
+          dictationDisabled={isRecording}
+          dictationBlockedReason={
+            isRecording ? 'Stop the audio session to use dictation' : undefined
+          }
+          transcript={fullTranscript.length > 0 ? fullTranscript : transcript}
+          transcriptionActivity={transcriptionActivity}
+          liveActions={liveActions}
+          assistError={liveAssistError}
+          onRecap={() => void runRecap()}
         />
         {renderToolbar()}
       </div>
