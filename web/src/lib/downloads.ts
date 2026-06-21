@@ -1,6 +1,6 @@
 import type { CustomerPlatform } from '@/lib/platform'
 
-const DEFAULT_APP_URL = 'https://www.clarifiapp.com'
+const GITHUB_REPO = 'Tayowill/clarificluely'
 
 export const CLARIFI_VERSION = '0.1.0'
 export const MAC_DMG_ARM64_FILENAME = 'Clarifi-0.1.0-arm64.dmg'
@@ -78,20 +78,27 @@ export function getDownloadManifest(target: DownloadTarget): DownloadPlatformMan
   return DOWNLOAD_PLATFORMS.find((p) => p.id === target) ?? DOWNLOAD_PLATFORMS[0]
 }
 
-function resolveAppUrl(): string {
-  return (process.env.NEXT_PUBLIC_APP_URL?.trim() || DEFAULT_APP_URL).replace(/\/$/, '')
+function githubReleaseAssetUrl(filename: string): string {
+  const tag = `v${CLARIFI_VERSION}`
+  return `https://github.com/${GITHUB_REPO}/releases/download/${tag}/${encodeURIComponent(filename)}`
 }
 
 export function getMacDownloadUrl(arch: MacArch = 'arm64'): string {
-  const override = process.env.NEXT_PUBLIC_CLARIFI_MAC_DOWNLOAD_URL?.trim()
-  if (override && arch === 'arm64') return override
-  return `${resolveAppUrl()}${getMacDownloadPath(arch)}`
+  if (arch === 'arm64') {
+    const override = process.env.NEXT_PUBLIC_CLARIFI_MAC_DOWNLOAD_URL?.trim()
+    if (override) return override
+  }
+  if (arch === 'x64') {
+    const override = process.env.NEXT_PUBLIC_CLARIFI_MAC_X64_DOWNLOAD_URL?.trim()
+    if (override) return override
+  }
+  return githubReleaseAssetUrl(macDmgFilename(arch))
 }
 
 export function getWindowsDownloadUrl(): string {
   const override = process.env.NEXT_PUBLIC_CLARIFI_WIN_DOWNLOAD_URL?.trim()
   if (override) return override
-  return `${resolveAppUrl()}${getWindowsDownloadPath()}`
+  return githubReleaseAssetUrl(WIN_EXE_FILENAME)
 }
 
 export function getDownloadForTarget(target: DownloadTarget): {

@@ -64,8 +64,9 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
           SKIP_NOTARIZE: '1'
           SKIP_NATIVE_REBUILD: ''
-          MAC_CI_ARCH: arm64
-        run: bash scripts/build-mac-ci.sh
+        run: |
+          MAC_CI_ARCH=arm64 bash scripts/build-mac-ci.sh
+          MAC_CI_ARCH=x64 bash scripts/build-mac-ci.sh
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
@@ -101,3 +102,32 @@ jobs:
           name: clarifi-windows-exe
           path: release/*.exe
           if-no-files-found: error
+
+  publish-release:
+    needs: [build-mac, build-win]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download macOS DMG
+        uses: actions/download-artifact@v4
+        with:
+          name: clarifi-macos-dmg
+          path: release-assets
+
+      - name: Download Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: clarifi-windows-exe
+          path: release-assets
+
+      - name: Publish GitHub Release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.0
+          name: Clarifi 0.1.0
+          draft: false
+          prerelease: false
+          make_latest: true
+          files: release-assets/**
+          generate_release_notes: true
