@@ -6,11 +6,19 @@ if [[ "$(uname)" != "Darwin" ]]; then
   exit 0
 fi
 
-ARCH=$(uname -m)
-if [ "$ARCH" = "arm64" ]; then
-  TARGET="arm64-apple-macosx13.0"
+if [[ -n "${MAC_TARGET_ARCH:-}" ]]; then
+  if [[ "$MAC_TARGET_ARCH" == "x64" ]]; then
+    TARGET="x86_64-apple-macosx13.0"
+  else
+    TARGET="arm64-apple-macosx13.0"
+  fi
 else
-  TARGET="x86_64-apple-macosx13.0"
+  ARCH=$(uname -m)
+  if [ "$ARCH" = "arm64" ]; then
+    TARGET="arm64-apple-macosx13.0"
+  else
+    TARGET="x86_64-apple-macosx13.0"
+  fi
 fi
 
 mkdir -p resources

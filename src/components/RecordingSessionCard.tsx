@@ -29,11 +29,6 @@ type RecordingSessionCardProps = {
   loading?: boolean
   reply?: string
   disabled?: boolean
-  isDictating?: boolean
-  dictationLoading?: boolean
-  onDictationToggle?: () => void
-  dictationDisabled?: boolean
-  dictationBlockedReason?: string
   transcript?: SessionTranscriptEntry[]
   transcriptionActivity?: 'silent' | 'listening' | 'transcribing'
   liveActions?: SessionAssistAction[]
@@ -89,16 +84,6 @@ function findActionForSlot(
     if (kinds.includes(actions[i].kind)) return actions[i]
   }
   return null
-}
-
-function ComposerMicIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
-      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-      <line x1="12" y1="19" x2="12" y2="22" />
-    </svg>
-  )
 }
 
 function SessionViewSwitch({
@@ -323,11 +308,6 @@ export function RecordingSessionCard({
   loading = false,
   reply,
   disabled = false,
-  isDictating = false,
-  dictationLoading = false,
-  onDictationToggle,
-  dictationDisabled = false,
-  dictationBlockedReason,
   transcript = [],
   transcriptionActivity = 'listening',
   liveActions = [],
@@ -345,14 +325,6 @@ export function RecordingSessionCard({
   const placeholder = screenContextEnabled
     ? 'Ask or search anything about my screen'
     : 'Ask or search anything'
-
-  const micLabel = dictationLoading
-    ? 'Transcribing…'
-    : isDictating
-      ? 'Stop dictation'
-      : dictationBlockedReason
-        ? dictationBlockedReason
-        : 'Speak into chat'
 
   return (
     <div className="session-card">
@@ -387,23 +359,8 @@ export function RecordingSessionCard({
             placeholder={placeholder}
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
-            disabled={disabled || loading || dictationLoading}
+            disabled={disabled || loading}
           />
-          <button
-            type="button"
-            className={`session-composer-mic ${isDictating ? 'active' : ''} ${dictationLoading ? 'loading' : ''}`}
-            onClick={onDictationToggle}
-            disabled={disabled || dictationDisabled || dictationLoading || !onDictationToggle}
-            aria-label={micLabel}
-            title={dictationBlockedReason ?? micLabel}
-            aria-pressed={isDictating}
-          >
-            {dictationLoading ? (
-              <span className="session-composer-mic-spinner" aria-hidden />
-            ) : (
-              <ComposerMicIcon />
-            )}
-          </button>
         </div>
       </form>
     </div>

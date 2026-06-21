@@ -5,6 +5,7 @@ import { HeroBackgroundPaths } from '@/components/ui/background-paths'
 import { Logos3 } from '@/components/ui/logos3'
 import { StackedCards } from '@/components/StackedCards'
 import { HeroSalesDemo } from '@/components/landing/HeroSalesDemo'
+import { HowItWorksSection } from '@/components/landing/HowItWorksSection'
 import { MeetingNotesSection } from '@/components/landing/MeetingNotesSection'
 import { DownloadWithInstallModal } from '@/components/DownloadWithInstallModal'
 import { MarketingNav } from '@/components/marketing/MarketingNav'
@@ -50,6 +51,8 @@ export function HeroScrollSection() {
       <StackedCards />
 
       <MeetingNotesSection />
+
+      <HowItWorksSection />
     </>
   )
 }

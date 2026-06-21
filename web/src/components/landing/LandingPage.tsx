@@ -14,12 +14,12 @@ import { ScreenShareCompare } from './ScreenShareCompare'
 import { MarketingNav } from '@/components/marketing/MarketingNav'
 import { PricingCheckoutButton } from '@/components/pricing/PricingCheckoutButton'
 import {
-  MAC_DMG_FILENAME,
-  WIN_EXE_FILENAME,
+  getDownloadManifest,
   getMacDownloadPath,
   getWindowsDownloadPath,
+  macDmgFilename,
 } from '@/lib/downloads'
-import { detectClientPlatform } from '@/lib/platform'
+import { detectClientPlatform, detectMacArchSync } from '@/lib/platform'
 import '@/components/waitlist/waitlist.css'
 import './landing.css'
 
@@ -170,8 +170,14 @@ export function LandingPage() {
 
   const triggerDownload = useCallback(() => {
     const platform = detectClientPlatform() ?? 'mac'
-    const path = platform === 'windows' ? getWindowsDownloadPath() : getMacDownloadPath()
-    const filename = platform === 'windows' ? WIN_EXE_FILENAME : MAC_DMG_FILENAME
+    const path =
+      platform === 'windows'
+        ? getWindowsDownloadPath()
+        : getMacDownloadPath(detectMacArchSync())
+    const filename =
+      platform === 'windows'
+        ? getDownloadManifest('windows').filename
+        : macDmgFilename(detectMacArchSync())
     const a = document.createElement('a')
     a.href = path
     a.download = filename

@@ -15,12 +15,43 @@ if [[ -f "$ENTITLEMENTS" ]]; then
   ENT_ARGS=(--entitlements "$ENTITLEMENTS")
 fi
 
+strip_detritus() {
+  local target="$1"
+  [[ -e "$target" ]] || return 0
+
+  if [[ -f "$target" ]]; then
+    local tmp
+    tmp="$(mktemp)"
+    COPYFILE_DISABLE=1 ditto --norsrc --noextattr "$target" "$tmp" 2>/dev/null || \
+      COPYFILE_DISABLE=1 cp -X "$target" "$tmp" 2>/dev/null || \
+      cat "$target" > "$tmp"
+    chmod "$(stat -f %Lp "$target")" "$tmp"
+    mv "$tmp" "$target"
+  fi
+
+  xattr -cr "$target" 2>/dev/null || true
+  local attr
+  while IFS= read -r attr; do
+    [[ -n "$attr" ]] || continue
+    xattr -d "$attr" "$target" 2>/dev/null || true
+  done < <(xattr "$target" 2>/dev/null || true)
+}
+
+echo "Stripping extended attributes and resource forks in $APP_PATH..."
+dot_clean -m "$APP_PATH" 2>/dev/null || true
 xattr -cr "$APP_PATH" 2>/dev/null || true
+
+while IFS= read -r -d '' file; do
+  strip_detritus "$file"
+done < <(
+  find "$APP_PATH" -type f \( -perm -111 -o -name "*.dylib" -o -name "*.node" \) -print0 2>/dev/null
+)
 
 sign_target() {
   local target="$1"
   [[ -e "$target" ]] || return 0
-  xattr -cr "$target" 2>/dev/null || true
+  strip_detritus "$target"
+  codesign --remove-signature "$target" 2>/dev/null || true
   codesign --force --sign - "${ENT_ARGS[@]}" "$target" 2>/dev/null || \
     codesign --force --sign - "$target"
 }

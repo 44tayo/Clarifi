@@ -69,6 +69,7 @@ export function registerKeybinds(prefs: KeybindPreferences = loadKeybindPreferen
   const used = new Map<string, KeybindActionId>()
   for (const [action, accelerator] of Object.entries(prefs) as [KeybindActionId, string][]) {
     if (!accelerator || used.has(accelerator)) continue
+    if (action === 'hold_to_dictate') continue
     // Plain keys (e.g. Enter) belong in the renderer form — not globalShortcut.
     if (!accelerator.includes('+')) continue
     used.set(accelerator, action)

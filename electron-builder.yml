@@ -19,6 +19,10 @@ mac:
       to: window_capture_exclude.node
       filter:
         - "**/*"
+    - from: resources/dictation_ptt.node
+      to: dictation_ptt.node
+      filter:
+        - "**/*"
   target:
     - dmg
     - zip
@@ -43,6 +47,7 @@ publish:
 dmg:
   title: Clarifi
   icon: build/icon.icns
+  artifactName: Clarifi-${version}-${arch}.dmg
 win:
   target: nsis
   icon: build/icon.ico

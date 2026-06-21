@@ -269,30 +269,6 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary)
 }
 
-async function getDictationMicStream(preferredDeviceId?: string): Promise<MediaStream> {
-  const audioConstraints = (deviceId?: string): MediaTrackConstraints => ({
-    channelCount: 1,
-    echoCancellation: true,
-    noiseSuppression: true,
-    ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
-  })
-
-  if (preferredDeviceId) {
-    try {
-      return await navigator.mediaDevices.getUserMedia({ audio: audioConstraints(preferredDeviceId) })
-    } catch {
-      // Preferred mic unavailable — fall back to system default
-    }
-  }
-
-  return navigator.mediaDevices.getUserMedia({ audio: audioConstraints() })
-}
-
-function showTransientStatus(setStatus: (value: string) => void, message: string, ms = 3000): void {
-  setStatus(message)
-  window.setTimeout(() => setStatus(''), ms)
-}
-
 type PanelMode =
   | 'bar'
   | 'chat'
@@ -521,15 +497,8 @@ export default function Overlay() {
   >('listening')
   const [sessionReply, setSessionReply] = useState('')
   const [sessionLoading, setSessionLoading] = useState(false)
-  const [isDictating, setIsDictating] = useState(false)
-  const [dictationLoading, setDictationLoading] = useState(false)
   const [tourStep, setTourStep] = useState<string | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const dictationRecorderRef = useRef<MediaRecorder | null>(null)
-  const dictationStreamRef = useRef<MediaStream | null>(null)
-  const dictationChunksRef = useRef<Blob[]>([])
-  const dictationMimeRef = useRef('audio/webm')
-  const dictationTargetAppRef = useRef<string | null>(null)
   const prevPanelForTourRef = useRef<PanelMode>('bar')
   const streamRef = useRef<MediaStream | null>(null)
   const isCapturingRef = useRef(false)
@@ -1308,140 +1277,6 @@ export default function Overlay() {
     })
   }, [])
 
-  const stopDictationCapture = useCallback(() => {
-    dictationRecorderRef.current = null
-    dictationStreamRef.current?.getTracks().forEach((track) => track.stop())
-    dictationStreamRef.current = null
-    dictationChunksRef.current = []
-  }, [])
-
-  const toggleDictation = async () => {
-    if (needsConnect) {
-      showTransientStatus(setStatus, 'Connect your account on the website first')
-      return
-    }
-    if (isRecording) {
-      showTransientStatus(setStatus, 'Stop the audio session to use dictation')
-      return
-    }
-    if (dictationLoading) return
-
-    if (isDictating) {
-      const recorder = dictationRecorderRef.current
-      if (!recorder || recorder.state === 'inactive') {
-        setIsDictating(false)
-        stopDictationCapture()
-        return
-      }
-
-      setDictationLoading(true)
-      setIsDictating(false)
-      setStatus('Transcribing…')
-
-      const blob = await new Promise<Blob | null>((resolve) => {
-        recorder.onstop = () => {
-          const chunks = dictationChunksRef.current
-          resolve(chunks.length > 0 ? new Blob(chunks, { type: dictationMimeRef.current }) : null)
-        }
-        try {
-          recorder.stop()
-        } catch {
-          resolve(null)
-        }
-      })
-
-      stopDictationCapture()
-
-      if (!blob || blob.size < 500) {
-        setDictationLoading(false)
-        showTransientStatus(setStatus, 'Speak a bit longer, then tap the mic again')
-        return
-      }
-
-      try {
-        const base64 = arrayBufferToBase64(await blob.arrayBuffer())
-        const result = (await window.electronAPI.invoke('dictation:compose', {
-          audioBase64: base64,
-          target: 'auto',
-          targetApp: dictationTargetAppRef.current,
-        })) as {
-          text?: string
-          error?: string
-          destination?: 'overlay' | 'focused_field'
-          targetApp?: string | null
-        }
-
-        if (result.error === 'no_speech') {
-          showTransientStatus(setStatus, 'No speech detected — try again')
-        } else if (result.destination === 'focused_field' && result.text) {
-          const appLabel = result.targetApp?.split(' ')[0] ?? 'your app'
-          showTransientStatus(setStatus, `Dictation inserted into ${appLabel}`, 2500)
-        } else if (result.error === 'accessibility_required') {
-          setQuery((prev) =>
-            result.text
-              ? prev.trim()
-                ? `${prev.trim()} ${result.text}`
-                : result.text
-              : prev,
-          )
-          setStatus('Enable Accessibility for Clarifi to dictate into other apps')
-        } else if (result.text) {
-          setQuery((prev) => (prev.trim() ? `${prev.trim()} ${result.text}` : result.text!))
-          setStatus('')
-        } else if (result.error === 'insert_failed') {
-          showTransientStatus(setStatus, 'Could not insert dictation — text added to chat instead')
-          if (result.text) {
-            setQuery((prev) => (prev.trim() ? `${prev.trim()} ${result.text}` : result.text!))
-          }
-        }
-      } catch (err) {
-        console.error('Dictation error:', err)
-        showTransientStatus(setStatus, 'Dictation failed — try again')
-      } finally {
-        setDictationLoading(false)
-      }
-      return
-    }
-
-    try {
-      const target = (await window.electronAPI.invoke('dictation:get-target-app')) as {
-        app?: string | null
-      }
-      dictationTargetAppRef.current = target.app ?? null
-
-      const audioPrefs = (await window.electronAPI.invoke('audio:prefs-load')) as {
-        preferredMicrophoneId?: string
-      }
-      const deviceId = audioPrefs?.preferredMicrophoneId?.trim()
-      const stream = await getDictationMicStream(deviceId || undefined)
-      dictationStreamRef.current = stream
-      dictationChunksRef.current = []
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : 'audio/webm'
-      dictationMimeRef.current = mimeType
-      const recorder = new MediaRecorder(stream, { mimeType })
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) dictationChunksRef.current.push(event.data)
-      }
-      recorder.start()
-      dictationRecorderRef.current = recorder
-      setIsDictating(true)
-      setStatus('Dictating… tap mic when done')
-    } catch (err) {
-      console.error('Dictation mic error:', err)
-      stopDictationCapture()
-      setIsDictating(false)
-      showTransientStatus(setStatus, 'Microphone access denied — check System Settings')
-    }
-  }
-
-  useEffect(() => {
-    return () => {
-      stopDictationCapture()
-    }
-  }, [stopDictationCapture])
-
   const submitSessionQuery = async (message: string) => {
     if (!message.trim() || sessionLoading || needsConnect) return
 
@@ -1812,13 +1647,6 @@ export default function Overlay() {
           loading={sessionLoading}
           reply={sessionReply}
           disabled={needsConnect}
-          isDictating={isDictating}
-          dictationLoading={dictationLoading}
-          onDictationToggle={() => void toggleDictation()}
-          dictationDisabled={isRecording}
-          dictationBlockedReason={
-            isRecording ? 'Stop the audio session to use dictation' : undefined
-          }
           transcript={fullTranscript.length > 0 ? fullTranscript : transcript}
           transcriptionActivity={transcriptionActivity}
           liveActions={liveActions}

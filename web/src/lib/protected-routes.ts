@@ -16,6 +16,7 @@ const PUBLIC_PREFIXES = [
   '/sign-in',
   '/sign-up',
   '/downloads',
+  '/download',
   '/desktop/connect',
   '/desktop/sign-in',
   '/desktop/sign-up',

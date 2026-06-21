@@ -13,6 +13,7 @@ export type KeybindActionId =
   | 'toggle_recording'
   | 'toggle_history'
   | 'open_settings'
+  | 'hold_to_dictate'
 
 export type KeybindDefinition = {
   id: KeybindActionId
@@ -85,6 +86,15 @@ export const KEYBIND_DEFINITIONS: KeybindDefinition[] = [
     label: 'Open settings',
     description: 'Open Clarifi settings.',
     defaultAccelerator: 'CommandOrControl+,',
+  },
+  {
+    id: 'hold_to_dictate',
+    label: 'Hold to dictate',
+    description:
+      process.platform === 'darwin'
+        ? 'Hold Fn (Globe) to dictate. Falls back to the shortcut below if Fn is unavailable.'
+        : 'Hold Right Ctrl to dictate. Customize the fallback shortcut below.',
+    defaultAccelerator: process.platform === 'darwin' ? 'Fn' : 'Control+Right',
   },
 ]
 
@@ -178,6 +188,7 @@ export function validateKeybindAssignment(
 ): string | null {
   const normalized = normalizeAccelerator(accelerator)
   if (!normalized) return 'Invalid shortcut'
+  if (action === 'hold_to_dictate' && normalized.toLowerCase() === 'fn') return null
   if (!normalized.includes('+')) return 'Include at least one modifier key'
 
   for (const def of KEYBIND_DEFINITIONS) {
@@ -207,6 +218,8 @@ export function normalizeAccelerator(accelerator: string): string {
       if (lower === 'down' || lower === 'arrowdown') return 'Down'
       if (lower === 'left' || lower === 'arrowleft') return 'Left'
       if (lower === 'right' || lower === 'arrowright') return 'Right'
+      if (lower === 'right') return 'Right'
+      if (lower === 'fn' || lower === 'globe') return 'Fn'
       if (part.length === 1) return part.toUpperCase()
       return part.charAt(0).toUpperCase() + part.slice(1)
     })

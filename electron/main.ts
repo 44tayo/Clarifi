@@ -20,6 +20,11 @@ import {
   ensureOverlayVisible,
   getOverlayWindow,
 } from './overlay'
+import {
+  createDictationPillWindow,
+  destroyDictationPillWindow,
+} from './dictationPill'
+import { startDictationPttMonitor, stopDictationPttMonitor } from './dictationPtt'
 import { stopOverlayFollow } from './overlayPosition'
 // Show "Clarifi" in the menu bar instead of "Electron" during local dev.
 app.setName('Clarifi')
@@ -98,6 +103,8 @@ async function showClarifiUI(): Promise<void> {
   const onboardingDone = await isOnboardingComplete()
   if (!onboardingDone) {
     destroyOverlayWindow()
+    destroyDictationPillWindow()
+    stopDictationPttMonitor()
     const onboarding = createOnboardingWindow()
     onboarding.focus()
     return
@@ -186,6 +193,8 @@ async function launchClarifi(): Promise<void> {
 
   if (!onboardingDone) {
     destroyOverlayWindow()
+    destroyDictationPillWindow()
+    stopDictationPttMonitor()
     createOnboardingWindow()
     return
   }
@@ -195,6 +204,8 @@ async function launchClarifi(): Promise<void> {
   }
 
   createOverlayWindow()
+  createDictationPillWindow()
+  startDictationPttMonitor()
   ensureOverlayVisible()
 }
 
@@ -247,6 +258,7 @@ app.whenReady().then(async () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
+  stopDictationPttMonitor()
   stopOverlayFollow()
   void import('./proactive').then(({ stopProactiveEngine }) => stopProactiveEngine())
 })

@@ -16,6 +16,10 @@ function copyStealthNativePlugin() {
       const destDir = join(root, 'dist-electron/resources')
       mkdirSync(destDir, { recursive: true })
       copyFileSync(src, join(destDir, 'window_capture_exclude.node'))
+      const pttSrc = join(root, 'resources/dictation_ptt.node')
+      if (existsSync(pttSrc)) {
+        copyFileSync(pttSrc, join(destDir, 'dictation_ptt.node'))
+      }
     },
   }
 }
@@ -89,6 +93,7 @@ export default defineConfig(({ mode }) => {
           overlay: 'overlay.html',
           onboarding: 'onboarding.html',
           settings: 'settings.html',
+          dictationPill: 'dictation-pill.html',
         },
       },
     },

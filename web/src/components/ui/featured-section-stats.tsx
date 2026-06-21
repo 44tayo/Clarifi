@@ -5,21 +5,21 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip } from 'recharts'
 /** Illustrative assist activity across a sample sales call — not live user data. */
 const CHART_DATA = [
   { minute: '0m', suggestions: 0 },
-  { minute: '5m', suggestions: 1 },
-  { minute: '10m', suggestions: 2 },
-  { minute: '15m', suggestions: 5 },
-  { minute: '20m', suggestions: 4 },
-  { minute: '25m', suggestions: 8 },
-  { minute: '30m', suggestions: 6 },
-  { minute: '35m', suggestions: 10 },
-  { minute: '40m', suggestions: 7 },
-  { minute: '45m', suggestions: 3 },
+  { minute: '5m', suggestions: 2 },
+  { minute: '10m', suggestions: 4 },
+  { minute: '15m', suggestions: 6 },
+  { minute: '20m', suggestions: 8 },
+  { minute: '25m', suggestions: 10 },
+  { minute: '30m', suggestions: 12 },
+  { minute: '35m', suggestions: 14 },
+  { minute: '40m', suggestions: 16 },
+  { minute: '45m', suggestions: 18 },
 ]
 
 const STATS = [
   { value: '0', label: 'Bots in your meetings' },
-  { value: '100%', label: 'Invisible on screen share' },
-  { value: '<2s', label: 'Avg assist response' },
+  { value: '1.8s', label: 'Response time' },
+  { value: '300ms', label: 'Avg transcription time' },
   { value: 'Unlimited', label: 'Live assist per session' },
 ] as const
 

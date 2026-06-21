@@ -124,8 +124,8 @@ export function InstallModal({ open, onClose, onDownloadAgain }: InstallModalPro
 
         {showTroubleshoot ? (
           <div className="landing-install-troubleshoot">
-            <strong>App won&apos;t open?</strong> This build is for <strong>Apple Silicon Macs</strong>{' '}
-            (M1/M2/M3/M4) and is not Apple-notarized yet.
+            <strong>App won&apos;t open?</strong> Clarifi is not Apple-notarized yet — macOS may block it
+            until you approve it once.
             <ol>
               <li>
                 Drag Clarifi into <strong>Applications</strong> (do not run it from the DMG).
@@ -133,6 +133,9 @@ export function InstallModal({ open, onClose, onDownloadAgain }: InstallModalPro
               <li>
                 In Finder → Applications, <strong>right-click Clarifi → Open → Open</strong> the first
                 time.
+              </li>
+              <li>
+                Hold <strong>Fn (Globe)</strong> or click the bottom pill to dictate into any text field.
               </li>
               <li>
                 If you still see &ldquo;can&apos;t be opened,&rdquo; run in Terminal:{' '}

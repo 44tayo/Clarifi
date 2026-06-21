@@ -13,6 +13,23 @@
           }
         }]
       ]
+    },
+    {
+      "target_name": "dictation_ptt",
+      "conditions": [
+        ["OS=='mac'", {
+          "sources": ["dictation_ptt.mm"],
+          "link_settings": {
+            "libraries": [
+              "-framework ApplicationServices",
+              "-framework CoreFoundation"
+            ]
+          }
+        }],
+        ["OS=='win'", {
+          "sources": ["dictation_ptt_win.cc"]
+        }]
+      ]
     }
   ]
 }

@@ -1,8 +1,8 @@
 'use client'
 
-import { Mic } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
+import { AudioSessionWaveformButton } from '@/components/ui/audio-session-waveform'
 import { cn } from '@/lib/utils'
 
 interface AIVoiceInputProps {
@@ -87,30 +87,13 @@ export function AIVoiceInput({
   return (
     <div className={cn('w-full py-4', className)}>
       <div className="relative mx-auto flex w-full max-w-xl flex-col items-center gap-2">
-        <button
-          className={cn(
-            'group flex h-16 w-16 items-center justify-center rounded-xl transition-colors',
-            submitted
-              ? 'bg-none'
-              : onDark
-                ? 'bg-none hover:bg-white/10'
-                : 'bg-none hover:bg-accent',
-          )}
-          type="button"
+        <AudioSessionWaveformButton
+          active={submitted}
           onClick={handleClick}
-        >
-          {submitted ? (
-            <div
-              className={cn(
-                'pointer-events-auto h-6 w-6 cursor-pointer animate-spin rounded-sm',
-                onDark ? 'bg-white' : 'bg-primary',
-              )}
-              style={{ animationDuration: '3s' }}
-            />
-          ) : (
-            <Mic className={cn('h-6 w-6', onDark ? 'text-white/70' : 'text-muted-foreground')} />
-          )}
-        </button>
+          size="lg"
+          variant={onDark ? 'on-dark' : 'default'}
+          className="mb-1"
+        />
 
         <span
           className={cn(
@@ -135,8 +118,8 @@ export function AIVoiceInput({
                 'w-0.5 rounded-full transition-all duration-300',
                 submitted
                   ? onDark
-                    ? 'animate-pulse bg-white/50'
-                    : 'animate-pulse bg-primary/50'
+                    ? 'animate-pulse bg-red-400/60'
+                    : 'animate-pulse bg-red-500/50'
                   : onDark
                     ? 'h-1 bg-white/10'
                     : 'h-1 bg-muted-foreground/20',

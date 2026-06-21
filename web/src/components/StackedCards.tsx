@@ -1,10 +1,10 @@
 'use client'
 
-import { Mic } from 'lucide-react'
 import { useState } from 'react'
 
 import { ClarifiAssistPreview } from '@/components/landing/ClarifiAssistPreview'
 import { AIVoiceInput } from '@/components/ui/ai-voice-input'
+import { AudioSessionWaveformButton } from '@/components/ui/audio-session-waveform'
 import { cn } from '@/lib/utils'
 
 type StackedCard =
@@ -39,7 +39,13 @@ const cards: StackedCard[] = [
 function VoiceCardPreview() {
   return (
     <div className="flex h-full w-full flex-col items-center justify-center bg-black px-6 py-8">
-      <Mic className="mb-3 h-8 w-8 text-white/70" aria-hidden />
+      <AudioSessionWaveformButton
+        active={false}
+        disabled
+        size="lg"
+        variant="on-dark"
+        className="mb-3"
+      />
       <span className="font-mono text-sm text-white/30">00:00</span>
       <div className="mt-3 flex h-4 w-64 items-center justify-center gap-0.5">
         {Array.from({ length: 48 }).map((_, i) => (

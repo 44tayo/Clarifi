@@ -48,6 +48,11 @@
   --ds-feature-visual-height-compact: 180px;
   --ds-feature-visual-height-mobile: 200px;
 
+  /* Feature gallery carousel (Gallery6) */
+  --ds-gallery-slide-width: 380px;
+  --ds-gallery-slide-gap: 1.25rem;
+  --ds-gallery-visual-height: 280px;
+
   /* Typography */
   --ds-section-title-size: clamp(1.75rem, 4vw, 2.35rem);
   --ds-section-subtitle-size: 1.05rem;

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import './onboarding.css'
 import OverlayMock from './OverlayMock'
+import DictationPillMock from './DictationPillMock'
 import SignInEmbed from './SignInEmbed'
 import { ClarifiLogo, SlideToContinue } from './onboarding-welcome'
 
@@ -14,6 +15,7 @@ type Step =
   | 'tour-chat'
   | 'tour-screen'
   | 'tour-audio'
+  | 'tour-dictation'
   | 'tour-stealth'
   | 'tour-move'
   | 'tour-sessions'
@@ -48,6 +50,7 @@ const STEPS: Step[] = [
   'tour-chat',
   'tour-screen',
   'tour-audio',
+  'tour-dictation',
   'tour-stealth',
   'tour-move',
   'tour-sessions',
@@ -61,6 +64,7 @@ const LIVE_TOUR_STEPS: Step[] = [
   'tour-chat',
   'tour-screen',
   'tour-audio',
+  'tour-dictation',
   'tour-stealth',
   'tour-move',
   'tour-sessions',
@@ -228,6 +232,10 @@ function PreviewPanel({ step, mockOffset, onPreviewListen, onPreviewStealth }: P
         }
       />
     )
+  }
+
+  if (step === 'tour-dictation') {
+    return <DictationPillMock />
   }
 
   if (step === 'tour-stealth') {
@@ -579,13 +587,13 @@ export default function OnboardingApp() {
         <div className="permission-list">
           <PermissionRow
             title="Allow Clarifi to assist"
-            description="Clarifi uses accessibility access for global shortcuts and app-aware controls."
+            description="Needed for dictation into other apps, Fn hold-to-talk, and global shortcuts."
             granted={permissions.accessibility}
             onToggle={() => void requestPermission('accessibility')}
           />
           <PermissionRow
             title="Allow Clarifi to hear audio"
-            description="Clarifi can listen to audio when you start a session."
+            description="Clarifi uses your mic for live sessions and hold-to-talk dictation."
             granted={permissions.microphone}
             onToggle={() => void requestPermission('microphone')}
           />
@@ -753,6 +761,27 @@ export default function OnboardingApp() {
         {tutorialDone && <span>›</span>}
       </button>
     )
+  } else if (step === 'tour-dictation') {
+    leftContent = (
+      <>
+        <h2 className="onboarding-heading">Dictate anywhere</h2>
+        <p className="onboarding-sub">
+          Hold <strong>Fn (Globe)</strong> on Mac or <strong>Right Ctrl</strong> on Windows — or click
+          the bottom pill — to dictate into any text field. Clarifi cleans up filler words and inserts
+          polished text at your cursor.
+        </p>
+        <div className="onboarding-press-row">
+          <span className="onboarding-kbd">Fn</span>
+          <span className="onboarding-kbd-label">hold to talk</span>
+        </div>
+      </>
+    )
+    primaryCta = (
+      <button type="button" className="onboarding-cta onboarding-cta-primary" onClick={goNext}>
+        Continue
+        <span>›</span>
+      </button>
+    )
   } else if (step === 'tour-stealth') {
     leftContent = (
       <>
@@ -838,8 +867,8 @@ export default function OnboardingApp() {
       <>
         <h2 className="onboarding-heading">You&apos;re all set</h2>
         <p className="onboarding-sub">
-          Clarifi is ready. Press <strong>⌘F</strong> whenever you need it. Replay this tour
-          from Settings → Replay product tour.
+          Clarifi is ready. Press <strong>⌘F</strong> for the overlay, or hold <strong>Fn</strong> to
+          dictate into any app. Replay this tour from Settings → Replay product tour.
         </p>
       </>
     )

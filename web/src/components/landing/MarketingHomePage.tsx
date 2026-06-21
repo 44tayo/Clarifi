@@ -7,7 +7,7 @@ import { FaqSection } from '@/components/landing/FaqSection'
 import { HeroScrollSection } from '@/components/landing/HeroScrollSection'
 import { FeaturedSectionStats } from '@/components/ui/featured-section-stats'
 import { WaitlistModelsSection } from '@/components/waitlist/WaitlistModelsSection'
-import { WaitlistProductSections, WaitlistSiteFooter } from '@/components/waitlist/WaitlistPageSections'
+import { WaitlistSiteFooter } from '@/components/waitlist/WaitlistPageSections'
 
 import '@/components/landing/landing.css'
 import '@/components/waitlist/waitlist.css'
@@ -38,7 +38,6 @@ export function MarketingHomePage() {
       <HeroScrollSection />
       <WaitlistModelsSection />
       <FeaturedSectionStats />
-      <WaitlistProductSections />
       <FaqSection className="waitlist-faq" />
       <WaitlistSiteFooter />
     </div>

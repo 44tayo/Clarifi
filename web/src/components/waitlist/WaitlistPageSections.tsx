@@ -6,77 +6,6 @@ import { useState } from 'react'
 import { ComingSoonModal } from '@/components/landing/ComingSoonModal'
 import './waitlist-page-sections.css'
 
-const PRODUCT_BENEFITS = [
-  {
-    title: 'Completely Undetectable',
-    description: "Invisible on your screen and on screen share. No one knows it's there.",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-        <circle cx="12" cy="12" r="3" />
-        <line x1="1" y1="1" x2="23" y2="23" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Always on Standby',
-    description: 'Clarifi is ready the moment you need it, with zero lag or setup.',
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-        <circle cx="12" cy="12" r="10" />
-        <polyline points="12 6 12 12 16 14" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Unlimited Usage',
-    description: 'No caps, no paywalls mid-session. Use it as much as you need.',
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-        <path d="M18.178 8c5.096 0 5.096 8 0 8-5.095 0-7.133-8-12.739-8-4.581 0-4.581 8 0 8 5.606 0 7.644-8 12.739-8z" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Fully Customisable',
-    description:
-      'Tailored to your workflow, industry, and use case — with your choice of the best AI models.',
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-        <line x1="4" y1="21" x2="4" y2="14" />
-        <line x1="4" y1="10" x2="4" y2="3" />
-        <line x1="12" y1="21" x2="12" y2="12" />
-        <line x1="12" y1="8" x2="12" y2="3" />
-        <line x1="20" y1="21" x2="20" y2="16" />
-        <line x1="20" y1="12" x2="20" y2="3" />
-        <line x1="1" y1="14" x2="7" y2="14" />
-        <line x1="9" y1="8" x2="15" y2="8" />
-        <line x1="17" y1="16" x2="23" y2="16" />
-      </svg>
-    ),
-  },
-  {
-    title: '3x Cheaper',
-    description: 'A third of the cost of leading tools in the space, with more flexibility.',
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-        <line x1="12" y1="1" x2="12" y2="23" />
-        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Real-Time Answers',
-    description:
-      'Watches your screen and listens to your audio to deliver instant, accurate answers when you need them most.',
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-      </svg>
-    ),
-  },
-] as const
-
 function ClarifiLogoMark() {
   return (
     <Image
@@ -87,31 +16,6 @@ function ClarifiLogoMark() {
       className="landing-logo-img"
       aria-hidden
     />
-  )
-}
-
-export function WaitlistProductSections() {
-  return (
-    <>
-      <section className="waitlist-benefits" aria-labelledby="why-clarifi-heading" data-reveal>
-        <div className="waitlist-benefits-inner">
-          <h2 id="why-clarifi-heading" className="waitlist-section-heading" data-reveal>
-            Why Clarifi?
-          </h2>
-          <div className="waitlist-benefits-grid" data-reveal-group>
-            {PRODUCT_BENEFITS.map((benefit) => (
-              <article key={benefit.title} className="waitlist-benefit-card" data-reveal>
-                <div className="waitlist-benefit-card-top">
-                  <div className="waitlist-benefit-icon">{benefit.icon}</div>
-                </div>
-                <h3 className="waitlist-benefit-title">{benefit.title}</h3>
-                <p className="waitlist-benefit-desc">{benefit.description}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-    </>
   )
 }
 

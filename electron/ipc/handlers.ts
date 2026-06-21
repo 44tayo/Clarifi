@@ -15,6 +15,16 @@ import {
 } from '../audio'
 import { composeDictationFromAudio } from '../dictation'
 import {
+  markDictationPillReady,
+  refreshDictationBlockedFromAudioSession,
+  setDictationBlocked,
+  setDictationPillInteractive,
+  showDictationPillWindow,
+  unlockPillDisplay,
+  lockPillToDisplay,
+} from '../dictationPill'
+import {
+  captureDictationTarget,
   getDictationTargetApp,
   startDictationTargetTracking,
   trackExternalFrontmostApp,
@@ -108,6 +118,9 @@ import {
   getConnectPageUrl,
   getSignInUrl,
   isDevicePaired,
+  hasLocalDeviceCredentials,
+  fetchDeviceProfileCached,
+  invalidateDeviceProfileCache,
 } from '../deviceAuth'
 import { getClarifiApiUrl } from '../keys'
 import { getKey, saveKey } from '../store'
@@ -140,6 +153,7 @@ import {
   validateKeybindAssignment,
   type KeybindActionId,
 } from '../keybindPreferences'
+import { startDictationPttMonitor } from '../dictationPtt'
 import { registerKeybinds } from '../keybindManager'
 import {
   eraseLocalAccountData,
@@ -979,6 +993,7 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
     startRecording(() => {
       // Transcripts are delivered through the transcription queue.
     })
+    setDictationBlocked(true, 'Stop the live session to use dictation')
 
     if (process.platform === 'darwin') {
       onSystemAudioData = (wavBuffer: Buffer) => {
@@ -1020,6 +1035,7 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
     onSystemAudioData = null
     await flushTranscriptionQueue()
     clearTranscriptionQueue()
+    setDictationBlocked(false)
     return { status: 'stopped' }
   })
 
@@ -1044,28 +1060,115 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
     },
   )
 
-  registerValidatedHandler(
-    'dictation:compose',
-    { requiresInput: true, rateLimitKey: 'llm:chat', rateLimit: LLM_RATE_LIMIT },
-    async (data) => {
-      const payload = data as {
-        audioBase64?: string
-        target?: 'auto' | 'overlay' | 'focused_field'
-        targetApp?: string | null
+  // Dictation audio bypasses sanitizeInput — base64 clips exceed the 50k IPC string cap.
+  ipcMain.handle('dictation:compose', async (_event, data) => {
+    const allowed = rateLimiter.check(
+      'llm:chat',
+      LLM_RATE_LIMIT.max,
+      LLM_RATE_LIMIT.windowMs,
+    )
+    if (!allowed) {
+      return {
+        error: 'rate_limit_exceeded',
+        message: 'Assist is updating too quickly — wait a few seconds.',
       }
-      if (!payload.audioBase64 || typeof payload.audioBase64 !== 'string') {
-        throw new Error('audioBase64 is required')
-      }
-      return composeDictationFromAudio(payload.audioBase64, {
-        target: payload.target,
-        targetApp: payload.targetApp,
-      })
-    },
-  )
+    }
+
+    const hasCreds = await hasLocalDeviceCredentials()
+    if (!hasCreds) {
+      throw new Error('Connect your account on the website first')
+    }
+    const profile = await fetchDeviceProfileCached(false)
+    if (!profile.paired) {
+      throw new Error('Connect your account on the website first')
+    }
+
+    const payload = data as {
+      audioBase64?: string
+      target?: 'auto' | 'overlay' | 'focused_field'
+      targetApp?: string | null
+    }
+    if (!payload?.audioBase64 || typeof payload.audioBase64 !== 'string') {
+      throw new Error('audioBase64 is required')
+    }
+    if (payload.audioBase64.length > 4_000_000) {
+      throw new Error('Audio clip too large')
+    }
+
+    const target =
+      payload.target === 'overlay' ||
+      payload.target === 'focused_field' ||
+      payload.target === 'auto'
+        ? payload.target
+        : undefined
+    const targetApp =
+      payload.targetApp === null
+        ? null
+        : typeof payload.targetApp === 'string'
+          ? payload.targetApp.slice(0, 256)
+          : undefined
+
+    return composeDictationFromAudio(payload.audioBase64, {
+      target,
+      targetApp,
+    })
+  })
+
 
   registerValidatedHandler('dictation:get-target-app', {}, () => {
     trackExternalFrontmostApp()
     return { app: getDictationTargetApp() }
+  })
+
+  registerValidatedHandler('dictation:session-bootstrap', {}, async (data) => {
+    const payload = (data ?? {}) as { refreshPairing?: boolean }
+    const hasCreds = await hasLocalDeviceCredentials()
+    if (payload.refreshPairing && hasCreds) {
+      await fetchDeviceProfileCached(true)
+    }
+
+    const prefs = loadAudioPreferences()
+    trackExternalFrontmostApp()
+
+    return {
+      connected: hasCreds,
+      preferredMicId: prefs.preferredMicrophoneId?.trim() || null,
+      targetApp: getDictationTargetApp(),
+    }
+  })
+
+  registerValidatedHandler('dictation:capture-target', {}, () => {
+    const snapshot = captureDictationTarget()
+    if (snapshot) {
+      lockPillToDisplay(snapshot.displayId)
+    }
+    return snapshot
+  })
+
+  registerValidatedHandler('dictation:session-idle', {}, () => {
+    unlockPillDisplay()
+    return { ok: true }
+  })
+
+  registerValidatedHandler('dictation-pill:ready', {}, () => {
+    markDictationPillReady()
+    return { ok: true }
+  })
+
+  registerValidatedHandler('dictation-pill:subscribe', {}, () => {
+    refreshDictationBlockedFromAudioSession()
+    return { ok: true }
+  })
+
+  registerValidatedHandler('dictation-pill:set-interactive', { requiresInput: true }, (data) => {
+    const payload = data as { interactive?: boolean }
+    setDictationPillInteractive(Boolean(payload.interactive))
+    return { ok: true }
+  })
+
+  registerValidatedHandler('dictation-pill:show', {}, () => {
+    showDictationPillWindow()
+    return { ok: true }
   })
 
   registerValidatedHandler(
@@ -1088,9 +1191,10 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
 
   registerValidatedHandler('auth:connection-status', {}, async () => {
     const apiUrl = getClarifiApiUrl()
-    const connected = await isDevicePaired()
+    const hasCreds = await hasLocalDeviceCredentials()
+    const profile = hasCreds ? await fetchDeviceProfileCached(false) : { paired: false }
     return {
-      connected,
+      connected: profile.paired,
       hasApiUrl: Boolean(apiUrl),
       connectUrl: getConnectPageUrl(),
     }
@@ -1679,6 +1783,14 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
           typeof payload.outputLanguage === 'string'
             ? payload.outputLanguage
             : current.outputLanguage,
+        dictationLanguage:
+          typeof payload.dictationLanguage === 'string'
+            ? payload.dictationLanguage
+            : current.dictationLanguage,
+        dictationOutputLanguage:
+          typeof payload.dictationOutputLanguage === 'string'
+            ? payload.dictationOutputLanguage
+            : current.dictationOutputLanguage,
         preferredMicrophoneId:
           typeof payload.preferredMicrophoneId === 'string'
             ? payload.preferredMicrophoneId
@@ -1711,6 +1823,9 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
   })
 
   registerValidatedHandler('app:logout', {}, async () => {
+    invalidateDeviceProfileCache()
+    const { invalidateTranscribeCache } = await import('../audio')
+    invalidateTranscribeCache()
     await logoutDevice()
     return { ok: true }
   })
@@ -1748,6 +1863,7 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
       const next = { ...current, [payload.action]: payload.accelerator }
       const saved = saveKeybindPreferences(next)
       registerKeybinds(saved)
+      startDictationPttMonitor()
       return toPublicKeybindPreferences()
     },
   )
@@ -1762,6 +1878,7 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
       }
       const saved = resetKeybind(payload.action)
       registerKeybinds(saved)
+      startDictationPttMonitor()
       return toPublicKeybindPreferences()
     },
   )
@@ -1769,6 +1886,7 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
   registerValidatedHandler('keybinds:reset-all', {}, () => {
     const saved = resetKeybindPreferences()
     registerKeybinds(saved)
+    startDictationPttMonitor()
     return toPublicKeybindPreferences()
   })
 

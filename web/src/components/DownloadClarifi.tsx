@@ -1,21 +1,20 @@
 'use client'
 
-import { useCallback } from 'react'
+import Link from 'next/link'
 
 import { Button } from '@/components/ui/button'
 import {
-  MAC_DMG_FILENAME,
-  WIN_EXE_FILENAME,
-  getMacDownloadPath,
-  getWindowsDownloadPath,
+  type DownloadTarget,
+  getDownloadManifest,
+  getDownloadPageHref,
+  parseDownloadTarget,
 } from '@/lib/downloads'
 import { platformDownloadLabel, useCustomerPlatform } from '@/hooks/useCustomerPlatform'
-import { type CustomerPlatform } from '@/lib/platform'
+import { detectMacArchSync, type CustomerPlatform } from '@/lib/platform'
 import { cn } from '@/lib/utils'
 
 type DownloadClarifiProps = {
   variant?: 'dashboard' | 'compact'
-  onDownloaded?: (platform: CustomerPlatform) => void
   className?: string
   buttonStyle?: 'landing' | 'shadcn'
 }
@@ -28,24 +27,16 @@ export function AppleLogo({ size = 16 }: { size?: number }) {
   )
 }
 
-async function recordPlatform(platform: CustomerPlatform): Promise<void> {
-  try {
-    await fetch('/api/customer/platform', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ platform }),
-    })
-  } catch {
-    /* ignore — unauthenticated or offline */
-  }
+export function defaultDownloadTarget(platform: CustomerPlatform): DownloadTarget {
+  if (platform === 'windows') return 'windows'
+  return detectMacArchSync() === 'x64' ? 'mac-x64' : 'mac-arm64'
 }
 
-export function triggerPlatformDownload(platform: CustomerPlatform): void {
-  const path = platform === 'windows' ? getWindowsDownloadPath() : getMacDownloadPath()
-  const filename = platform === 'windows' ? WIN_EXE_FILENAME : MAC_DMG_FILENAME
+export function triggerPlatformDownload(target: DownloadTarget): void {
+  const manifest = getDownloadManifest(target)
   const a = document.createElement('a')
-  a.href = path
-  a.download = filename
+  a.href = manifest.path
+  a.download = manifest.filename
   a.rel = 'noopener'
   document.body.appendChild(a)
   a.click()
@@ -54,58 +45,54 @@ export function triggerPlatformDownload(platform: CustomerPlatform): void {
 
 export function DownloadClarifi({
   variant = 'dashboard',
-  onDownloaded,
   className,
   buttonStyle = 'shadcn',
 }: DownloadClarifiProps) {
   const platform = useCustomerPlatform()
-  const secondary: CustomerPlatform = platform === 'mac' ? 'windows' : 'mac'
+  const primary = defaultDownloadTarget(platform)
+  const secondary: DownloadTarget = platform === 'mac' ? 'windows' : 'mac-arm64'
 
-  const download = useCallback(
-    (targetPlatform: CustomerPlatform) => {
-      triggerPlatformDownload(targetPlatform)
-      void recordPlatform(targetPlatform)
-      onDownloaded?.(targetPlatform)
-    },
-    [onDownloaded],
-  )
-
-  const label = platformDownloadLabel(platform)
-  const secondaryLabel = platformDownloadLabel(secondary)
-  const isMac = platform === 'mac'
+  const primaryManifest = getDownloadManifest(primary)
+  const secondaryManifest = getDownloadManifest(secondary)
+  const isPrimaryMac = primary.startsWith('mac')
+  const isSecondaryMac = secondary.startsWith('mac')
 
   if (variant === 'compact') {
     if (buttonStyle === 'landing') {
       return (
-        <button
-          type="button"
-          className={cn('download-mac-btn', className)}
-          onClick={() => download(platform)}
-        >
-          {isMac ? <AppleLogo size={14} /> : null}
-          {label}
-        </button>
+        <Link href={primaryManifest.href} className={cn('download-mac-btn', className)}>
+          {isPrimaryMac ? <AppleLogo size={14} /> : null}
+          {platformDownloadLabel(platform)}
+        </Link>
       )
     }
 
     return (
-      <Button type="button" className={cn('gap-2', className)} onClick={() => download(platform)}>
-        {isMac ? <AppleLogo size={14} /> : null}
-        {label}
+      <Button asChild className={cn('gap-2', className)}>
+        <Link href={primaryManifest.href}>
+          {isPrimaryMac ? <AppleLogo size={14} /> : null}
+          {platformDownloadLabel(platform)}
+        </Link>
       </Button>
     )
   }
 
   return (
     <div className={cn('flex flex-wrap gap-3', className)}>
-      <Button type="button" className="gap-2" onClick={() => download(platform)}>
-        {isMac ? <AppleLogo size={14} /> : null}
-        {label}
+      <Button asChild className="gap-2">
+        <Link href={primaryManifest.href}>
+          {isPrimaryMac ? <AppleLogo size={14} /> : null}
+          {primaryManifest.shortLabel}
+        </Link>
       </Button>
-      <Button type="button" variant="outline" className="gap-2" onClick={() => download(secondary)}>
-        {secondary === 'mac' ? <AppleLogo size={14} /> : null}
-        {secondaryLabel}
+      <Button asChild variant="outline" className="gap-2">
+        <Link href={secondaryManifest.href}>
+          {isSecondaryMac ? <AppleLogo size={14} /> : null}
+          {secondaryManifest.shortLabel}
+        </Link>
       </Button>
     </div>
   )
 }
+
+export { parseDownloadTarget }

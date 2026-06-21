@@ -4,26 +4,37 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-echo "Building unsigned macOS DMG..."
-CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_NOTARIZE=1 npm run build:mac
+VERSION="$(node -p "require('./package.json').version")"
+DOWNLOADS_DIR="$ROOT/web/public/downloads"
+mkdir -p "$DOWNLOADS_DIR"
 
-DMG="$(ls -t release/*.dmg 2>/dev/null | head -1)"
-if [[ -z "$DMG" ]]; then
-  echo "ERROR: No DMG found in release/"
-  exit 1
-fi
+for ARCH in arm64 x64; do
+  echo ""
+  echo "=== Building unsigned macOS DMG ($ARCH) ==="
+  CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_NOTARIZE=1 bash "$ROOT/scripts/build-mac-arch.sh" "$ARCH"
 
-APP_BUNDLE="$(ls -d release/mac-arm64/Clarifi.app 2>/dev/null | head -1)"
-if [[ -n "$APP_BUNDLE" ]]; then
-  bash "$ROOT/scripts/adhoc-sign-mac-app.sh" "$APP_BUNDLE"
-fi
+  DMG="$ROOT/release/Clarifi-${VERSION}-${ARCH}.dmg"
+  if [[ ! -f "$DMG" ]]; then
+    echo "ERROR: Expected DMG not found: $DMG"
+    exit 1
+  fi
 
-WEB_DMG="$ROOT/web/public/downloads/Clarifi-0.1.0-arm64.dmg"
-mkdir -p "$(dirname "$WEB_DMG")"
-cp "$DMG" "$WEB_DMG"
+  APP_BUNDLE=""
+  for CANDIDATE in "${ROOT}/release/mac-${ARCH}/Clarifi.app" "${ROOT}/release/mac/Clarifi.app"; do
+    if [[ -d "$CANDIDATE" ]]; then
+      APP_BUNDLE="$CANDIDATE"
+      break
+    fi
+  done
+  WEB_DMG="$DOWNLOADS_DIR/Clarifi-${VERSION}-${ARCH}.dmg"
+  cp "$DMG" "$WEB_DMG"
 
-echo "Published unsigned DMG:"
-echo "  $WEB_DMG"
+  if [[ -n "$APP_BUNDLE" ]]; then
+    bash "$ROOT/scripts/adhoc-sign-mac-app.sh" "$APP_BUNDLE"
+  fi
+  echo "Published: $WEB_DMG ($(du -h "$WEB_DMG" | cut -f1))"
+done
+
 echo ""
-echo "Apple Silicon (arm64) only. Users must drag to Applications, then:"
-echo "  Right-click Clarifi → Open → Open (first launch only)"
+echo "Published Apple Silicon + Intel Mac DMGs to $DOWNLOADS_DIR"
+echo "Users must drag to Applications, then right-click Clarifi → Open (first launch)."

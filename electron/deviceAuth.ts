@@ -95,8 +95,31 @@ export async function updateDeviceProfile(input: {
 }
 
 export async function isDevicePaired(): Promise<boolean> {
-  const profile = await fetchDeviceProfile()
+  const profile = await fetchDeviceProfileCached()
   return profile.paired
+}
+
+/** Fast local check — device credentials in keychain (no network). */
+export async function hasLocalDeviceCredentials(): Promise<boolean> {
+  const creds = await getDeviceCredentials()
+  return creds !== null
+}
+
+let profileCache: { profile: DeviceProfile; fetchedAt: number } | null = null
+const PROFILE_CACHE_TTL_MS = 5 * 60 * 1000
+
+export function invalidateDeviceProfileCache(): void {
+  profileCache = null
+}
+
+export async function fetchDeviceProfileCached(force = false): Promise<DeviceProfile> {
+  const now = Date.now()
+  if (!force && profileCache && now - profileCache.fetchedAt < PROFILE_CACHE_TTL_MS) {
+    return profileCache.profile
+  }
+  const profile = await fetchDeviceProfile()
+  profileCache = { profile, fetchedAt: now }
+  return profile
 }
 
 export {

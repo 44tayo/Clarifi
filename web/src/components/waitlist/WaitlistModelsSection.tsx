@@ -1,9 +1,12 @@
 'use client'
 
 import { useRef, type RefObject } from 'react'
+
 import { OverlayDemo, type OverlayDemoHandle } from '@/components/landing/OverlayDemo'
 import { ScreenShareCompare } from '@/components/landing/ScreenShareCompare'
 import { MeetingParticipantsMock } from '@/components/landing/MeetingParticipantsMock'
+import { Gallery6, type GalleryItem } from '@/components/ui/gallery6'
+
 import { ModelExploreDemo } from './ModelExploreDemo'
 import './waitlist-page-sections.css'
 
@@ -44,52 +47,37 @@ function MoveOverlayDemo({ demoRef }: { demoRef: RefObject<OverlayDemoHandle | n
 export function WaitlistModelsSection() {
   const moveDemoRef = useRef<OverlayDemoHandle>(null)
 
-  return (
-    <section
-      id="features"
-      className="landing-section landing-section-tint waitlist-features-section"
-      data-reveal
-    >
-      <div className="landing-section-header centered" data-reveal>
-        <h2>View some of our features</h2>
-        <p>Our collection of Clarifi features for your convenience</p>
-      </div>
-      <div className="landing-undetect-grid" data-reveal-group>
-        <div className="landing-undetect-feature grad-purple" data-reveal>
-          <div className="landing-undetect-visual landing-undetect-visual-participants">
-            <MeetingParticipantsMock />
-          </div>
-          <h3>Doesn&apos;t join meetings.</h3>
-          <p>No bots. No extra people on the guest list.</p>
-        </div>
+  const items: GalleryItem[] = [
+    {
+      id: 'no-bots',
+      title: "Doesn't join meetings.",
+      summary: 'No bots. No extra people on the guest list.',
+      visualClassName: 'gallery6-visual-participants',
+      visual: <MeetingParticipantsMock />,
+    },
+    {
+      id: 'screen-share',
+      title: 'Invisible to screen share.',
+      summary: 'Never shows up in shared screens, recordings, or external tools.',
+      visualClassName: 'gallery6-visual-compare',
+      visual: <ScreenShareCompare />,
+    },
+    {
+      id: 'drag-drop',
+      title: 'Drag and drop.',
+      summary: 'Move Clarifi anywhere on your screen — always within reach.',
+      visualClassName: 'gallery6-visual-move',
+      visual: <MoveOverlayDemo demoRef={moveDemoRef} />,
+    },
+    {
+      id: 'models',
+      title: 'Models',
+      summary:
+        'Scroll and expand providers to preview Anthropic, OpenAI, and Gemini — the same lineup in the desktop app.',
+      visualClassName: 'gallery6-visual-models',
+      visual: <ModelExploreDemo />,
+    },
+  ]
 
-        <div className="landing-undetect-feature grad-pink" data-reveal>
-          <div className="landing-undetect-visual landing-undetect-visual-compare">
-            <ScreenShareCompare />
-          </div>
-          <h3>Invisible to screen share.</h3>
-          <p>Never shows up in shared screens, recordings, or external tools.</p>
-        </div>
-
-        <div className="landing-undetect-feature grad-blue" data-reveal>
-          <div className="landing-undetect-visual landing-undetect-move">
-            <MoveOverlayDemo demoRef={moveDemoRef} />
-          </div>
-          <h3>Drag and drop.</h3>
-          <p>Move Clarifi anywhere on your screen — always within reach.</p>
-        </div>
-
-        <div className="landing-undetect-feature grad-teal" data-reveal>
-          <div className="landing-undetect-visual landing-undetect-visual-models">
-            <ModelExploreDemo />
-          </div>
-          <h3>Explore our models.</h3>
-          <p>
-            Scroll and expand providers to preview Anthropic, OpenAI, and Gemini — the same
-            lineup in the desktop app.
-          </p>
-        </div>
-      </div>
-    </section>
-  )
+  return <Gallery6 items={items} />
 }

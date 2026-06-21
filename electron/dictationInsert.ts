@@ -1,11 +1,212 @@
 import { execSync } from 'child_process'
-import { clipboard, systemPreferences } from 'electron'
+import { clipboard, screen, systemPreferences } from 'electron'
+import { runOsascript } from './osascript'
 import { getFrontmostAppName } from './proactive/textExtraction'
 
 let lastExternalFrontmostApp: string | null = null
+let lastExternalDisplayId: number | null = null
 let trackingTimer: ReturnType<typeof setInterval> | null = null
 
 const CLARIFI_APP_NAMES = new Set(['clarifi', 'electron'])
+const WINDOW_CENTER_CACHE_MS = 400
+
+let windowCenterCache: {
+  key: string
+  center: { x: number; y: number }
+  at: number
+} | null = null
+
+function cachedWindowCenter(
+  key: string,
+  lookup: () => { x: number; y: number } | null,
+): { x: number; y: number } | null {
+  const now = Date.now()
+  if (
+    windowCenterCache &&
+    windowCenterCache.key === key &&
+    now - windowCenterCache.at < WINDOW_CENTER_CACHE_MS
+  ) {
+    return windowCenterCache.center
+  }
+  const center = lookup()
+  if (center) windowCenterCache = { key, center, at: now }
+  return center
+}
+
+export type DictationTargetSnapshot = {
+  app: string
+  displayId: number
+  windowTitle?: string
+  fieldPreview?: string
+}
+
+function getFrontmostWindowCenter(): { x: number; y: number } | null {
+  if (process.platform === 'darwin') {
+    const script = `
+tell application "System Events"
+  set frontProc to first application process whose frontmost is true
+  try
+    tell frontProc
+      set frontWin to first window whose frontmost is true
+      set winPos to position of frontWin
+      set winSize to size of frontWin
+      set cx to (item 1 of winPos) + (item 1 of winSize) / 2
+      set cy to (item 2 of winPos) + (item 2 of winSize) / 2
+      return (cx as text) & "," & (cy as text)
+    end tell
+  end try
+end tell
+`
+    return cachedWindowCenter('frontmost', () => {
+      const result = runOsascript(script, 2000)
+      if (!result) return null
+      const [xRaw, yRaw] = result.split(',')
+      const x = Number(xRaw)
+      const y = Number(yRaw)
+      if (Number.isFinite(x) && Number.isFinite(y)) return { x, y }
+      return null
+    })
+  }
+
+  if (process.platform === 'win32') {
+    try {
+      const result = execSync(
+        `powershell -NoProfile -Command "Add-Type @' using System; using System.Runtime.InteropServices; public class W { [DllImport(\\\"user32.dll\\\")] public static extern IntPtr GetForegroundWindow(); [DllImport(\\\"user32.dll\\\")] public static extern bool GetWindowRect(IntPtr h, out RECT r); public struct RECT { public int L,T,R,B; } } '@; $h=[W]::GetForegroundWindow(); $r=New-Object W+RECT; [W]::GetWindowRect($h,[ref]$r)|Out-Null; Write-Output (($r.L+$r.R)/2); Write-Output (($r.T+$r.B)/2)"`,
+        { encoding: 'utf-8', timeout: 2000 },
+      ).trim()
+      const lines = result.split(/\r?\n/).filter(Boolean)
+      const x = Number(lines[0])
+      const y = Number(lines[1])
+      if (Number.isFinite(x) && Number.isFinite(y)) return { x, y }
+    } catch {
+      return null
+    }
+  }
+
+  return null
+}
+
+function getWindowCenterForApp(appName: string): { x: number; y: number } | null {
+  if (process.platform === 'darwin') {
+    const escaped = appName.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+    const script = `
+tell application "System Events"
+  tell process "${escaped}"
+    if (count of windows) > 0 then
+      set frontWin to window 1
+      set winPos to position of frontWin
+      set winSize to size of frontWin
+      set cx to (item 1 of winPos) + (item 1 of winSize) / 2
+      set cy to (item 2 of winPos) + (item 2 of winSize) / 2
+      return (cx as text) & "," & (cy as text)
+    end if
+  end tell
+end tell
+`
+    return cachedWindowCenter(`app:${appName}`, () => {
+      const result = runOsascript(script, 1500)
+      if (!result) return null
+      const [xRaw, yRaw] = result.split(',')
+      const x = Number(xRaw)
+      const y = Number(yRaw)
+      if (Number.isFinite(x) && Number.isFinite(y)) return { x, y }
+      return null
+    })
+  }
+
+  if (process.platform === 'win32') {
+    try {
+      const safeName = appName.replace(/'/g, "''")
+      const result = execSync(
+        `powershell -NoProfile -Command "$p = Get-Process -Name '${safeName}' -ErrorAction SilentlyContinue | Select-Object -First 1; if ($p -and $p.MainWindowHandle -ne 0) { Add-Type @' using System; using System.Runtime.InteropServices; public class W { [DllImport(\\\"user32.dll\\\")] public static extern bool GetWindowRect(IntPtr h, out RECT r); public struct RECT { public int L,T,R,B; } } '@; $r=New-Object W+RECT; [W]::GetWindowRect($p.MainWindowHandle,[ref]$r)|Out-Null; Write-Output (($r.L+$r.R)/2); Write-Output (($r.T+$r.B)/2) }"`,
+        { encoding: 'utf-8', timeout: 2000 },
+      ).trim()
+      const lines = result.split(/\r?\n/).filter(Boolean)
+      const x = Number(lines[0])
+      const y = Number(lines[1])
+      if (Number.isFinite(x) && Number.isFinite(y)) return { x, y }
+    } catch {
+      return null
+    }
+  }
+
+  return null
+}
+
+function readFrontWindowTitle(): string | undefined {
+  if (process.platform !== 'darwin') return undefined
+
+  const script = `
+tell application "System Events"
+  set frontProc to first application process whose frontmost is true
+  try
+    tell frontProc
+      set frontWin to first window whose frontmost is true
+      return name of frontWin as text
+    end tell
+  end try
+end tell
+`
+  const title = runOsascript(script, 1500)
+  return title?.trim() || undefined
+}
+
+export function getFrontmostAppDisplayId(): number {
+  const center = getFrontmostWindowCenter()
+  if (center) {
+    const id = screen.getDisplayNearestPoint(center).id
+    lastExternalDisplayId = id
+    return id
+  }
+  return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id
+}
+
+/** Display for pill follow — uses external app when Clarifi/Electron is frontmost. */
+export function getFollowDisplayId(): number {
+  const front = getFrontmostAppName()
+  if (front && !isClarifiProcess(front)) {
+    const center = getFrontmostWindowCenter()
+    if (center) {
+      const id = screen.getDisplayNearestPoint(center).id
+      lastExternalDisplayId = id
+      return id
+    }
+  }
+
+  const external = lastExternalFrontmostApp ?? getDictationTargetApp()
+  if (external && !isClarifiProcess(external)) {
+    const center = getWindowCenterForApp(external)
+    if (center) {
+      const id = screen.getDisplayNearestPoint(center).id
+      lastExternalDisplayId = id
+      return id
+    }
+  }
+
+  if (lastExternalDisplayId !== null) {
+    return lastExternalDisplayId
+  }
+
+  return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id
+}
+
+/** Snapshot target app + display at session start — frozen for insert. */
+export function captureDictationTarget(): DictationTargetSnapshot | null {
+  trackExternalFrontmostApp()
+  const app = getDictationTargetApp()
+  if (!app || isClarifiProcess(app)) return null
+
+  const fieldPreview = readFocusedFieldValue()?.slice(0, 80)
+  const windowTitle = readFrontWindowTitle()
+  const displayId = getFrontmostAppDisplayId()
+
+  return {
+    app,
+    displayId,
+    windowTitle,
+    fieldPreview: fieldPreview || undefined,
+  }
+}
 
 export function isClarifiProcess(appName: string | null | undefined): boolean {
   if (!appName) return false
@@ -18,16 +219,19 @@ export function isClarifiProcess(appName: string | null | undefined): boolean {
 
 /** Remember the last app the user was working in (not Clarifi). */
 export function trackExternalFrontmostApp(): void {
-  if (process.platform !== 'darwin') return
   const app = getFrontmostAppName()
   if (app && !isClarifiProcess(app)) {
     lastExternalFrontmostApp = app
+    const center = getFrontmostWindowCenter()
+    if (center) {
+      lastExternalDisplayId = screen.getDisplayNearestPoint(center).id
+    }
   }
 }
 
 /** Poll frontmost app so dictation can target Gmail etc. after the user focuses Clarifi. */
 export function startDictationTargetTracking(): void {
-  if (process.platform !== 'darwin' || trackingTimer) return
+  if (trackingTimer) return
   trackExternalFrontmostApp()
   trackingTimer = setInterval(trackExternalFrontmostApp, 1500)
 }
@@ -46,24 +250,26 @@ function accessibilityTrusted(): boolean {
   )
 }
 
-function runOsascript(script: string, timeoutMs = 5000): string | null {
-  try {
-    const result = execSync(`osascript -e ${JSON.stringify(script)}`, {
-      encoding: 'utf-8',
-      timeout: timeoutMs,
-      maxBuffer: 1024 * 1024,
-    })
-    return result.trim()
-  } catch {
-    return null
-  }
-}
-
 function activateApplication(appName: string): boolean {
-  if (process.platform !== 'darwin') return false
-  const escaped = appName.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-  const result = runOsascript(`tell application "${escaped}" to activate`)
-  return result !== null
+  if (process.platform === 'darwin') {
+    const escaped = appName.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+    return runOsascript(`tell application "${escaped}" to activate`) !== null
+  }
+
+  if (process.platform === 'win32') {
+    try {
+      const safeName = appName.replace(/'/g, "''")
+      execSync(
+        `powershell -NoProfile -Command "$p = Get-Process -Name '${safeName}' -ErrorAction SilentlyContinue | Select-Object -First 1; if ($p) { Add-Type @' using System; using System.Runtime.InteropServices; public class W { [DllImport(\\\"user32.dll\\\")] public static extern bool SetForegroundWindow(System.IntPtr h); } '@; [W]::SetForegroundWindow($p.MainWindowHandle) }"`,
+        { timeout: 3000 },
+      )
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  return false
 }
 
 function readFocusedFieldValue(): string | null {
@@ -114,12 +320,65 @@ end tell
 }
 
 function pasteAtFrontmost(): boolean {
-  if (!accessibilityTrusted()) return false
-  const result = runOsascript(
-    `tell application "System Events" to keystroke "v" using command down`,
-    3000,
-  )
-  return result !== null
+  if (process.platform === 'darwin') {
+    if (!accessibilityTrusted()) return false
+    return (
+      runOsascript(
+        `tell application "System Events" to keystroke "v" using command down`,
+        3000,
+      ) !== null
+    )
+  }
+
+  if (process.platform === 'win32') {
+    try {
+      execSync(
+        `powershell -NoProfile -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^v')"`,
+        { timeout: 3000 },
+      )
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  return false
+}
+
+const PASTE_FIRST_APPS = ['cursor', 'visual studio code', 'code', 'sublime', 'webstorm', 'intellij', 'zed']
+
+function prefersPasteInsert(appName: string): boolean {
+  const lower = appName.toLowerCase()
+  return PASTE_FIRST_APPS.some((name) => lower.includes(name))
+}
+
+async function pasteViaClipboard(text: string): Promise<boolean> {
+  const previousClipboard = clipboard.readText()
+  clipboard.writeText(text)
+  await delay(40)
+
+  const pasted = pasteAtFrontmost()
+  if (!pasted) {
+    if (previousClipboard) {
+      clipboard.writeText(previousClipboard)
+    } else {
+      clipboard.clear()
+    }
+    return false
+  }
+
+  // Target app reads clipboard asynchronously after Cmd+V — restore only after paste completes.
+  await delay(180)
+  if (previousClipboard) {
+    clipboard.writeText(previousClipboard)
+  } else {
+    clipboard.clear()
+  }
+  return true
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 export type DictationInsertResult = {
@@ -127,52 +386,114 @@ export type DictationInsertResult = {
   method?: 'accessibility' | 'paste'
   error?: 'accessibility_required' | 'no_target_app' | 'insert_failed'
   targetApp?: string | null
+  clipboardFallback?: boolean
 }
 
-export function insertTextIntoExternalField(
+export async function insertTextIntoExternalField(
   text: string,
   targetApp?: string | null,
-): DictationInsertResult {
+): Promise<DictationInsertResult> {
   const trimmed = text.trim()
   if (!trimmed) return { ok: false, error: 'insert_failed' }
-
-  if (process.platform !== 'darwin') {
-    return { ok: false, error: 'insert_failed' }
-  }
-
-  if (!accessibilityTrusted()) {
-    return { ok: false, error: 'accessibility_required' }
-  }
 
   const app = targetApp?.trim() || getDictationTargetApp()
   if (!app || isClarifiProcess(app)) {
     return { ok: false, error: 'no_target_app', targetApp: app }
   }
 
-  activateApplication(app)
+  if (process.platform === 'darwin') {
+    if (!accessibilityTrusted()) {
+      return { ok: false, error: 'accessibility_required' }
+    }
 
-  const existing = readFocusedFieldValue()
-  const merged =
-    existing && existing.length > 0
-      ? `${existing.replace(/\s+$/, '')}\n\n${trimmed}`
-      : trimmed
+    activateApplication(app)
+    await delay(100)
 
-  if (setFocusedFieldValue(merged)) {
-    return { ok: true, method: 'accessibility', targetApp: app }
+    if (prefersPasteInsert(app)) {
+      if (await pasteViaClipboard(trimmed)) {
+        return { ok: true, method: 'paste', targetApp: app }
+      }
+    }
+
+    const existing = readFocusedFieldValue()
+    const merged =
+      existing && existing.length > 0
+        ? `${existing.replace(/\s+$/, '')}\n\n${trimmed}`
+        : trimmed
+
+    if (setFocusedFieldValue(merged)) {
+      return { ok: true, method: 'accessibility', targetApp: app }
+    }
+
+    if (await pasteViaClipboard(trimmed)) {
+      return { ok: true, method: 'paste', targetApp: app }
+    }
+
+    return { ok: false, error: 'insert_failed', targetApp: app }
   }
 
-  const previousClipboard = clipboard.readText()
+  if (process.platform === 'win32') {
+    activateApplication(app)
+    await delay(100)
+    if (await pasteViaClipboard(trimmed)) {
+      return { ok: true, method: 'paste', targetApp: app }
+    }
+    clipboard.writeText(trimmed)
+    return { ok: false, error: 'insert_failed', targetApp: app, clipboardFallback: true }
+  }
+
   clipboard.writeText(trimmed)
-  const pasted = pasteAtFrontmost()
-  if (previousClipboard) {
-    clipboard.writeText(previousClipboard)
-  } else {
-    clipboard.clear()
+  return { ok: false, error: 'insert_failed', targetApp: app, clipboardFallback: true }
+}
+
+export async function replaceSelectionInExternalField(
+  text: string,
+  selectedText: string,
+  targetApp?: string | null,
+): Promise<DictationInsertResult> {
+  const trimmed = text.trim()
+  const prior = selectedText.trim()
+  if (!trimmed || !prior) return { ok: false, error: 'insert_failed' }
+
+  const app = targetApp?.trim() || getDictationTargetApp()
+  if (!app || isClarifiProcess(app)) {
+    return { ok: false, error: 'no_target_app', targetApp: app }
   }
 
-  if (pasted) {
-    return { ok: true, method: 'paste', targetApp: app }
+  if (process.platform === 'darwin') {
+    if (!accessibilityTrusted()) {
+      return { ok: false, error: 'accessibility_required' }
+    }
+
+    activateApplication(app)
+    await delay(180)
+
+    const existing = readFocusedFieldValue()
+    if (existing && existing.includes(prior)) {
+      const nextValue = existing.replace(prior, trimmed)
+      if (setFocusedFieldValue(nextValue)) {
+        return { ok: true, method: 'accessibility', targetApp: app }
+      }
+    }
+
+    if (await pasteViaClipboard(trimmed)) {
+      return { ok: true, method: 'paste', targetApp: app }
+    }
+
+    clipboard.writeText(trimmed)
+    return { ok: false, error: 'insert_failed', targetApp: app, clipboardFallback: true }
   }
 
-  return { ok: false, error: 'insert_failed', targetApp: app }
+  if (process.platform === 'win32') {
+    activateApplication(app)
+    await delay(180)
+    if (await pasteViaClipboard(trimmed)) {
+      return { ok: true, method: 'paste', targetApp: app }
+    }
+    clipboard.writeText(trimmed)
+    return { ok: false, error: 'insert_failed', targetApp: app, clipboardFallback: true }
+  }
+
+  clipboard.writeText(trimmed)
+  return { ok: false, error: 'insert_failed', targetApp: app, clipboardFallback: true }
 }

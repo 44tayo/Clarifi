@@ -102,15 +102,77 @@ function dedupeLines(text: string): string {
 }
 
 export function getFrontmostAppName(): string | null {
-  if (process.platform !== 'darwin') return null
-  try {
-    const result = execSync(
-      `osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true'`,
-      { encoding: 'utf-8', timeout: 2000 },
-    )
-    return result.trim() || null
-  } catch {
-    return null
+  if (process.platform === 'darwin') {
+    try {
+      const result = execSync(
+        `osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true'`,
+        { encoding: 'utf-8', timeout: 2000 },
+      )
+      return result.trim() || null
+    } catch {
+      return null
+    }
+  }
+
+  if (process.platform === 'win32') {
+    try {
+      const script = `
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class ClarifiWin {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
+}
+"@
+$hwnd = [ClarifiWin]::GetForegroundWindow()
+$pid = [uint32]0
+[void][ClarifiWin]::GetWindowThreadProcessId($hwnd, [ref]$pid)
+if ($pid -eq 0) { exit 1 }
+(Get-Process -Id $pid -ErrorAction SilentlyContinue).ProcessName
+`
+      const result = execSync(`powershell -NoProfile -Command ${JSON.stringify(script)}`, {
+        encoding: 'utf-8',
+        timeout: 3000,
+      })
+      return result.trim() || null
+    } catch {
+      return null
+    }
+  }
+
+  return null
+}
+
+export type DictationSurface = 'email' | 'chat' | 'code' | 'document' | 'general'
+
+const EMAIL_APPS = ['mail', 'gmail', 'outlook', 'spark', 'superhuman']
+const CHAT_APPS = ['slack', 'teams', 'discord', 'messages', 'telegram', 'whatsapp', 'imessage']
+const CODE_APPS = ['code', 'cursor', 'xcode', 'sublime', 'webstorm', 'intellij', 'vim', 'nova']
+const DOCUMENT_APPS = ['notes', 'notion', 'obsidian', 'bear', 'pages', 'word', 'docs', 'evernote']
+
+export function inferDictationSurface(appName: string | null | undefined): DictationSurface {
+  if (!appName) return 'general'
+  const lower = appName.toLowerCase()
+  if (EMAIL_APPS.some((name) => lower.includes(name))) return 'email'
+  if (CHAT_APPS.some((name) => lower.includes(name))) return 'chat'
+  if (CODE_APPS.some((name) => lower.includes(name))) return 'code'
+  if (DOCUMENT_APPS.some((name) => lower.includes(name))) return 'document'
+  return 'general'
+}
+
+export function dictationSurfaceLabel(surface: DictationSurface): string {
+  switch (surface) {
+    case 'email':
+      return 'email'
+    case 'chat':
+      return 'Slack or chat'
+    case 'code':
+      return 'code editor'
+    case 'document':
+      return 'document'
+    default:
+      return 'your app'
   }
 }
 

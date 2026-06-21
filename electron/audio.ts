@@ -1,9 +1,6 @@
-import * as fs from 'fs'
-import * as path from 'path'
-import * as os from 'os'
 import FormData from 'form-data'
 import fetch from 'node-fetch'
-import { getTranscriptionLanguage } from './audioPreferences'
+import { getTranscriptionLanguage, getDictationLanguage } from './audioPreferences'
 import { getGroqApiKey } from './keys'
 import { isProxyConfigured, proxyTranscribe } from './proxyClient'
 import { isTranscriptionDrainMode } from './transcriptionQueue'
@@ -11,6 +8,37 @@ import { isTranscriptionDrainMode } from './transcriptionQueue'
 let isRecording = false
 let isPaused = false
 let transcriptCallback: ((text: string) => void) | null = null
+
+let cachedGroqKey: string | null | undefined
+let cachedProxyConfigured: boolean | undefined
+let transcribeCacheExpiry = 0
+const TRANSCRIBE_CACHE_MS = 60_000
+
+export function invalidateTranscribeCache(): void {
+  cachedGroqKey = undefined
+  cachedProxyConfigured = undefined
+  transcribeCacheExpiry = 0
+}
+
+async function getCachedProxyConfigured(): Promise<boolean> {
+  const now = Date.now()
+  if (cachedProxyConfigured !== undefined && now < transcribeCacheExpiry) {
+    return cachedProxyConfigured
+  }
+  cachedProxyConfigured = await isProxyConfigured()
+  transcribeCacheExpiry = now + TRANSCRIBE_CACHE_MS
+  return cachedProxyConfigured
+}
+
+async function getCachedGroqKey(): Promise<string | null> {
+  const now = Date.now()
+  if (cachedGroqKey !== undefined && now < transcribeCacheExpiry) {
+    return cachedGroqKey
+  }
+  cachedGroqKey = await getGroqApiKey()
+  transcribeCacheExpiry = now + TRANSCRIBE_CACHE_MS
+  return cachedGroqKey
+}
 
 export function startRecording(onTranscript: (text: string) => void): void {
   isRecording = true
@@ -54,9 +82,10 @@ function detectAudioFormat(buffer: Buffer): 'wav' | 'webm' {
 export type TranscribeOptions = {
   source?: 'mic' | 'system'
   prompt?: string
+  language?: string
 }
 
-const MIN_WEBM_BYTES = 1_200
+export const MIN_WEBM_BYTES = 1_200
 const MIN_WAV_BYTES = 12_800
 const SYSTEM_SPEECH_RMS_MIN = 0.004
 
@@ -101,40 +130,37 @@ async function transcribeAudioBuffer(
     if (format === 'wav' && !wavHasSpeechEnergy(audioBuffer)) {
       return null
     }
+
     const extension = format === 'wav' ? 'wav' : 'webm'
     const contentType = format === 'wav' ? 'audio/wav' : 'audio/webm'
-    const tmpFile = path.join(os.tmpdir(), `clarifi-${Date.now()}.${extension}`)
-    fs.writeFileSync(tmpFile, audioBuffer)
-
-    const formData = new FormData()
-    formData.append('file', fs.createReadStream(tmpFile), {
-      filename: `audio.${extension}`,
-      contentType,
-    })
-    formData.append('model', 'whisper-large-v3-turbo')
-    const language = getTranscriptionLanguage()
-    if (language && language !== 'auto') {
-      formData.append('language', language)
-    }
+    const language = options.language ?? getTranscriptionLanguage()
     const prompt = options.prompt?.trim().slice(-220)
-    if (prompt) {
-      formData.append('prompt', prompt)
-    }
-    formData.append('temperature', '0')
 
-    if (await isProxyConfigured()) {
+    if (await getCachedProxyConfigured()) {
       const transcript = await proxyTranscribe(audioBase64, format, language, prompt)
-      fs.unlinkSync(tmpFile)
       if (transcript) console.log('Transcript:', transcript)
       return transcript
     }
 
-    const groqKey = await getGroqApiKey()
+    const groqKey = await getCachedGroqKey()
     if (!groqKey) {
       console.error('Groq API key is not configured')
-      fs.unlinkSync(tmpFile)
       return null
     }
+
+    const formData = new FormData()
+    formData.append('file', audioBuffer, {
+      filename: `audio.${extension}`,
+      contentType,
+    })
+    formData.append('model', 'whisper-large-v3-turbo')
+    if (language && language !== 'auto') {
+      formData.append('language', language)
+    }
+    if (prompt) {
+      formData.append('prompt', prompt)
+    }
+    formData.append('temperature', '0')
 
     const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
       method: 'POST',
@@ -144,8 +170,6 @@ async function transcribeAudioBuffer(
       },
       body: formData,
     })
-
-    fs.unlinkSync(tmpFile)
 
     if (!response.ok) {
       const err = await response.text()
@@ -176,5 +200,8 @@ export async function transcribeDictationAudio(
   audioBase64: string,
   options: TranscribeOptions = {},
 ): Promise<string | null> {
-  return transcribeAudioBuffer(audioBase64, options)
+  return transcribeAudioBuffer(audioBase64, {
+    ...options,
+    language: options.language ?? getDictationLanguage(),
+  })
 }

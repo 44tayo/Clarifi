@@ -9,6 +9,8 @@ export type TranscriptionMode = 'dual' | 'group'
 export type AudioPreferences = {
   transcriptionLanguage: string
   outputLanguage: string
+  dictationLanguage: string
+  dictationOutputLanguage: string
   preferredMicrophoneId: string
   preferredMicrophoneLabel: string
   systemAudioCapture: SystemAudioCaptureMode
@@ -20,6 +22,8 @@ const PREFS_FILE = 'audio-preferences.json'
 const DEFAULTS: AudioPreferences = {
   transcriptionLanguage: 'en',
   outputLanguage: 'en',
+  dictationLanguage: 'auto',
+  dictationOutputLanguage: 'same',
   preferredMicrophoneId: '',
   preferredMicrophoneLabel: '',
   systemAudioCapture: 'meeting',
@@ -31,6 +35,18 @@ const OUTPUT_LANGUAGE_LABELS: Record<string, string> = {
   es: 'Spanish',
   fr: 'French',
   de: 'German',
+  pt: 'Portuguese',
+  it: 'Italian',
+  nl: 'Dutch',
+  ja: 'Japanese',
+  ko: 'Korean',
+  zh: 'Chinese',
+  hi: 'Hindi',
+  ar: 'Arabic',
+  pl: 'Polish',
+  tr: 'Turkish',
+  ru: 'Russian',
+  sv: 'Swedish',
 }
 
 function prefsPath(): string {
@@ -53,6 +69,14 @@ export function loadAudioPreferences(): AudioPreferences {
         typeof parsed.outputLanguage === 'string'
           ? parsed.outputLanguage
           : DEFAULTS.outputLanguage,
+      dictationLanguage:
+        typeof parsed.dictationLanguage === 'string'
+          ? parsed.dictationLanguage
+          : DEFAULTS.dictationLanguage,
+      dictationOutputLanguage:
+        typeof parsed.dictationOutputLanguage === 'string'
+          ? parsed.dictationOutputLanguage
+          : DEFAULTS.dictationOutputLanguage,
       preferredMicrophoneId:
         typeof parsed.preferredMicrophoneId === 'string'
           ? parsed.preferredMicrophoneId
@@ -87,6 +111,14 @@ export function getTranscriptionLanguage(): string {
   return loadAudioPreferences().transcriptionLanguage
 }
 
+export function getDictationLanguage(): string {
+  return loadAudioPreferences().dictationLanguage
+}
+
+export function getDictationOutputLanguage(): string {
+  return loadAudioPreferences().dictationOutputLanguage
+}
+
 export function getSystemAudioCaptureMode(): SystemAudioCaptureMode {
   return loadAudioPreferences().systemAudioCapture
 }
@@ -112,6 +144,17 @@ export function getOutputLanguageInstruction(): string {
   const label = OUTPUT_LANGUAGE_LABELS[code] ?? 'English'
   if (code === 'en') return ''
   return `\n\nRespond in ${label}.`
+}
+
+export function getDictationOutputLanguageInstruction(spokenLanguage?: string): string {
+  const pref = getDictationOutputLanguage()
+  if (pref === 'same') {
+    if (!spokenLanguage || spokenLanguage === 'auto') return ''
+    const label = OUTPUT_LANGUAGE_LABELS[spokenLanguage] ?? spokenLanguage
+    return `\n\nWrite the final text in ${label}. Preserve natural phrasing for that language.`
+  }
+  const label = OUTPUT_LANGUAGE_LABELS[pref] ?? pref
+  return `\n\nWrite the final text in ${label}.`
 }
 
 export function notifyAudioPrefsChanged(): void {

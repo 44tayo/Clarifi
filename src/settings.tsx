@@ -239,6 +239,7 @@ type KeybindActionId =
   | 'toggle_recording'
   | 'toggle_history'
   | 'open_settings'
+  | 'hold_to_dictate'
 
 type KeybindDefinition = {
   id: KeybindActionId
@@ -252,6 +253,8 @@ type KeybindPreferences = Record<KeybindActionId, string>
 type AudioPreferences = {
   transcriptionLanguage: string
   outputLanguage: string
+  dictationLanguage: string
+  dictationOutputLanguage: string
   preferredMicrophoneId: string
   preferredMicrophoneLabel: string
   systemAudioCapture: 'meeting' | 'display'
@@ -271,11 +274,48 @@ const TRANSCRIPTION_LANGUAGES = [
   { code: 'auto', label: 'Auto-detect' },
 ]
 
+const DICTATION_LANGUAGES = [
+  { code: 'auto', label: 'Auto-detect (recommended for accents)' },
+  { code: 'en', label: 'English' },
+  { code: 'es', label: 'Spanish' },
+  { code: 'fr', label: 'French' },
+  { code: 'de', label: 'German' },
+  { code: 'pt', label: 'Portuguese' },
+  { code: 'it', label: 'Italian' },
+  { code: 'nl', label: 'Dutch' },
+  { code: 'ja', label: 'Japanese' },
+  { code: 'ko', label: 'Korean' },
+  { code: 'zh', label: 'Chinese' },
+  { code: 'hi', label: 'Hindi' },
+  { code: 'ar', label: 'Arabic' },
+  { code: 'pl', label: 'Polish' },
+  { code: 'tr', label: 'Turkish' },
+  { code: 'ru', label: 'Russian' },
+  { code: 'sv', label: 'Swedish' },
+]
+
+const DICTATION_OUTPUT_LANGUAGES = [
+  { code: 'same', label: 'Same as spoken language' },
+  ...DICTATION_LANGUAGES.filter((lang) => lang.code !== 'auto'),
+]
+
 const OUTPUT_LANGUAGES = [
   { code: 'en', label: 'English' },
   { code: 'es', label: 'Spanish' },
   { code: 'fr', label: 'French' },
   { code: 'de', label: 'German' },
+  { code: 'pt', label: 'Portuguese' },
+  { code: 'it', label: 'Italian' },
+  { code: 'nl', label: 'Dutch' },
+  { code: 'ja', label: 'Japanese' },
+  { code: 'ko', label: 'Korean' },
+  { code: 'zh', label: 'Chinese' },
+  { code: 'hi', label: 'Hindi' },
+  { code: 'ar', label: 'Arabic' },
+  { code: 'pl', label: 'Polish' },
+  { code: 'tr', label: 'Turkish' },
+  { code: 'ru', label: 'Russian' },
+  { code: 'sv', label: 'Swedish' },
 ]
 
 function normalizeSettingsTab(value: unknown): SettingsTab | null {
@@ -343,6 +383,8 @@ export default function SettingsApp() {
   const [audioPrefs, setAudioPrefs] = useState<AudioPreferences>({
     transcriptionLanguage: 'en',
     outputLanguage: 'en',
+    dictationLanguage: 'auto',
+    dictationOutputLanguage: 'same',
     preferredMicrophoneId: '',
     preferredMicrophoneLabel: '',
     systemAudioCapture: 'meeting',
@@ -740,12 +782,22 @@ export default function SettingsApp() {
   }
   const openMicSettings = () =>
     void window.electronAPI.invoke('permissions:open-settings', { kind: 'microphone' })
+  const openAccessibilitySettings = () =>
+    void window.electronAPI.invoke('permissions:open-settings', { kind: 'accessibility' })
 
   const saveAudioPrefs = async (patch: Partial<AudioPreferences>) => {
     const next = { ...audioPrefs, ...patch }
     setAudioPrefs(next)
     const saved = (await window.electronAPI.invoke('audio:prefs-save', next)) as AudioPreferences
     setAudioPrefs(saved)
+  }
+
+  const handleDictationLanguage = (code: string) => {
+    void saveAudioPrefs({ dictationLanguage: code })
+  }
+
+  const handleDictationOutputLanguage = (code: string) => {
+    void saveAudioPrefs({ dictationOutputLanguage: code })
   }
 
   const handleTranscriptionLanguage = (code: string) => {
@@ -1760,6 +1812,77 @@ export default function SettingsApp() {
                   Could not access the microphone. Check permissions and try again.
                 </p>
               )}
+            </section>
+
+            <section className="settings-audio-section">
+              <h2 className="settings-audio-section-title">Dictation</h2>
+              <p className="settings-audio-section-desc">
+                Hold <strong>Fn (Globe)</strong> on Mac or <strong>Right Ctrl</strong> on Windows to
+                dictate into any text field. You can also click the pill at the bottom of your screen — it
+                follows whichever app you&apos;re typing in. Dictation uses the microphone selected above.
+              </p>
+
+              <div className="settings-audio-row">
+                <div className="settings-audio-row-text">
+                  <div className="settings-audio-row-title">Dictation language</div>
+                  <div className="settings-audio-row-desc">
+                    Auto-detect works best for mixed accents. Pick a fixed language if Whisper keeps
+                    mishearing you.
+                  </div>
+                </div>
+                <select
+                  className="settings-audio-select"
+                  value={audioPrefs.dictationLanguage}
+                  onChange={(e) => handleDictationLanguage(e.target.value)}
+                >
+                  {DICTATION_LANGUAGES.map((lang) => (
+                    <option key={lang.code} value={lang.code}>
+                      {lang.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="settings-audio-row">
+                <div className="settings-audio-row-text">
+                  <div className="settings-audio-row-title">Dictation output language</div>
+                  <div className="settings-audio-row-desc">
+                    Choose whether inserted text stays in your spoken language or is rewritten into
+                    another language.
+                  </div>
+                </div>
+                <select
+                  className="settings-audio-select"
+                  value={audioPrefs.dictationOutputLanguage}
+                  onChange={(e) => handleDictationOutputLanguage(e.target.value)}
+                >
+                  {DICTATION_OUTPUT_LANGUAGES.map((lang) => (
+                    <option key={lang.code} value={lang.code}>
+                      {lang.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="settings-audio-row">
+                <div className="settings-audio-row-text">
+                  <div className="settings-audio-row-title">Permissions</div>
+                  <div className="settings-audio-row-desc">
+                    {permissions?.accessibility
+                      ? 'Accessibility is enabled — dictation can insert into other apps.'
+                      : 'Enable Accessibility so Clarifi can insert dictation into other apps.'}
+                    {typeof navigator !== 'undefined' &&
+                    navigator.platform.toLowerCase().includes('win')
+                      ? ' On Windows, dictation inserts via clipboard paste (Ctrl+V).'
+                      : ''}
+                  </div>
+                </div>
+                {!permissions?.accessibility && (
+                  <button type="button" className="settings-btn small" onClick={openAccessibilitySettings}>
+                    Open Accessibility settings
+                  </button>
+                )}
+              </div>
             </section>
           </>
         )}
