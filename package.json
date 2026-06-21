@@ -19,6 +19,7 @@
     "build:native": "bash scripts/build-native.sh",
     "prebuild:mac": "npm run build:helper:mac",
     "prebuild:win": "node -e \"console.log('Skipping macOS-only helpers on Windows')\"",
+    "build:native:win": "bash scripts/build-native-win.sh",
     "build:mac:arm64": "bash scripts/build-mac-arch.sh arm64",
     "build:mac:x64": "bash scripts/build-mac-arch.sh x64",
     "build:mac": "tsc --noEmit && vite build && electron-builder --mac --arm64",
@@ -28,7 +29,7 @@
     "build:mac:unsigned": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_NOTARIZE=1 npm run build:mac",
     "publish:mac:unsigned": "bash scripts/publish-mac-unsigned.sh",
     "install:mac:unsigned": "bash scripts/install-mac-unsigned.sh",
-    "build:win": "tsc --noEmit && vite build && electron-builder --win --x64",
+    "build:win": "npm run build:native:win && tsc --noEmit && vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --x64",
     "preview": "vite preview"
   },
   "dependencies": {

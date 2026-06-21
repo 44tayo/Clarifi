@@ -11,11 +11,16 @@ function copyStealthNativePlugin() {
     name: 'copy-stealth-native',
     closeBundle() {
       const root = process.cwd()
-      const src = join(root, 'resources/window_capture_exclude.node')
-      if (!existsSync(src)) return
       const destDir = join(root, 'dist-electron/resources')
       mkdirSync(destDir, { recursive: true })
-      copyFileSync(src, join(destDir, 'window_capture_exclude.node'))
+
+      if (process.platform === 'darwin') {
+        const excludeSrc = join(root, 'resources/window_capture_exclude.node')
+        if (existsSync(excludeSrc)) {
+          copyFileSync(excludeSrc, join(destDir, 'window_capture_exclude.node'))
+        }
+      }
+
       const pttSrc = join(root, 'resources/dictation_ptt.node')
       if (existsSync(pttSrc)) {
         copyFileSync(pttSrc, join(destDir, 'dictation_ptt.node'))
