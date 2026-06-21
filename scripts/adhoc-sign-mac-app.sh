@@ -8,6 +8,22 @@ if [[ -z "$APP_PATH" || ! -d "$APP_PATH" ]]; then
   exit 1
 fi
 
+# macOS re-applies com.apple.provenance on Desktop/Downloads paths and breaks codesign.
+# Stage to $TMPDIR, sign there, then copy the signed bundle back.
+if [[ "${CLARIFI_SIGN_IN_TMP:-}" != "1" ]]; then
+  STAGE="$(mktemp -d "${TMPDIR:-/tmp}/clarifi-sign.XXXXXX")"
+  STAGE_APP="$STAGE/$(basename "$APP_PATH")"
+  ditto "$APP_PATH" "$STAGE_APP"
+  CLARIFI_SIGN_IN_TMP=1 bash "$0" "$STAGE_APP"
+  EC=$?
+  if [[ $EC -eq 0 ]]; then
+    rm -rf "$APP_PATH"
+    ditto "$STAGE_APP" "$APP_PATH"
+  fi
+  rm -rf "$STAGE"
+  exit $EC
+fi
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ENTITLEMENTS="$ROOT/build/entitlements.mac.plist"
 ENT_ARGS=()
@@ -52,15 +68,22 @@ sign_target() {
   [[ -e "$target" ]] || return 0
   strip_detritus "$target"
   codesign --remove-signature "$target" 2>/dev/null || true
-  codesign --force --sign - "${ENT_ARGS[@]}" "$target" 2>/dev/null || \
-    codesign --force --sign - "$target"
+  if ! codesign --force --sign - "${ENT_ARGS[@]}" "$target" 2>/dev/null; then
+    if ! codesign --force --sign - "$target"; then
+      echo "ERROR: codesign failed for $target" >&2
+      exit 1
+    fi
+  fi
 }
 
-# Inside-out: frameworks and helpers before the top-level app.
+# Inside-out: binaries and helpers before frameworks, then the top-level app.
 if [[ -d "$APP_PATH/Contents/Frameworks" ]]; then
+  while IFS= read -r -d '' bin; do
+    sign_target "$bin"
+  done < <(find "$APP_PATH/Contents/Frameworks" -depth -type f \( -perm -111 -o -name "*.dylib" -o -name "*.node" \) -print0 2>/dev/null)
   while IFS= read -r -d '' framework; do
     sign_target "$framework"
-  done < <(find "$APP_PATH/Contents/Frameworks" -depth \( -name "*.framework" -o -name "*.app" -o -name "*.dylib" -o -name "*.node" \) -print0 2>/dev/null)
+  done < <(find "$APP_PATH/Contents/Frameworks" -depth \( -name "*.framework" -o -name "*.app" \) -print0 2>/dev/null)
 fi
 
 if [[ -d "$APP_PATH/Contents/Resources" ]]; then

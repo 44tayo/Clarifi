@@ -48,6 +48,8 @@ dmg:
   title: Clarifi
   icon: build/icon.icns
   artifactName: Clarifi-${version}-${arch}.dmg
+  writeUpdateInfo: false
+  format: ULFO
 win:
   target: nsis
   icon: build/icon.ico

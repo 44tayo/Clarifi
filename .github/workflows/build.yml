@@ -19,6 +19,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -68,9 +70,13 @@ jobs:
         run: |
           for APP in release/mac-arm64/Clarifi.app release/mac/Clarifi.app; do
             if [[ -d "$APP" ]]; then
-              xattr -cr "$APP" || true
               bash scripts/adhoc-sign-mac-app.sh "$APP"
               codesign --verify --deep "$APP"
+            fi
+          done
+          for DMG in release/Clarifi-*-*.dmg; do
+            if [[ -f "$DMG" ]]; then
+              node scripts/verify-mac-dmg-signed.mjs "$DMG"
             fi
           done
 
@@ -86,6 +92,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

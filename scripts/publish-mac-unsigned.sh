@@ -10,7 +10,7 @@ mkdir -p "$DOWNLOADS_DIR"
 
 for ARCH in arm64 x64; do
   echo ""
-  echo "=== Building unsigned macOS DMG ($ARCH) ==="
+  echo "=== Building signed unsigned macOS DMG ($ARCH) ==="
   CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_NOTARIZE=1 bash "$ROOT/scripts/build-mac-arch.sh" "$ARCH"
 
   DMG="$ROOT/release/Clarifi-${VERSION}-${ARCH}.dmg"
@@ -19,19 +19,11 @@ for ARCH in arm64 x64; do
     exit 1
   fi
 
-  APP_BUNDLE=""
-  for CANDIDATE in "${ROOT}/release/mac-${ARCH}/Clarifi.app" "${ROOT}/release/mac/Clarifi.app"; do
-    if [[ -d "$CANDIDATE" ]]; then
-      APP_BUNDLE="$CANDIDATE"
-      break
-    fi
-  done
+  echo "Verifying DMG before publish..."
+  node "$ROOT/scripts/verify-mac-dmg-signed.mjs" "$DMG"
+
   WEB_DMG="$DOWNLOADS_DIR/Clarifi-${VERSION}-${ARCH}.dmg"
   cp "$DMG" "$WEB_DMG"
-
-  if [[ -n "$APP_BUNDLE" ]]; then
-    bash "$ROOT/scripts/adhoc-sign-mac-app.sh" "$APP_BUNDLE"
-  fi
   echo "Published: $WEB_DMG ($(du -h "$WEB_DMG" | cut -f1))"
 done
 

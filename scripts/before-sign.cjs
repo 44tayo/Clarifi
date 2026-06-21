@@ -22,10 +22,12 @@ exports.default = async function afterPack(context) {
 
   if (!signingDisabled) return
 
-  console.log('Ad-hoc signing unsigned Clarifi.app for local distribution...')
-  try {
-    execSync(`bash "${adhocScript}" "${appPath}"`, { stdio: 'inherit' })
-  } catch (err) {
-    console.warn('Ad-hoc signing failed (continuing):', err.message)
+  if (process.env.SKIP_AFTERPACK_SIGN === '1') {
+    console.log('Skipping afterPack ad-hoc sign (handled by sign-and-dmg-mac-app.sh)')
+    return
   }
+
+  console.log('Ad-hoc signing unsigned Clarifi.app for local distribution...')
+  execSync(`bash "${adhocScript}" "${appPath}"`, { stdio: 'inherit' })
+  execSync(`codesign --verify --deep "${appPath}"`, { stdio: 'inherit' })
 }

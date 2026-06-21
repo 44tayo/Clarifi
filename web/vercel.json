@@ -1,4 +1,5 @@
 {
+  "installCommand": "git lfs pull && npm ci",
   "redirects": [
     {
       "source": "/:path*",
