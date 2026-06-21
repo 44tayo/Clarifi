@@ -28,7 +28,7 @@
     "build:mac:unsigned": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_NOTARIZE=1 npm run build:mac",
     "publish:mac:unsigned": "bash scripts/publish-mac-unsigned.sh",
     "install:mac:unsigned": "bash scripts/install-mac-unsigned.sh",
-    "build:win": "tsc --noEmit && vite build && electron-builder --win",
+    "build:win": "tsc --noEmit && vite build && electron-builder --win --x64",
     "preview": "vite preview"
   },
   "dependencies": {

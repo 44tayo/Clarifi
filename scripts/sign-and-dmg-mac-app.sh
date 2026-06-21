@@ -12,6 +12,7 @@ fi
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="$(node -p "require('$ROOT/package.json').version")"
 SIGN_SCRIPT="$ROOT/scripts/adhoc-sign-mac-app.sh"
+DMG="$ROOT/release/Clarifi-${VERSION}-${ARCH}.dmg"
 
 echo "Ad-hoc signing $APP_PATH..."
 bash "$SIGN_SCRIPT" "$APP_PATH"
@@ -24,14 +25,19 @@ if ! codesign --verify --deep "$APP_PATH" 2>/dev/null; then
 fi
 
 echo "Creating DMG from signed app..."
-export CSC_IDENTITY_AUTO_DISCOVERY=false
-export SKIP_NOTARIZE=1
-cd "$ROOT"
-npx electron-builder --prepackaged="$(dirname "$APP_PATH")" --mac dmg --"$ARCH"
+STAGE="$(mktemp -d "${TMPDIR:-/tmp}/clarifi-dmg.XXXXXX")"
+trap 'rm -rf "$STAGE"' EXIT
+ditto "$APP_PATH" "$STAGE/$(basename "$APP_PATH")"
+rm -f "$DMG"
+hdiutil create \
+  -volname "Clarifi" \
+  -srcfolder "$STAGE" \
+  -ov \
+  -format UDZO \
+  "$DMG" >/dev/null
 
-DMG="$ROOT/release/Clarifi-${VERSION}-${ARCH}.dmg"
 if [[ ! -f "$DMG" ]]; then
-  echo "ERROR: Expected DMG not found after rebuild: $DMG" >&2
+  echo "ERROR: Expected DMG not found after hdiutil create: $DMG" >&2
   exit 1
 fi
 
