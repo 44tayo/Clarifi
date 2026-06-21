@@ -14,3 +14,6 @@ build/developer-id-csr/private.key
 .DS_Store
 *.log
 .vercel
+resources/audio-capture-helper 2
+resources/window_capture_exclude 2.node
+tsconfig.node.tsbuildinfo
