@@ -188,6 +188,7 @@ export function createDictationPillWindow(): BrowserWindow {
     show: false,
     hasShadow: false,
     focusable: false,
+    acceptFirstMouse: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

@@ -35,24 +35,6 @@ export function defaultDownloadTarget(platform: CustomerPlatform): DownloadTarge
 
 export function triggerPlatformDownload(target: DownloadTarget): void {
   const { url, filename } = getDownloadForTarget(target)
-  // #region agent log
-  fetch('http://127.0.0.1:7545/ingest/c19994d6-505e-4d73-855e-70ee46048b6f', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Debug-Session-Id': '6989d7',
-    },
-    body: JSON.stringify({
-      sessionId: '6989d7',
-      runId: 'download-trigger',
-      hypothesisId: 'H1',
-      location: 'DownloadClarifi.tsx:triggerPlatformDownload',
-      message: 'Triggering platform download',
-      data: { target, url, filename },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {})
-  // #endregion
   const a = document.createElement('a')
   a.href = url
   a.rel = 'noopener noreferrer'

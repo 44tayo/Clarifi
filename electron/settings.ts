@@ -56,6 +56,7 @@ export function openSettingsWindow(tab: SettingsTab = 'profile'): BrowserWindow 
     center: true,
     resizable: true,
     show: false,
+    acceptFirstMouse: true,
     title: 'Clarifi Settings',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: { x: 18, y: 18 },

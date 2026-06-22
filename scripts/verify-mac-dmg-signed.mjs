@@ -8,36 +8,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-const DEBUG_ENDPOINT =
-  'http://127.0.0.1:7545/ingest/c19994d6-505e-4d73-855e-70ee46048b6f'
-const SESSION_ID = '6989d7'
-const LOG_PATH = '/Users/tschool/Desktop/Clarifi.c/.cursor/debug-6989d7.log'
-
-function log(hypothesisId, message, data) {
-  const payload = {
-    sessionId: SESSION_ID,
-    runId: process.env.DEBUG_RUN_ID || 'verify-signed',
-    hypothesisId,
-    location: 'scripts/verify-mac-dmg-signed.mjs',
-    message,
-    data,
-    timestamp: Date.now(),
-  }
-  // #region agent log
-  fetch(DEBUG_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Debug-Session-Id': SESSION_ID,
-    },
-    body: JSON.stringify(payload),
-  }).catch(() => {})
-  try {
-    fs.appendFileSync(LOG_PATH, `${JSON.stringify(payload)}\n`)
-  } catch {
-    /* ignore */
-  }
-  // #endregion
+function log(_hypothesisId, message, data) {
   console.log(`[verify-signed] ${message}`, data ? JSON.stringify(data) : '')
 }
 

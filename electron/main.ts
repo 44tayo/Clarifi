@@ -26,6 +26,7 @@ import {
 } from './dictationPill'
 import { startDictationPttMonitor, stopDictationPttMonitor } from './dictationPtt'
 import { stopOverlayFollow } from './overlayPosition'
+import { scheduleProactiveEngineStart } from './proactiveStartup'
 // Show "Clarifi" in the menu bar instead of "Electron" during local dev.
 app.setName('Clarifi')
 
@@ -231,8 +232,7 @@ app.whenReady().then(async () => {
 
     await initializeStorage()
     registerHandlers()
-    const { initializeProactiveEngine } = await import('./proactive')
-    initializeProactiveEngine()
+    scheduleProactiveEngineStart()
     await launchClarifi()
     registerKeybinds()
     logStartup('H4', 'launch-complete', {

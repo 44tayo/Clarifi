@@ -339,6 +339,7 @@ export function createOverlayWindow(): BrowserWindow {
     resizable: false,
     hasShadow: false,
     focusable: true,
+    acceptFirstMouse: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -350,6 +351,7 @@ export function createOverlayWindow(): BrowserWindow {
   attachMovePersistence(overlayWindow)
   startOverlayFollow(overlayWindow)
   applyOverlayWindowPolicies(overlayWindow)
+  setOverlayInteractive(true)
 
   overlayWindow.on('resize', () => {
     if (overlayWindow && !overlayWindow.isDestroyed()) {
@@ -432,9 +434,15 @@ export function nudgeOverlayWindow(dx: number, dy: number): void {
   setOverlayBounds(overlayWindow, position.x, position.y, bounds.width, bounds.height, true)
 }
 
+function applyOverlayMousePolicy(window: BrowserWindow, interactive: boolean): void {
+  if (window.isDestroyed()) return
+  window.setIgnoreMouseEvents(!interactive, { forward: true })
+}
+
 export function setOverlayInteractive(interactive: boolean): void {
   if (!overlayWindow || overlayWindow.isDestroyed()) return
   overlayWindow.setFocusable(interactive)
+  applyOverlayMousePolicy(overlayWindow, interactive)
   if (interactive) {
     overlayWindow.focus()
   }

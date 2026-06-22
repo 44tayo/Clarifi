@@ -3,13 +3,13 @@ import * as fs from 'fs'
 import * as path from 'path'
 
 export const OVERLAY_WIDTH = 640
-export const OVERLAY_HEIGHT_COLLAPSED = 132
+export const OVERLAY_HEIGHT_COLLAPSED = 168
 export const OVERLAY_HEIGHT_EXPANDED = 360
 export const OVERLAY_HEIGHT_CHAT = 480
 
 export const OVERLAY_MIN_WIDTH = 480
 export const OVERLAY_MAX_WIDTH = 900
-export const OVERLAY_MIN_HEIGHT = 132
+export const OVERLAY_MIN_HEIGHT = 168
 export const OVERLAY_MAX_HEIGHT = 700
 
 const POSITION_FILE = 'overlay-position.json'

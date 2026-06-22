@@ -50,6 +50,7 @@ export function createOnboardingWindow(): BrowserWindow {
     center: true,
     resizable: true,
     show: false,
+    acceptFirstMouse: true,
     title: 'Clarifi',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: { x: 18, y: 18 },

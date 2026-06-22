@@ -8,4 +8,5 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>,
 )
 
+void window.electronAPI?.invoke('overlay:set-interactive', true)
 void window.electronAPI?.invoke('overlay:ready')

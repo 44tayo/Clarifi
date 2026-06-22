@@ -754,6 +754,8 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
   padding: 12px 14px;
+  position: relative;
+  z-index: 202;
   -webkit-app-region: no-drag;
 }
 
@@ -958,7 +960,7 @@ body {
 /* Resize handles */
 .resize-handle {
   position: absolute;
-  z-index: 200;
+  z-index: 1;
   -webkit-app-region: no-drag;
   opacity: 0.15;
   transition: opacity 150ms ease, background 150ms ease;
@@ -2736,6 +2738,7 @@ body {
 .session-composer {
   padding: 10px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  -webkit-app-region: no-drag;
 }
 
 .session-dictation-mode {
@@ -2790,6 +2793,7 @@ body {
   font-size: 13px;
   color: rgba(255, 255, 255, 0.9);
   outline: none;
+  -webkit-app-region: no-drag;
 }
 
 .session-composer-mic {

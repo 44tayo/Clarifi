@@ -26,24 +26,6 @@ export async function GET(
   }
 
   const target = resolve()
-  // #region agent log
-  fetch('http://127.0.0.1:7545/ingest/c19994d6-505e-4d73-855e-70ee46048b6f', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Debug-Session-Id': '6989d7',
-    },
-    body: JSON.stringify({
-      sessionId: '6989d7',
-      runId: 'download-redirect',
-      hypothesisId: 'H3',
-      location: 'app/downloads/[filename]/route.ts',
-      message: 'Redirecting legacy download path',
-      data: { filename: decoded, target },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {})
-  // #endregion
 
   return NextResponse.redirect(target, 302)
 }

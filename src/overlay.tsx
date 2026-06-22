@@ -563,6 +563,10 @@ export default function Overlay() {
   }, [needsConnect, isRecording, isDropdownPanel])
 
   useEffect(() => {
+    void window.electronAPI.invoke('overlay:set-interactive', true)
+  }, [])
+
+  useEffect(() => {
     syncHeight()
   }, [syncHeight])
 
@@ -1631,7 +1635,12 @@ export default function Overlay() {
   )
 
   return (
-    <div className="overlay-root overlay-root-simple">
+    <div
+      className="overlay-root overlay-root-simple"
+      onMouseDown={() => {
+        void window.electronAPI.invoke('overlay:set-interactive', true)
+      }}
+    >
       <ResizeHandles onResize={applyBounds} />
       <div
         className={`overlay-bar overlay-bar-simple${stealthEnabled ? ' overlay-stealth-active' : ''}${stealthFlash ? ' overlay-stealth-flash' : ''}`}

@@ -42,6 +42,7 @@ import {
   toggleContentProtection,
   toggleOverlayFollow,
 } from '../overlay'
+import { startProactiveEngineOnOverlayReady } from '../proactiveStartup'
 
 let screenContextEnabled = false
 import {
@@ -899,6 +900,7 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
 
   ipcMain.handle('overlay:ready', () => {
     markOverlayReady()
+    startProactiveEngineOnOverlayReady()
     return { ok: true }
   })
 

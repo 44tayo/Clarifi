@@ -4,15 +4,8 @@ import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 
-const DEBUG_ENDPOINT =
-  'http://127.0.0.1:7545/ingest/c19994d6-505e-4d73-855e-70ee46048b6f'
-const DEBUG_LOG_PATH = '/Users/tschool/Desktop/Clarifi.c/.cursor/debug-6989d7.log'
-
-function logPaths(): string[] {
-  return [
-    DEBUG_LOG_PATH,
-    path.join(os.homedir(), 'Library', 'Logs', 'Clarifi', 'startup.log'),
-  ]
+function logPath(): string {
+  return path.join(os.homedir(), 'Library', 'Logs', 'Clarifi', 'startup.log')
 }
 
 export function logStartup(
@@ -21,8 +14,6 @@ export function logStartup(
   data: Record<string, unknown> = {},
 ): void {
   const payload = {
-    sessionId: '6989d7',
-    runId: process.env.DEBUG_RUN_ID || 'prod',
     hypothesisId,
     location: 'electron/startupDiagnostics.ts',
     message,
@@ -35,24 +26,13 @@ export function logStartup(
     timestamp: Date.now(),
   }
   const line = `${JSON.stringify(payload)}\n`
-  // #region agent log
-  for (const logPath of logPaths()) {
-    try {
-      fs.mkdirSync(path.dirname(logPath), { recursive: true })
-      fs.appendFileSync(logPath, line)
-    } catch {
-      /* ignore */
-    }
+  try {
+    const file = logPath()
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.appendFileSync(file, line)
+  } catch {
+    /* ignore */
   }
-  fetch(DEBUG_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Debug-Session-Id': '6989d7',
-    },
-    body: JSON.stringify(payload),
-  }).catch(() => {})
-  // #endregion
 }
 
 export function stripMacQuarantine(): void {
