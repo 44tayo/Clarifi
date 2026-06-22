@@ -62,9 +62,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
           SKIP_NOTARIZE: '1'
           SKIP_NATIVE_REBUILD: ''
-        run: |
-          MAC_CI_ARCH=arm64 bash scripts/build-mac-ci.sh
-          MAC_CI_ARCH=x64 bash scripts/build-mac-ci.sh
+        run: MAC_CI_ARCH=arm64 bash scripts/build-mac-ci.sh
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
