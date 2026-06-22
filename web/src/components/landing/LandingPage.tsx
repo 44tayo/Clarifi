@@ -15,8 +15,8 @@ import { MarketingNav } from '@/components/marketing/MarketingNav'
 import { PricingCheckoutButton } from '@/components/pricing/PricingCheckoutButton'
 import {
   getDownloadManifest,
-  getMacDownloadPath,
-  getWindowsDownloadPath,
+  getMacDownloadUrl,
+  getWindowsDownloadUrl,
   macDmgFilename,
 } from '@/lib/downloads'
 import { detectClientPlatform, detectMacArchSync } from '@/lib/platform'
@@ -170,16 +170,15 @@ export function LandingPage() {
 
   const triggerDownload = useCallback(() => {
     const platform = detectClientPlatform() ?? 'mac'
-    const path =
-      platform === 'windows'
-        ? getWindowsDownloadPath()
-        : getMacDownloadPath(detectMacArchSync())
+    const arch = detectMacArchSync()
+    const url =
+      platform === 'windows' ? getWindowsDownloadUrl() : getMacDownloadUrl(arch)
     const filename =
       platform === 'windows'
         ? getDownloadManifest('windows').filename
-        : macDmgFilename(detectMacArchSync())
+        : macDmgFilename(arch)
     const a = document.createElement('a')
-    a.href = path
+    a.href = url
     a.download = filename
     document.body.appendChild(a)
     a.click()
