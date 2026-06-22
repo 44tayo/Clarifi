@@ -83,22 +83,42 @@ function githubReleaseAssetUrl(filename: string): string {
   return `https://github.com/${GITHUB_REPO}/releases/download/${tag}/${encodeURIComponent(filename)}`
 }
 
+function isStaleLocalDownloadOverride(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return parsed.pathname.startsWith('/downloads/') && !parsed.hostname.includes('github.com')
+  } catch {
+    return url.startsWith('/downloads/')
+  }
+}
+
+function resolveDownloadOverride(
+  override: string | undefined,
+  fallback: () => string,
+): string {
+  const trimmed = override?.trim()
+  if (!trimmed || isStaleLocalDownloadOverride(trimmed)) return fallback()
+  return trimmed
+}
+
 export function getMacDownloadUrl(arch: MacArch = 'arm64'): string {
   if (arch === 'arm64') {
-    const override = process.env.NEXT_PUBLIC_CLARIFI_MAC_DOWNLOAD_URL?.trim()
-    if (override) return override
+    return resolveDownloadOverride(
+      process.env.NEXT_PUBLIC_CLARIFI_MAC_DOWNLOAD_URL,
+      () => githubReleaseAssetUrl(macDmgFilename('arm64')),
+    )
   }
-  if (arch === 'x64') {
-    const override = process.env.NEXT_PUBLIC_CLARIFI_MAC_X64_DOWNLOAD_URL?.trim()
-    if (override) return override
-  }
-  return githubReleaseAssetUrl(macDmgFilename(arch))
+  return resolveDownloadOverride(
+    process.env.NEXT_PUBLIC_CLARIFI_MAC_X64_DOWNLOAD_URL,
+    () => githubReleaseAssetUrl(macDmgFilename('x64')),
+  )
 }
 
 export function getWindowsDownloadUrl(): string {
-  const override = process.env.NEXT_PUBLIC_CLARIFI_WIN_DOWNLOAD_URL?.trim()
-  if (override) return override
-  return githubReleaseAssetUrl(WIN_EXE_FILENAME)
+  return resolveDownloadOverride(
+    process.env.NEXT_PUBLIC_CLARIFI_WIN_DOWNLOAD_URL,
+    () => githubReleaseAssetUrl(WIN_EXE_FILENAME),
+  )
 }
 
 export function getDownloadForTarget(target: DownloadTarget): {

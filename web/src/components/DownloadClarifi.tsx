@@ -55,8 +55,12 @@ export function triggerPlatformDownload(target: DownloadTarget): void {
   // #endregion
   const a = document.createElement('a')
   a.href = url
-  a.download = filename
-  a.rel = 'noopener'
+  a.rel = 'noopener noreferrer'
+  if (url.startsWith('/') || url.startsWith(window.location.origin)) {
+    a.download = filename
+  } else {
+    a.target = '_blank'
+  }
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
