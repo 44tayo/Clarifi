@@ -22,7 +22,7 @@ function copyStealthNativePlugin() {
       }
 
       const pttSrc = join(root, 'resources/dictation_ptt.node')
-      if (existsSync(pttSrc)) {
+      if (process.platform === 'darwin' && existsSync(pttSrc)) {
         copyFileSync(pttSrc, join(destDir, 'dictation_ptt.node'))
       }
     },
