@@ -11,7 +11,6 @@ import {
   readFileSync,
   rmSync,
   unlinkSync,
-  writeFileSync,
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -19,11 +18,11 @@ import { fileURLToPath } from 'node:url'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const nativeDir = join(root, 'native')
 const DEBUG_LOG = join(root, '.cursor/debug-6989d7.log')
-const BUILD_LOG = join(root, '.cursor/win-native-build.log')
 
 function logDebug(hypothesisId, message, data = {}) {
   // #region agent log
   try {
+    mkdirSync(join(root, '.cursor'), { recursive: true })
     const line = `${JSON.stringify({
       sessionId: '6989d7',
       hypothesisId,
@@ -61,7 +60,7 @@ if (!existsSync(bindingWin)) {
 }
 
 console.log(`Building dictation_ptt for Electron ${electronVersion} (win32 x64)...`)
-logDebug('H4', 'native-win-build-start', { electronVersion, binding: 'binding.win.gyp' })
+logDebug('H5', 'native-win-build-start', { electronVersion, binding: 'binding.win.gyp' })
 
 copyFileSync(bindingPath, bindingBackup)
 copyFileSync(bindingWin, bindingPath)
@@ -70,13 +69,10 @@ rmSync(join(nativeDir, 'build'), { recursive: true, force: true })
 try {
   execSync(
     `npx --yes node-gyp@10 rebuild --target=${electronVersion} --arch=x64 --dist-url=https://electronjs.org/headers`,
-    { cwd: nativeDir, stdio: 'pipe', encoding: 'utf8' },
+    { cwd: nativeDir, stdio: 'inherit' },
   )
 } catch (err) {
-  const output = `${err.stdout ?? ''}\n${err.stderr ?? ''}\n${String(err)}`
-  writeFileSync(BUILD_LOG, output)
-  logDebug('H4', 'native-win-build-failed', { error: String(err), log: BUILD_LOG })
-  console.error(output)
+  logDebug('H5', 'native-win-build-failed', { error: String(err) })
   throw err
 } finally {
   copyFileSync(bindingBackup, bindingPath)
@@ -85,11 +81,11 @@ try {
 
 const built = join(nativeDir, 'build/Release/dictation_ptt.node')
 if (!existsSync(built)) {
-  logDebug('H4', 'native-win-build-missing-output', { expected: built })
+  logDebug('H5', 'native-win-build-missing-output', { expected: built })
   console.error('ERROR: dictation_ptt.node was not produced')
   process.exit(1)
 }
 
 copyFileSync(built, join(root, 'resources/dictation_ptt.node'))
-logDebug('H4', 'native-win-build-complete', { output: 'resources/dictation_ptt.node' })
+logDebug('H5', 'native-win-build-complete', { output: 'resources/dictation_ptt.node' })
 console.log('Built resources/dictation_ptt.node (Windows)')
