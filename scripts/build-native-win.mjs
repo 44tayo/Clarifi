@@ -75,8 +75,14 @@ try {
   logDebug('H5', 'native-win-build-failed', { error: String(err) })
   throw err
 } finally {
-  copyFileSync(bindingBackup, bindingPath)
-  unlinkSync(bindingBackup)
+  try {
+    if (existsSync(bindingBackup)) {
+      copyFileSync(bindingBackup, bindingPath)
+      unlinkSync(bindingBackup)
+    }
+  } catch (restoreErr) {
+    console.warn('Failed to restore binding.gyp:', restoreErr)
+  }
 }
 
 const built = join(nativeDir, 'build/Release/dictation_ptt.node')
