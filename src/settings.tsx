@@ -538,6 +538,9 @@ export default function SettingsApp() {
       setWorkKnowledgeDraft(data.workKnowledge ?? '')
       setGeneralKnowledgeDraft(data.generalKnowledge ?? '')
     })
+    window.electronAPI.on('permissions:changed', (payload) => {
+      setPermissions(payload as PermissionState)
+    })
   }, [loadPrefs, loadProfile, loadPermissions, loadAudioPrefs, loadChatHistory, loadAudioSessions, loadKeybindPrefs, applyKeybindPrefs])
 
   useEffect(() => {

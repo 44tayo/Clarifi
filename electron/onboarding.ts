@@ -17,6 +17,9 @@ import {
   getOverlayWindow,
   showOverlayWindow,
 } from './overlay'
+import { createDictationPillWindow, showDictationPillWindow } from './dictationPill'
+import { isDictationEnabled } from './dictationControl'
+import { startDictationPttMonitor } from './dictationPtt'
 import { registerKeybinds } from './keybindManager'
 import { sendOverlayTourStep } from './overlayTour'
 
@@ -118,6 +121,11 @@ export async function completeOnboarding(): Promise<void> {
     createOverlayWindow()
   }
   showOverlayWindow()
+  createDictationPillWindow()
+  if (isDictationEnabled()) {
+    startDictationPttMonitor()
+    showDictationPillWindow()
+  }
   registerKeybinds()
 }
 

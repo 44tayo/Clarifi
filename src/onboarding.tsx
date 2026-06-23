@@ -28,6 +28,7 @@ type PermissionState = {
   microphone: boolean
   screen: boolean
   allGranted: boolean
+  execPath?: string
 }
 
 type TutorialStep =
@@ -455,7 +456,15 @@ export default function OnboardingApp() {
     const interval = window.setInterval(() => {
       void refreshPermissions()
     }, 1000)
-    return () => window.clearInterval(interval)
+
+    const onPermissionsChanged = (payload: unknown) => {
+      setPermissions(payload as PermissionState)
+    }
+    window.electronAPI.on('permissions:changed', onPermissionsChanged)
+
+    return () => {
+      window.clearInterval(interval)
+    }
   }, [step, refreshPermissions])
 
   // Live overlay tour — show real bar alongside onboarding
@@ -609,6 +618,21 @@ export default function OnboardingApp() {
             onToggle={() => void requestPermission('screen')}
           />
         </div>
+        {!permissions.accessibility && (
+          <p className="onboarding-permission-hint">
+            Already enabled Clarifi in System Settings? Toggle it off and on, return to this
+            window, or quit and reopen Clarifi.
+          </p>
+        )}
+        {!permissions.allGranted && (
+          <button
+            type="button"
+            className="onboarding-refresh-perms"
+            onClick={() => void refreshPermissions()}
+          >
+            Refresh permissions
+          </button>
+        )}
         {permissions.allGranted && (
           <p className="onboarding-status-text success">All permissions granted</p>
         )}

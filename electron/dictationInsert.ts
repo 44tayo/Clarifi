@@ -13,7 +13,7 @@ let lastTrackAt = 0
 const CLARIFI_APP_NAMES = new Set(['clarifi', 'electron'])
 const WINDOW_CENTER_CACHE_MS = 5000
 const TRACK_INTERVAL_MS = 5000
-const FOLLOW_REFRESH_MS = 5000
+const FOLLOW_REFRESH_MS = 1000
 const TRACK_THROTTLE_MS = 4000
 
 let windowCenterCache: {

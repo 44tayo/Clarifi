@@ -24,9 +24,11 @@ import {
   createDictationPillWindow,
   destroyDictationPillWindow,
 } from './dictationPill'
-import { stopDictationTargetTracking } from './dictationInsert'
+import { stopDictationTargetTracking, startDictationTargetTracking } from './dictationInsert'
 import { startDictationPttMonitor, stopDictationPttMonitor } from './dictationPtt'
 import { isDictationEnabled } from './dictationControl'
+import { attachPermissionFocusListeners } from './permissions'
+import { startMeetingPromptMonitor, stopMeetingPromptMonitor } from './meetingPrompt'
 import { stopOverlayFollow } from './overlayPosition'
 import { scheduleProactiveEngineStart } from './proactiveStartup'
 // Show "Clarifi" in the menu bar instead of "Electron" during local dev.
@@ -236,8 +238,14 @@ app.whenReady().then(async () => {
 
     await initializeStorage()
     registerHandlers()
+    attachPermissionFocusListeners()
+    startDictationTargetTracking()
     scheduleProactiveEngineStart()
     await launchClarifi()
+    const onboardingDone = await isOnboardingComplete()
+    if (onboardingDone) {
+      startMeetingPromptMonitor()
+    }
     registerKeybinds()
     logStartup('H4', 'launch-complete', {
       windowCount: BrowserWindow.getAllWindows().length,
@@ -262,6 +270,7 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', () => {
   stopDictationTargetTracking()
+  stopMeetingPromptMonitor()
   stopDictationPttMonitor()
   stopOverlayFollow()
   globalShortcut.unregisterAll()
@@ -286,4 +295,5 @@ app.on('activate', () => {
     return
   }
   void showClarifiUI()
+  void import('./permissions').then(({ broadcastPermissionStatuses }) => broadcastPermissionStatuses())
 })

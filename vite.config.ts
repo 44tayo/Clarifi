@@ -99,6 +99,7 @@ export default defineConfig(({ mode }) => {
           onboarding: 'onboarding.html',
           settings: 'settings.html',
           dictationPill: 'dictation-pill.html',
+          meetingPrompt: 'meeting-prompt.html',
         },
       },
     },

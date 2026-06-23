@@ -20,6 +20,8 @@ let dictationBlockedReason = ''
 let displayListenerAttached = false
 let lastFollowedDisplayId: number | null = null
 let lockedDisplayId: number | null = null
+let pillFollowPollTimer: ReturnType<typeof setInterval> | null = null
+const PILL_FOLLOW_POLL_MS = 500
 let pendingSessionStart: DictationTargetSnapshot | null | undefined = undefined
 
 function attachDisplayListener(): void {
@@ -59,12 +61,24 @@ function followPillToActiveDisplay(): void {
   lastFollowedDisplayId = targetDisplayId
 }
 
-/** Reposition on display changes only — no AppleScript polling loop. */
-function startPillDisplayFollow(): void {
+function startPillDisplayFollowPoll(): void {
+  if (pillFollowPollTimer) return
   followPillToActiveDisplay()
+  pillFollowPollTimer = setInterval(() => {
+    if (lockedDisplayId !== null) return
+    followPillToActiveDisplay()
+  }, PILL_FOLLOW_POLL_MS)
+}
+
+function startPillDisplayFollow(): void {
+  startPillDisplayFollowPoll()
 }
 
 function stopPillDisplayFollow(): void {
+  if (pillFollowPollTimer) {
+    clearInterval(pillFollowPollTimer)
+    pillFollowPollTimer = null
+  }
   lastFollowedDisplayId = null
 }
 

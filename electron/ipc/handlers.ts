@@ -108,10 +108,11 @@ import {
 } from '../onboardingTutorial'
 import { isOnboardingComplete } from '../onboardingState'
 import {
-  allPermissionsGranted,
-  getPermissionStatuses,
+  broadcastPermissionStatuses,
+  getPermissionStatusPayload,
   openPermissionSettings,
   requestPermission,
+  setOnAccessibilityGranted,
   type PermissionKind,
 } from '../permissions'
 import {
@@ -156,6 +157,11 @@ import {
 } from '../keybindPreferences'
 import { applyDictationEnabled, applyDictationEnabledSideEffects, isDictationEnabled } from '../dictationControl'
 import { startDictationPttMonitor } from '../dictationPtt'
+import {
+  dismissMeetingPrompt,
+  startMeetingPromptMonitor,
+  startRecordingFromMeetingPrompt,
+} from '../meetingPrompt'
 import { registerKeybinds } from '../keybindManager'
 import {
   eraseLocalAccountData,
@@ -601,6 +607,12 @@ let handlersRegistered = false
 
 export function registerHandlers(mainWindow?: BrowserWindow | null): void {
   if (handlersRegistered) return
+
+  setOnAccessibilityGranted(() => {
+    if (isDictationEnabled()) {
+      startDictationPttMonitor()
+    }
+  })
 
   void mainWindow
 
@@ -1352,6 +1364,7 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
 
   registerValidatedHandler('onboarding:complete', {}, async () => {
     await completeOnboarding()
+    startMeetingPromptMonitor()
     return { ok: true }
   })
 
@@ -1432,12 +1445,8 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
     return { ok: true }
   })
 
-  registerValidatedHandler('permissions:status', {}, () => {
-    const statuses = getPermissionStatuses()
-    return {
-      ...statuses,
-      allGranted: allPermissionsGranted(statuses),
-    }
+  registerValidatedHandler('permissions:status', {}, async () => {
+    return getPermissionStatusPayload()
   })
 
   registerValidatedHandler(
@@ -1449,11 +1458,10 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
         throw new Error('kind is required')
       }
       const granted = await requestPermission(payload.kind)
-      const statuses = getPermissionStatuses()
+      const status = await broadcastPermissionStatuses()
       return {
         granted,
-        ...statuses,
-        allGranted: allPermissionsGranted(statuses),
+        ...status,
       }
     },
   )
@@ -1470,6 +1478,16 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
       return { ok: true }
     },
   )
+
+  registerValidatedHandler('meeting-prompt:dismiss', {}, () => {
+    dismissMeetingPrompt(true)
+    return { ok: true }
+  })
+
+  registerValidatedHandler('meeting-prompt:start-recording', {}, () => {
+    startRecordingFromMeetingPrompt()
+    return { ok: true }
+  })
 
   registerValidatedHandler(
     'onboarding:tutorial-signal',
