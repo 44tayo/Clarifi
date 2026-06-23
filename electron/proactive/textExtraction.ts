@@ -102,15 +102,30 @@ function dedupeLines(text: string): string {
 }
 
 export function getFrontmostAppName(): string | null {
+  return getFrontmostAppNameCached(false)
+}
+
+let frontmostCache: { name: string | null; at: number } | null = null
+const FRONTMOST_CACHE_MS = 4000
+
+/** Cached frontmost app — skips AppleScript when cache is fresh unless force=true. */
+export function getFrontmostAppNameCached(force = false): string | null {
+  const now = Date.now()
+  if (!force && frontmostCache && now - frontmostCache.at < FRONTMOST_CACHE_MS) {
+    return frontmostCache.name
+  }
+
   if (process.platform === 'darwin') {
     try {
       const result = execSync(
         `osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true'`,
-        { encoding: 'utf-8', timeout: 2000 },
+        { encoding: 'utf-8', timeout: 1500 },
       )
-      return result.trim() || null
+      const name = result.trim() || null
+      frontmostCache = { name, at: now }
+      return name
     } catch {
-      return null
+      return frontmostCache?.name ?? null
     }
   }
 

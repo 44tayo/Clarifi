@@ -8,10 +8,11 @@ import {
 import { restartClipboardMonitor, stopClipboardMonitor, startClipboardMonitor } from './clipboardMonitor'
 import { analyzeScreenCapture } from './screenAnalyzer'
 import {
-  getFrontmostAppName,
+  getFrontmostAppNameCached,
   shouldWatchApp,
 } from './textExtraction'
 import { trackExternalFrontmostApp } from '../dictationInsert'
+import { getFrontmostAppNameCached } from './textExtraction'
 import type {
   ProactiveEngineState,
   ProactiveSettings,
@@ -106,7 +107,7 @@ async function runAnalysisTick(): Promise<void> {
   state.lastError = null
 
   try {
-    const frontmostApp = getFrontmostAppName()
+    const frontmostApp = getFrontmostAppNameCached(false)
     if (!shouldWatchApp(frontmostApp, settings.appWhitelist, settings.appBlacklist)) {
       return
     }

@@ -11,14 +11,12 @@ import {
 const PILL_WIDTH = 320
 const PILL_HEIGHT = 96
 const BOTTOM_MARGIN = 18
-const FOLLOW_POLL_INTERVAL_MS = 200
 
 let pillWindow: BrowserWindow | null = null
 let pillReady = false
 let dictationBlocked = false
 let dictationBlockedReason = ''
 let displayListenerAttached = false
-let followPollTimer: ReturnType<typeof setInterval> | null = null
 let lastFollowedDisplayId: number | null = null
 let lockedDisplayId: number | null = null
 let pendingSessionStart: DictationTargetSnapshot | null | undefined = undefined
@@ -28,6 +26,7 @@ function attachDisplayListener(): void {
   displayListenerAttached = true
   const onDisplayChange = () => {
     repositionDictationPillOnDisplayChange()
+    followPillToActiveDisplay()
   }
   screen.on('display-metrics-changed', onDisplayChange)
   screen.on('display-added', onDisplayChange)
@@ -54,22 +53,17 @@ function followPillToActiveDisplay(): void {
   if (!pillWindow || pillWindow.isDestroyed() || !pillWindow.isVisible()) return
 
   const targetDisplayId = resolveFollowDisplayId()
+  if (targetDisplayId === lastFollowedDisplayId) return
   positionPillWindow(pillWindow, targetDisplayId)
   lastFollowedDisplayId = targetDisplayId
 }
 
+/** Reposition on display changes only — no AppleScript polling loop. */
 function startPillDisplayFollow(): void {
-  if (followPollTimer) return
-  followPollTimer = setInterval(() => {
-    followPillToActiveDisplay()
-  }, FOLLOW_POLL_INTERVAL_MS)
+  followPillToActiveDisplay()
 }
 
 function stopPillDisplayFollow(): void {
-  if (followPollTimer) {
-    clearInterval(followPollTimer)
-    followPollTimer = null
-  }
   lastFollowedDisplayId = null
 }
 
@@ -146,15 +140,21 @@ export function sendDictationSessionStart(snapshot?: DictationTargetSnapshot | n
   }
 
   broadcastToPill('dictation:session-start', target)
+  if (pillWindow && !pillWindow.isDestroyed()) {
+    pillWindow.showInactive()
+    startPillDisplayFollow()
+  }
 }
 
 export function sendDictationSessionFinish(): void {
   broadcastToPill('dictation:session-finish')
+  hideDictationPillWindow()
 }
 
 export function sendDictationSessionCancel(): void {
   unlockPillDisplay()
   broadcastToPill('dictation:session-cancel')
+  hideDictationPillWindow()
 }
 
 export function getDictationPillWindow(): BrowserWindow | null {
@@ -163,10 +163,6 @@ export function getDictationPillWindow(): BrowserWindow | null {
 
 export function createDictationPillWindow(): BrowserWindow {
   if (pillWindow && !pillWindow.isDestroyed()) {
-    positionPillWindow(pillWindow)
-    lastFollowedDisplayId = resolveFollowDisplayId()
-    pillWindow.showInactive()
-    startPillDisplayFollow()
     return pillWindow
   }
 
@@ -221,8 +217,6 @@ export function createDictationPillWindow(): BrowserWindow {
     if (!pillWindow || pillWindow.isDestroyed()) return
     positionPillWindow(pillWindow)
     lastFollowedDisplayId = resolveFollowDisplayId()
-    pillWindow.showInactive()
-    startPillDisplayFollow()
   })
 
   return pillWindow
@@ -251,6 +245,7 @@ export function showDictationPillWindow(): void {
 }
 
 export function hideDictationPillWindow(): void {
+  stopPillDisplayFollow()
   if (pillWindow && !pillWindow.isDestroyed()) {
     pillWindow.hide()
   }

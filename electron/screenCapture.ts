@@ -1,5 +1,5 @@
 import { desktopCapturer, screen, systemPreferences } from 'electron'
-import { getOverlayWindow, reapplyOverlayWindowPolicies } from './overlay'
+import { getOverlayWindow, reapplyOverlayWindowPolicies, setOverlayInteractive } from './overlay'
 
 const MAX_CAPTURE_DIMENSION = 1568
 const OVERLAY_HIDE_MS = 120
@@ -69,7 +69,8 @@ export async function captureScreenForContext(): Promise<ScreenCaptureResult> {
     return { error: 'capture_failed' }
   } finally {
     if (overlay && !overlay.isDestroyed() && wasOverlayVisible) {
-      overlay.showInactive()
+      overlay.show()
+      setOverlayInteractive(true)
       reapplyOverlayWindowPolicies()
     }
   }

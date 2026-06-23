@@ -1,13 +1,13 @@
-import { spawnSync } from 'child_process'
+import { spawn, spawnSync } from 'child_process'
 
-let osaBusy = false
+let osaSyncBusy = false
 
-/** Run AppleScript without shell/execSync stdin — avoids uncaught EPIPE on early exit. */
+/** Blocking AppleScript — use only for user-initiated dictation insert, not background polls. */
 export function runOsascript(script: string, timeoutMs = 5000): string | null {
   if (process.platform !== 'darwin') return null
-  if (osaBusy) return null
+  if (osaSyncBusy) return null
 
-  osaBusy = true
+  osaSyncBusy = true
   try {
     const result = spawnSync('osascript', ['-e', script], {
       encoding: 'utf-8',
@@ -21,6 +21,43 @@ export function runOsascript(script: string, timeoutMs = 5000): string | null {
   } catch {
     return null
   } finally {
-    osaBusy = false
+    osaSyncBusy = false
   }
+}
+
+/** Non-blocking AppleScript for background display/target refresh. */
+export function runOsascriptAsync(script: string, timeoutMs = 5000): Promise<string | null> {
+  if (process.platform !== 'darwin') return Promise.resolve(null)
+
+  return new Promise((resolve) => {
+    const child = spawn('osascript', ['-e', script], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+
+    let stdout = ''
+    child.stdout?.setEncoding('utf-8')
+    child.stdout?.on('data', (chunk: string) => {
+      stdout += chunk
+    })
+
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM')
+      resolve(null)
+    }, timeoutMs)
+
+    child.on('error', () => {
+      clearTimeout(timer)
+      resolve(null)
+    })
+
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      if (code !== 0) {
+        resolve(null)
+        return
+      }
+      const out = stdout.trim()
+      resolve(out || null)
+    })
+  })
 }

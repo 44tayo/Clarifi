@@ -1,14 +1,20 @@
 import { execSync } from 'child_process'
 import { clipboard, screen, systemPreferences } from 'electron'
-import { runOsascript } from './osascript'
-import { getFrontmostAppName } from './proactive/textExtraction'
+import { runOsascript, runOsascriptAsync } from './osascript'
+import { getFrontmostAppNameCached } from './proactive/textExtraction'
 
 let lastExternalFrontmostApp: string | null = null
 let lastExternalDisplayId: number | null = null
 let trackingTimer: ReturnType<typeof setInterval> | null = null
+let followRefreshTimer: ReturnType<typeof setInterval> | null = null
+let followRefreshInFlight = false
+let lastTrackAt = 0
 
 const CLARIFI_APP_NAMES = new Set(['clarifi', 'electron'])
-const WINDOW_CENTER_CACHE_MS = 400
+const WINDOW_CENTER_CACHE_MS = 5000
+const TRACK_INTERVAL_MS = 5000
+const FOLLOW_REFRESH_MS = 5000
+const TRACK_THROTTLE_MS = 4000
 
 let windowCenterCache: {
   key: string
@@ -40,7 +46,15 @@ export type DictationTargetSnapshot = {
   fieldPreview?: string
 }
 
-function getFrontmostWindowCenter(): { x: number; y: number } | null {
+function parseCenterCsv(result: string): { x: number; y: number } | null {
+  const [xRaw, yRaw] = result.split(',')
+  const x = Number(xRaw)
+  const y = Number(yRaw)
+  if (Number.isFinite(x) && Number.isFinite(y)) return { x, y }
+  return null
+}
+
+function getFrontmostWindowCenterSync(): { x: number; y: number } | null {
   if (process.platform === 'darwin') {
     const script = `
 tell application "System Events"
@@ -58,13 +72,8 @@ tell application "System Events"
 end tell
 `
     return cachedWindowCenter('frontmost', () => {
-      const result = runOsascript(script, 2000)
-      if (!result) return null
-      const [xRaw, yRaw] = result.split(',')
-      const x = Number(xRaw)
-      const y = Number(yRaw)
-      if (Number.isFinite(x) && Number.isFinite(y)) return { x, y }
-      return null
+      const result = runOsascript(script, 1500)
+      return result ? parseCenterCsv(result) : null
     })
   }
 
@@ -86,7 +95,7 @@ end tell
   return null
 }
 
-function getWindowCenterForApp(appName: string): { x: number; y: number } | null {
+function getWindowCenterForAppSync(appName: string): { x: number; y: number } | null {
   if (process.platform === 'darwin') {
     const escaped = appName.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
     const script = `
@@ -105,12 +114,7 @@ end tell
 `
     return cachedWindowCenter(`app:${appName}`, () => {
       const result = runOsascript(script, 1500)
-      if (!result) return null
-      const [xRaw, yRaw] = result.split(',')
-      const x = Number(xRaw)
-      const y = Number(yRaw)
-      if (Number.isFinite(x) && Number.isFinite(y)) return { x, y }
-      return null
+      return result ? parseCenterCsv(result) : null
     })
   }
 
@@ -133,6 +137,12 @@ end tell
   return null
 }
 
+function displayIdFromCenter(center: { x: number; y: number }): number {
+  const id = screen.getDisplayNearestPoint(center).id
+  lastExternalDisplayId = id
+  return id
+}
+
 function readFrontWindowTitle(): string | undefined {
   if (process.platform !== 'darwin') return undefined
 
@@ -152,47 +162,101 @@ end tell
 }
 
 export function getFrontmostAppDisplayId(): number {
-  const center = getFrontmostWindowCenter()
-  if (center) {
-    const id = screen.getDisplayNearestPoint(center).id
-    lastExternalDisplayId = id
-    return id
+  const center = getFrontmostWindowCenterSync()
+  if (center) return displayIdFromCenter(center)
+  return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id
+}
+
+/**
+ * Fast display lookup for pill/overlay positioning — never blocks on AppleScript.
+ * Background refresh keeps lastExternalDisplayId up to date.
+ */
+export function getFollowDisplayId(): number {
+  if (lastExternalDisplayId !== null) {
+    return lastExternalDisplayId
   }
   return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id
 }
 
-/** Display for pill follow — uses external app when Clarifi/Electron is frontmost. */
-export function getFollowDisplayId(): number {
-  const front = getFrontmostAppName()
-  if (front && !isClarifiProcess(front)) {
-    const center = getFrontmostWindowCenter()
-    if (center) {
-      const id = screen.getDisplayNearestPoint(center).id
-      lastExternalDisplayId = id
-      return id
+async function refreshFollowDisplayAsync(): Promise<void> {
+  if (followRefreshInFlight || process.platform !== 'darwin') return
+  followRefreshInFlight = true
+  try {
+    const frontScript = `tell application "System Events" to get name of first application process whose frontmost is true`
+    const frontName = (await runOsascriptAsync(frontScript, 1500))?.trim() || null
+
+    if (frontName && !isClarifiProcess(frontName)) {
+      lastExternalFrontmostApp = frontName
+      const centerScript = `
+tell application "System Events"
+  set frontProc to first application process whose frontmost is true
+  try
+    tell frontProc
+      set frontWin to first window whose frontmost is true
+      set winPos to position of frontWin
+      set winSize to size of frontWin
+      set cx to (item 1 of winPos) + (item 1 of winSize) / 2
+      set cy to (item 2 of winPos) + (item 2 of winSize) / 2
+      return (cx as text) & "," & (cy as text)
+    end tell
+  end try
+end tell
+`
+      const centerResult = await runOsascriptAsync(centerScript, 1500)
+      const center = centerResult ? parseCenterCsv(centerResult) : null
+      if (center) {
+        displayIdFromCenter(center)
+        return
+      }
     }
-  }
 
-  const external = lastExternalFrontmostApp ?? getDictationTargetApp()
-  if (external && !isClarifiProcess(external)) {
-    const center = getWindowCenterForApp(external)
-    if (center) {
-      const id = screen.getDisplayNearestPoint(center).id
-      lastExternalDisplayId = id
-      return id
+    const external = lastExternalFrontmostApp
+    if (external && !isClarifiProcess(external)) {
+      const escaped = external.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+      const appScript = `
+tell application "System Events"
+  tell process "${escaped}"
+    if (count of windows) > 0 then
+      set frontWin to window 1
+      set winPos to position of frontWin
+      set winSize to size of frontWin
+      set cx to (item 1 of winPos) + (item 1 of winSize) / 2
+      set cy to (item 2 of winPos) + (item 2 of winSize) / 2
+      return (cx as text) & "," & (cy as text)
+    end if
+  end tell
+end tell
+`
+      const centerResult = await runOsascriptAsync(appScript, 1500)
+      const center = centerResult ? parseCenterCsv(centerResult) : null
+      if (center) {
+        displayIdFromCenter(center)
+      }
     }
+  } finally {
+    followRefreshInFlight = false
   }
+}
 
-  if (lastExternalDisplayId !== null) {
-    return lastExternalDisplayId
+export function startFollowDisplayRefresh(): void {
+  if (followRefreshTimer) return
+  void refreshFollowDisplayAsync()
+  followRefreshTimer = setInterval(() => {
+    void refreshFollowDisplayAsync()
+  }, FOLLOW_REFRESH_MS)
+}
+
+export function stopFollowDisplayRefresh(): void {
+  if (followRefreshTimer) {
+    clearInterval(followRefreshTimer)
+    followRefreshTimer = null
   }
-
-  return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id
+  followRefreshInFlight = false
 }
 
 /** Snapshot target app + display at session start — frozen for insert. */
 export function captureDictationTarget(): DictationTargetSnapshot | null {
-  trackExternalFrontmostApp()
+  trackExternalFrontmostApp(true)
   const app = getDictationTargetApp()
   if (!app || isClarifiProcess(app)) return null
 
@@ -218,27 +282,41 @@ export function isClarifiProcess(appName: string | null | undefined): boolean {
 }
 
 /** Remember the last app the user was working in (not Clarifi). */
-export function trackExternalFrontmostApp(): void {
-  const app = getFrontmostAppName()
+export function trackExternalFrontmostApp(force = false): void {
+  const now = Date.now()
+  if (!force && now - lastTrackAt < TRACK_THROTTLE_MS) return
+  lastTrackAt = now
+
+  const app = getFrontmostAppNameCached(force)
   if (app && !isClarifiProcess(app)) {
     lastExternalFrontmostApp = app
-    const center = getFrontmostWindowCenter()
+    const center = getFrontmostWindowCenterSync()
     if (center) {
       lastExternalDisplayId = screen.getDisplayNearestPoint(center).id
     }
   }
 }
 
-/** Poll frontmost app so dictation can target Gmail etc. after the user focuses Clarifi. */
+/** Slow background poll for dictation target — not on the UI hot path. */
 export function startDictationTargetTracking(): void {
   if (trackingTimer) return
-  trackExternalFrontmostApp()
-  trackingTimer = setInterval(trackExternalFrontmostApp, 1500)
+  trackExternalFrontmostApp(true)
+  startFollowDisplayRefresh()
+  trackingTimer = setInterval(() => {
+    trackExternalFrontmostApp(false)
+  }, TRACK_INTERVAL_MS)
+}
+
+export function stopDictationTargetTracking(): void {
+  if (trackingTimer) {
+    clearInterval(trackingTimer)
+    trackingTimer = null
+  }
+  stopFollowDisplayRefresh()
 }
 
 export function getDictationTargetApp(): string | null {
-  trackExternalFrontmostApp()
-  const current = getFrontmostAppName()
+  const current = getFrontmostAppNameCached(false)
   if (current && !isClarifiProcess(current)) return current
   return lastExternalFrontmostApp
 }
@@ -367,7 +445,6 @@ async function pasteViaClipboard(text: string): Promise<boolean> {
     return false
   }
 
-  // Target app reads clipboard asynchronously after Cmd+V — restore only after paste completes.
   await delay(180)
   if (previousClipboard) {
     clipboard.writeText(previousClipboard)

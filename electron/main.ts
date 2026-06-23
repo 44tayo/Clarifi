@@ -24,6 +24,7 @@ import {
   createDictationPillWindow,
   destroyDictationPillWindow,
 } from './dictationPill'
+import { stopDictationTargetTracking } from './dictationInsert'
 import { startDictationPttMonitor, stopDictationPttMonitor } from './dictationPtt'
 import { stopOverlayFollow } from './overlayPosition'
 import { scheduleProactiveEngineStart } from './proactiveStartup'
@@ -256,10 +257,16 @@ app.whenReady().then(async () => {
   }
 })
 
-app.on('will-quit', () => {
-  globalShortcut.unregisterAll()
+app.on('before-quit', () => {
+  stopDictationTargetTracking()
   stopDictationPttMonitor()
   stopOverlayFollow()
+  globalShortcut.unregisterAll()
+  destroyDictationPillWindow()
+  destroyOverlayWindow()
+})
+
+app.on('will-quit', () => {
   void import('./proactive').then(({ stopProactiveEngine }) => stopProactiveEngine())
 })
 

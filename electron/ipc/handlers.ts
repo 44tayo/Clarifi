@@ -901,6 +901,7 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
   ipcMain.handle('overlay:ready', () => {
     markOverlayReady()
     startProactiveEngineOnOverlayReady()
+    startDictationTargetTracking()
     return { ok: true }
   })
 
@@ -1959,5 +1960,4 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
   }
 
   handlersRegistered = true
-  startDictationTargetTracking()
 }
