@@ -235,7 +235,12 @@ function PreviewPanel({ step, mockOffset, onPreviewListen, onPreviewStealth }: P
   }
 
   if (step === 'tour-dictation') {
-    return <DictationPillMock />
+    return (
+      <div className="onboarding-dictation-preview">
+        <OverlayMock dictationEnabled highlight="dictation" />
+        <DictationPillMock />
+      </div>
+    )
   }
 
   if (step === 'tour-stealth') {
@@ -766,9 +771,13 @@ export default function OnboardingApp() {
       <>
         <h2 className="onboarding-heading">Dictate anywhere</h2>
         <p className="onboarding-sub">
-          Hold <strong>Fn (Globe)</strong> on Mac or <strong>Right Ctrl</strong> on Windows — or click
-          the bottom pill — to dictate into any text field. Clarifi cleans up filler words and inserts
+          Hold <strong>Fn (Globe)</strong> on Mac or <strong>Right Ctrl</strong> on Windows — or tap
+          the bottom pill — to dictate into any text field. Clarifi strips filler words and inserts
           polished text at your cursor.
+        </p>
+        <p className="onboarding-sub">
+          Use the <strong>mic icon</strong> on the live bar to hide the dictation pill. Change your
+          hold-to-talk key anytime in <strong>Settings → Keybinds</strong>.
         </p>
         <div className="onboarding-press-row">
           <span className="onboarding-kbd">Fn</span>

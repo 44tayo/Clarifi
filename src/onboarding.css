@@ -351,6 +351,21 @@ body {
   overflow: hidden;
 }
 
+.onboarding-dictation-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 48px;
+  width: 100%;
+  max-width: 520px;
+}
+
+.onboarding-dictation-preview .dpm-scene {
+  min-height: 180px;
+  width: 100%;
+}
+
 .onboarding-preview-sign-in {
   background: #f0f0f2;
   padding: 0;

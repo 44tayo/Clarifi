@@ -6,6 +6,7 @@
 
 static std::atomic<bool> g_running(false);
 static std::atomic<bool> g_fnHeld(false);
+static std::atomic<int64_t> g_targetKeyCode(0);
 static CFMachPortRef g_eventTap = nullptr;
 static CFRunLoopSourceRef g_runLoopSource = nullptr;
 static std::thread g_tapThread;
@@ -29,6 +30,21 @@ static void tsfnCallback(napi_env env, napi_value js_callback, void* context, vo
   napi_call_function(env, undefined, js_callback, 1, argv, &result);
 }
 
+static bool isPttKeyDown(CGEventType type, CGEventFlags flags, int64_t keyCode) {
+  const int64_t target = g_targetKeyCode.load();
+  if (target == 0) {
+    return (flags & kCGEventFlagMaskSecondaryFn) != 0 || keyCode == 63;
+  }
+  if (target == 59) return (flags & kCGEventFlagMaskControl) != 0;
+  if (target == 62) return (flags & kCGEventFlagMaskControl) != 0;
+  if (target == 55) return (flags & kCGEventFlagMaskCommand) != 0;
+  if (target == 56 || target == 60) return (flags & kCGEventFlagMaskShift) != 0;
+  if (target == 58 || target == 61) return (flags & kCGEventFlagMaskAlternate) != 0;
+  if (type == kCGEventKeyDown && keyCode == target) return true;
+  if (type == kCGEventKeyUp && keyCode == target) return false;
+  return g_fnHeld.load();
+}
+
 static CGEventRef tapCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef event, void* userData) {
   (void)proxy;
   (void)userData;
@@ -46,12 +62,12 @@ static CGEventRef tapCallback(CGEventTapProxy proxy, CGEventType type, CGEventRe
 
   const CGEventFlags flags = CGEventGetFlags(event);
   const int64_t keyCode = CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode);
-  const bool fnDown = (flags & kCGEventFlagMaskSecondaryFn) != 0 || keyCode == 63;
+  const bool pttDown = isPttKeyDown(type, flags, keyCode);
 
-  if (fnDown && !g_fnHeld.load()) {
+  if (pttDown && !g_fnHeld.load()) {
     g_fnHeld.store(true);
     emitPttEvent("down");
-  } else if (!fnDown && g_fnHeld.load()) {
+  } else if (!pttDown && g_fnHeld.load()) {
     g_fnHeld.store(false);
     emitPttEvent("up");
   }
@@ -80,11 +96,19 @@ static void runTapLoop() {
 }
 
 static napi_value StartMonitor(napi_env env, napi_callback_info info) {
-  size_t argc = 1;
-  napi_value args[1];
+  size_t argc = 2;
+  napi_value args[2];
   if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok || argc < 1) {
     napi_throw_type_error(env, nullptr, "Expected callback function");
     return nullptr;
+  }
+
+  if (argc >= 2) {
+    int32_t keyCode = 0;
+    napi_get_value_int32(env, args[1], &keyCode);
+    g_targetKeyCode.store(keyCode);
+  } else {
+    g_targetKeyCode.store(0);
   }
 
   if (g_running.load()) {
@@ -128,6 +152,7 @@ static napi_value StopMonitor(napi_env env, napi_callback_info info) {
 
   g_running.store(false);
   g_fnHeld.store(false);
+  g_targetKeyCode.store(0);
 
   if (g_tapRunLoop != nullptr) {
     CFRunLoopStop(g_tapRunLoop);

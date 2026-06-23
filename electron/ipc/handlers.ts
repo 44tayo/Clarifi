@@ -154,6 +154,7 @@ import {
   validateKeybindAssignment,
   type KeybindActionId,
 } from '../keybindPreferences'
+import { applyDictationEnabled, applyDictationEnabledSideEffects, isDictationEnabled } from '../dictationControl'
 import { startDictationPttMonitor } from '../dictationPtt'
 import { registerKeybinds } from '../keybindManager'
 import {
@@ -1175,6 +1176,17 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
   })
 
   registerValidatedHandler(
+    'dictation:set-enabled',
+    { requiresInput: true },
+    (data) => {
+      const payload = data as { enabled?: boolean }
+      const enabled = Boolean(payload.enabled)
+      applyDictationEnabled(enabled)
+      return { enabled }
+    },
+  )
+
+  registerValidatedHandler(
     'screen:capture',
     { requiresInput: true },
     () => ({ status: 'screen_capture_requested' }),
@@ -1794,6 +1806,10 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
           typeof payload.dictationOutputLanguage === 'string'
             ? payload.dictationOutputLanguage
             : current.dictationOutputLanguage,
+        dictationEnabled:
+          typeof payload.dictationEnabled === 'boolean'
+            ? payload.dictationEnabled
+            : current.dictationEnabled,
         preferredMicrophoneId:
           typeof payload.preferredMicrophoneId === 'string'
             ? payload.preferredMicrophoneId
@@ -1816,6 +1832,12 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
               : current.transcriptionMode,
       }
       saveAudioPreferences(next)
+      if (
+        typeof payload.dictationEnabled === 'boolean' &&
+        payload.dictationEnabled !== current.dictationEnabled
+      ) {
+        applyDictationEnabledSideEffects(payload.dictationEnabled)
+      }
       return next
     },
   )
@@ -1866,7 +1888,7 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
       const next = { ...current, [payload.action]: payload.accelerator }
       const saved = saveKeybindPreferences(next)
       registerKeybinds(saved)
-      startDictationPttMonitor()
+      if (isDictationEnabled()) startDictationPttMonitor()
       return toPublicKeybindPreferences()
     },
   )
@@ -1881,7 +1903,7 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
       }
       const saved = resetKeybind(payload.action)
       registerKeybinds(saved)
-      startDictationPttMonitor()
+      if (isDictationEnabled()) startDictationPttMonitor()
       return toPublicKeybindPreferences()
     },
   )
@@ -1889,7 +1911,7 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
   registerValidatedHandler('keybinds:reset-all', {}, () => {
     const saved = resetKeybindPreferences()
     registerKeybinds(saved)
-    startDictationPttMonitor()
+    if (isDictationEnabled()) startDictationPttMonitor()
     return toPublicKeybindPreferences()
   })
 

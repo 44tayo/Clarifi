@@ -1,6 +1,8 @@
 import * as fs from 'fs'
 import * as path from 'path'
 
+import { getDictationEnabled } from './audioPreferences'
+import { resolvePttKeyFromPrefs } from './pttKeybind'
 import {
   refreshDictationBlockedFromAudioSession,
   sendDictationSessionCancel,
@@ -71,6 +73,10 @@ export function stopDictationPttMonitor(): void {
 export function startDictationPttMonitor(): boolean {
   stopDictationPttMonitor()
 
+  if (!getDictationEnabled()) {
+    return false
+  }
+
   const mod = loadPttModule()
   if (!mod) {
     console.warn('[dictation-ptt] Native module unavailable — Fn hold disabled; use bottom pill.')
@@ -78,10 +84,10 @@ export function startDictationPttMonitor(): boolean {
   }
 
   try {
-    const vkCode = process.platform === 'win32' ? 0xa3 : undefined
-    mod.startMonitor(handlePttEvent, vkCode)
+    const { vkOrKeyCode } = resolvePttKeyFromPrefs()
+    mod.startMonitor(handlePttEvent, vkOrKeyCode)
     monitorActive = true
-    console.log('[dictation-ptt] Push-to-talk monitor started')
+    console.log('[dictation-ptt] Push-to-talk monitor started (key:', vkOrKeyCode, ')')
     return true
   } catch (err) {
     console.warn('[dictation-ptt] Failed to start monitor:', err)

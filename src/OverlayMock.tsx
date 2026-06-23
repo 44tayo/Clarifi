@@ -8,6 +8,7 @@ export type TourHighlight =
   | 'screen'
   | 'stealth'
   | 'audio'
+  | 'dictation'
   | 'sessions'
   | 'mode'
   | 'move'
@@ -45,6 +46,8 @@ export type OverlayMockProps = {
   placeholder?: string
   screenContextEnabled?: boolean
   stealthEnabled?: boolean
+  dictationEnabled?: boolean
+  followEnabled?: boolean
   isRecording?: boolean
   showChatPanel?: boolean
   showModePill?: boolean
@@ -64,9 +67,11 @@ function highlightClass(target: TourHighlight, highlight?: TourHighlight | null)
 }
 
 export default function OverlayMock({
-  placeholder = 'Ask me anything',
+  placeholder = 'Ask or search anything',
   screenContextEnabled = false,
   stealthEnabled = true,
+  dictationEnabled = true,
+  followEnabled = true,
   isRecording = false,
   showChatPanel = false,
   showModePill = true,
@@ -158,11 +163,34 @@ export default function OverlayMock({
               </span>
             )}
 
+            <span
+              className={`overlay-mock-icon ${followEnabled ? 'active' : ''}`}
+              aria-hidden
+              title="Pinned position"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="7" height="7" />
+                <rect x="14" y="3" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" />
+                <rect x="14" y="14" width="7" height="7" />
+              </svg>
+            </span>
           </div>
 
           <div className="overlay-mock-divider" />
 
           <div className="overlay-mock-toolbar-right">
+            <span
+              className={`overlay-mock-icon dictation-btn ${dictationEnabled ? 'active' : ''} ${highlightClass('dictation', highlight)}`}
+              aria-hidden
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <line x1="12" y1="19" x2="12" y2="22" />
+              </svg>
+            </span>
+
             {audioInteractive ? (
               <button
                 type="button"
@@ -197,11 +225,6 @@ export default function OverlayMock({
               tabIndex={-1}
               aria-hidden
             >
-              <span>Sessions</span>
-              <span className="overlay-mock-chevron">▼</span>
-            </button>
-
-            <button type="button" className="overlay-mock-history" tabIndex={-1} aria-hidden>
               <span>History</span>
               <span className="overlay-mock-chevron">▼</span>
             </button>
