@@ -45,7 +45,7 @@ console.log(`Building dictation_ptt for Electron ${electronVersion} (win32 x64).
 logDebug('H2', 'native-win-build-start', { electronVersion })
 try {
   execSync(
-    `npx --yes node-gyp@10 rebuild --target=${electronVersion} --arch=x64 --dist-url=https://electronjs.org/headers -- dictation_ptt`,
+    `npx --yes node-gyp@10 rebuild --target=${electronVersion} --arch=x64 --dist-url=https://electronjs.org/headers`,
     { cwd: join(root, 'native'), stdio: 'inherit' },
   )
 } catch (err) {
