@@ -91,11 +91,27 @@ jobs:
         shell: bash
         run: npx --yes @electron/rebuild -f -w better-sqlite3,keytar
 
-      - name: Build application
+      - name: Build Windows native module
+        shell: bash
+        run: npm run build:native:win
+
+      - name: Build frontend
+        shell: bash
+        run: npx tsc --noEmit && npm run build
+
+      - name: Package Windows installer
         shell: bash
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: npm run build:win
+        run: npx electron-builder --win --x64
+
+      - name: Upload Windows build debug log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-build-debug-log
+          path: .cursor/debug-6989d7.log
+          if-no-files-found: ignore
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
