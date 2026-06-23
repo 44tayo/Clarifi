@@ -1,5 +1,5 @@
 import { execSync } from 'child_process'
-import { clipboard, screen, systemPreferences, type BrowserWindow } from 'electron'
+import { clipboard, screen, systemPreferences, BrowserWindow } from 'electron'
 import { runOsascript, runOsascriptAsync } from './osascript'
 import { getFrontmostAppNameCached } from './proactive/textExtraction'
 
@@ -252,32 +252,24 @@ function escapeAppleScriptString(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
 
-function isPointInClarifiWindow(x: number, y: number): boolean {
-  try {
-    // Lazy require avoids circular imports with overlay/dictationPill.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { getOverlayWindow } = require('./overlay') as {
-      getOverlayWindow: () => BrowserWindow | null
-    }
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { getDictationPillWindow } = require('./dictationPill') as {
-      getDictationPillWindow: () => BrowserWindow | null
-    }
+function isClarifiWindowUrl(url: string): boolean {
+  return url.includes('overlay.html') || url.includes('dictation-pill.html')
+}
 
-    for (const win of [getOverlayWindow(), getDictationPillWindow()]) {
-      if (!win || win.isDestroyed() || !win.isVisible()) continue
-      const bounds = win.getBounds()
-      if (
-        x >= bounds.x &&
-        x <= bounds.x + bounds.width &&
-        y >= bounds.y &&
-        y <= bounds.y + bounds.height
-      ) {
-        return true
-      }
+function isPointInClarifiWindow(x: number, y: number): boolean {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win.isDestroyed() || !win.isVisible()) continue
+    const url = win.webContents.getURL()
+    if (!isClarifiWindowUrl(url)) continue
+    const bounds = win.getBounds()
+    if (
+      x >= bounds.x &&
+      x <= bounds.x + bounds.width &&
+      y >= bounds.y &&
+      y <= bounds.y + bounds.height
+    ) {
+      return true
     }
-  } catch {
-    // ignore
   }
   return false
 }
