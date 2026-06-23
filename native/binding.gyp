@@ -3,6 +3,7 @@
     {
       "target_name": "window_capture_exclude",
       "conditions": [
+        ["OS!='mac'", { "type": "none" }],
         ["OS=='mac'", {
           "sources": ["window_capture_exclude.mm"],
           "link_settings": {
