@@ -11,6 +11,7 @@ export type AudioPreferences = {
   outputLanguage: string
   dictationLanguage: string
   dictationOutputLanguage: string
+  dictationEnabled: boolean
   preferredMicrophoneId: string
   preferredMicrophoneLabel: string
   systemAudioCapture: SystemAudioCaptureMode
@@ -24,6 +25,7 @@ const DEFAULTS: AudioPreferences = {
   outputLanguage: 'en',
   dictationLanguage: 'auto',
   dictationOutputLanguage: 'same',
+  dictationEnabled: true,
   preferredMicrophoneId: '',
   preferredMicrophoneLabel: '',
   systemAudioCapture: 'meeting',
@@ -77,6 +79,10 @@ export function loadAudioPreferences(): AudioPreferences {
         typeof parsed.dictationOutputLanguage === 'string'
           ? parsed.dictationOutputLanguage
           : DEFAULTS.dictationOutputLanguage,
+      dictationEnabled:
+        typeof parsed.dictationEnabled === 'boolean'
+          ? parsed.dictationEnabled
+          : DEFAULTS.dictationEnabled,
       preferredMicrophoneId:
         typeof parsed.preferredMicrophoneId === 'string'
           ? parsed.preferredMicrophoneId
@@ -113,6 +119,10 @@ export function getTranscriptionLanguage(): string {
 
 export function getDictationLanguage(): string {
   return loadAudioPreferences().dictationLanguage
+}
+
+export function getDictationEnabled(): boolean {
+  return loadAudioPreferences().dictationEnabled
 }
 
 export function getDictationOutputLanguage(): string {

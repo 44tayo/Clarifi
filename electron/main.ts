@@ -26,6 +26,7 @@ import {
 } from './dictationPill'
 import { stopDictationTargetTracking } from './dictationInsert'
 import { startDictationPttMonitor, stopDictationPttMonitor } from './dictationPtt'
+import { isDictationEnabled } from './dictationControl'
 import { stopOverlayFollow } from './overlayPosition'
 import { scheduleProactiveEngineStart } from './proactiveStartup'
 // Show "Clarifi" in the menu bar instead of "Electron" during local dev.
@@ -207,7 +208,9 @@ async function launchClarifi(): Promise<void> {
 
   createOverlayWindow()
   createDictationPillWindow()
-  startDictationPttMonitor()
+  if (isDictationEnabled()) {
+    startDictationPttMonitor()
+  }
   ensureOverlayVisible()
 }
 

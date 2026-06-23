@@ -2,6 +2,7 @@ import { app, BrowserWindow, screen } from 'electron'
 import * as path from 'path'
 
 import { getIsRecording } from './audio'
+import { getDictationEnabled } from './audioPreferences'
 import {
   captureDictationTarget,
   getFollowDisplayId,
@@ -121,6 +122,8 @@ export function refreshDictationBlockedFromAudioSession(): void {
 }
 
 export function sendDictationSessionStart(snapshot?: DictationTargetSnapshot | null): void {
+  if (!getDictationEnabled()) return
+
   if (dictationBlocked) {
     broadcastToPill('dictation:blocked-changed', {
       blocked: true,
@@ -147,13 +150,28 @@ export function sendDictationSessionStart(snapshot?: DictationTargetSnapshot | n
 }
 
 export function sendDictationSessionFinish(): void {
+  unlockPillDisplay()
   broadcastToPill('dictation:session-finish')
+  if (getDictationEnabled()) {
+    if (pillWindow && !pillWindow.isDestroyed()) {
+      pillWindow.showInactive()
+      startPillDisplayFollow()
+    }
+    return
+  }
   hideDictationPillWindow()
 }
 
 export function sendDictationSessionCancel(): void {
   unlockPillDisplay()
   broadcastToPill('dictation:session-cancel')
+  if (getDictationEnabled()) {
+    if (pillWindow && !pillWindow.isDestroyed()) {
+      pillWindow.showInactive()
+      startPillDisplayFollow()
+    }
+    return
+  }
   hideDictationPillWindow()
 }
 
@@ -259,6 +277,9 @@ export function markDictationPillReady(): void {
     reason: dictationBlockedReason,
   })
   flushPendingSessionStart()
+  if (getDictationEnabled()) {
+    showDictationPillWindow()
+  }
 }
 
 export function setDictationPillInteractive(interactive: boolean): void {

@@ -465,6 +465,7 @@ export default function Overlay() {
   const [query, setQuery] = useState('')
   const [followEnabled, setFollowEnabled] = useState(true)
   const [stealthEnabled, setStealthEnabled] = useState(true)
+  const [dictationEnabled, setDictationEnabled] = useState(true)
   const [stealthFlash, setStealthFlash] = useState(false)
   const [screenContextEnabled, setScreenContextEnabled] = useState(false)
   const [, setChatStatus] = useState('')
@@ -670,12 +671,14 @@ export default function Overlay() {
       setPrefs(data as PublicPreferences)
     })
     void window.electronAPI.invoke('audio:prefs-load').then((data) => {
-      const prefs = data as { transcriptionMode?: 'dual' | 'group' }
+      const prefs = data as { transcriptionMode?: 'dual' | 'group'; dictationEnabled?: boolean }
       if (prefs.transcriptionMode) setTranscriptionMode(prefs.transcriptionMode)
+      if (typeof prefs.dictationEnabled === 'boolean') setDictationEnabled(prefs.dictationEnabled)
     })
     window.electronAPI.on('audio:prefs-changed', (data) => {
-      const prefs = data as { transcriptionMode?: 'dual' | 'group' }
+      const prefs = data as { transcriptionMode?: 'dual' | 'group'; dictationEnabled?: boolean }
       if (prefs.transcriptionMode) setTranscriptionMode(prefs.transcriptionMode)
+      if (typeof prefs.dictationEnabled === 'boolean') setDictationEnabled(prefs.dictationEnabled)
     })
   }, [])
 
@@ -834,6 +837,21 @@ export default function Overlay() {
       }
     } catch {
       setStealthEnabled(!next)
+    }
+  }
+
+  const toggleDictation = async () => {
+    const next = !dictationEnabled
+    setDictationEnabled(next)
+    try {
+      const result = (await window.electronAPI.invoke('dictation:set-enabled', {
+        enabled: next,
+      })) as { enabled?: boolean }
+      if (typeof result?.enabled === 'boolean') {
+        setDictationEnabled(result.enabled)
+      }
+    } catch {
+      setDictationEnabled(!next)
     }
   }
 
@@ -1593,6 +1611,22 @@ export default function Overlay() {
             </button>
           </ToolbarTooltip>
         )}
+
+        <ToolbarTooltip label={dictationEnabled ? 'Dictation on' : 'Dictation off'}>
+          <button
+            type="button"
+            className={`toolbar-icon dictation-btn ${dictationEnabled ? 'active' : ''}`}
+            aria-pressed={dictationEnabled}
+            aria-label={dictationEnabled ? 'Dictation on' : 'Dictation off'}
+            onClick={() => void toggleDictation()}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" y1="19" x2="12" y2="22" />
+            </svg>
+          </button>
+        </ToolbarTooltip>
 
         <ToolbarTooltip
           label={isRecording ? 'Stop Audio Session' : 'Start Audio Session'}

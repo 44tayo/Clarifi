@@ -83,6 +83,7 @@ export type TranscribeOptions = {
   source?: 'mic' | 'system'
   prompt?: string
   language?: string
+  model?: string
 }
 
 export const MIN_WEBM_BYTES = 1_200
@@ -137,7 +138,13 @@ async function transcribeAudioBuffer(
     const prompt = options.prompt?.trim().slice(-220)
 
     if (await getCachedProxyConfigured()) {
-      const transcript = await proxyTranscribe(audioBase64, format, language, prompt)
+      const transcript = await proxyTranscribe(
+        audioBase64,
+        format,
+        language,
+        prompt,
+        options.model,
+      )
       if (transcript) console.log('Transcript:', transcript)
       return transcript
     }
@@ -153,7 +160,7 @@ async function transcribeAudioBuffer(
       filename: `audio.${extension}`,
       contentType,
     })
-    formData.append('model', 'whisper-large-v3-turbo')
+    formData.append('model', options.model ?? 'whisper-large-v3-turbo')
     if (language && language !== 'auto') {
       formData.append('language', language)
     }
@@ -203,5 +210,6 @@ export async function transcribeDictationAudio(
   return transcribeAudioBuffer(audioBase64, {
     ...options,
     language: options.language ?? getDictationLanguage(),
+    model: options.model ?? 'whisper-large-v3',
   })
 }

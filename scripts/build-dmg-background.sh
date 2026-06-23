@@ -1,31 +1,30 @@
 #!/bin/bash
-# Build a DMG window background with the Clarifi logo centered on a dark canvas.
+# Build a full-bleed DMG window background (540×320) from the landscape source image.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-ICON="$ROOT/build/icon.png"
+SOURCE="$ROOT/build/dmg-background-source.jpg"
 OUT="$ROOT/build/dmg-background.png"
 WIDTH=540
 HEIGHT=320
 
-if [[ ! -f "$ICON" ]]; then
-  echo "Missing $ICON — run npm run build:icons first" >&2
+if [[ ! -f "$SOURCE" ]]; then
+  echo "Missing $SOURCE — add the DMG background source image" >&2
   exit 1
 fi
 
 mkdir -p "$ROOT/build"
 
 if command -v magick &>/dev/null; then
-  magick -size "${WIDTH}x${HEIGHT}" "xc:#141820" \
-    \( "$ICON" -resize 200x200 \) -gravity center -composite \
-    "$OUT"
+  magick "$SOURCE" -resize "${WIDTH}x${HEIGHT}^" -gravity center -extent "${WIDTH}x${HEIGHT}" "$OUT"
 elif command -v convert &>/dev/null; then
-  convert -size "${WIDTH}x${HEIGHT}" "xc:#141820" \
-    \( "$ICON" -resize 200x200 \) -gravity center -composite \
-    "$OUT"
+  convert "$SOURCE" -resize "${WIDTH}x${HEIGHT}^" -gravity center -extent "${WIDTH}x${HEIGHT}" "$OUT"
 else
-  # Fallback: scaled logo fill (no ImageMagick on runner).
-  sips -z "$HEIGHT" "$WIDTH" "$ICON" --out "$OUT" >/dev/null
+  # Fallback: sips center-crop via pad (no ImageMagick on runner).
+  TMP="$(mktemp -t clarifi-dmg-src.XXXXXX).png"
+  sips -s format png "$SOURCE" --out "$TMP" >/dev/null
+  sips -z "$HEIGHT" "$WIDTH" "$TMP" --out "$OUT" >/dev/null 2>&1 || cp "$TMP" "$OUT"
+  rm -f "$TMP"
 fi
 
 echo "DMG background written to $OUT"
