@@ -9,6 +9,7 @@ import {
 import {
   insertTextIntoExternalField,
   isClarifiProcess,
+  type DictationTargetSnapshot,
 } from './dictationInsert'
 
 function buildDictationPrompt(spokenLanguage: string, surface?: string): string {
@@ -80,11 +81,15 @@ function shouldSkipPolish(raw: string, spokenLanguage: string): boolean {
 
 export async function composeDictationFromAudio(
   audioBase64: string,
-  options: { target?: DictationTarget; targetApp?: string | null } = {},
+  options: {
+    target?: DictationTarget
+    targetApp?: string | null
+    targetSnapshot?: DictationTargetSnapshot | null
+  } = {},
 ): Promise<DictationComposeResult> {
   const spokenLanguage = getDictationLanguage()
   const whisperPrompt = dictationWhisperPrompt(spokenLanguage)
-  const targetApp = options.targetApp ?? null
+  const targetApp = options.targetSnapshot?.app ?? options.targetApp ?? null
   const surface = inferDictationSurface(targetApp)
   const surfaceHint = resolveSurfaceHint(targetApp)
   const outputInstruction = getDictationOutputLanguageInstruction(spokenLanguage)
@@ -114,7 +119,10 @@ export async function composeDictationFromAudio(
     return { text, destination: 'overlay', surfaceLabel }
   }
 
-  const insert = await insertTextIntoExternalField(text, targetApp)
+  const insert = await insertTextIntoExternalField(
+    text,
+    options.targetSnapshot ?? targetApp,
+  )
   if (insert.ok) {
     return {
       text,

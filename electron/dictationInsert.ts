@@ -1,10 +1,9 @@
 import { execSync } from 'child_process'
-import { clipboard, screen, systemPreferences } from 'electron'
+import { clipboard, screen, systemPreferences, type BrowserWindow } from 'electron'
 import { runOsascript, runOsascriptAsync } from './osascript'
 import { getFrontmostAppNameCached } from './proactive/textExtraction'
 
 let lastExternalFrontmostApp: string | null = null
-let lastExternalDisplayId: number | null = null
 let trackingTimer: ReturnType<typeof setInterval> | null = null
 let followRefreshTimer: ReturnType<typeof setInterval> | null = null
 let followRefreshInFlight = false
@@ -44,6 +43,7 @@ export type DictationTargetSnapshot = {
   displayId: number
   windowTitle?: string
   fieldPreview?: string
+  cursor?: { x: number; y: number }
 }
 
 function parseCenterCsv(result: string): { x: number; y: number } | null {
@@ -138,9 +138,7 @@ end tell
 }
 
 function displayIdFromCenter(center: { x: number; y: number }): number {
-  const id = screen.getDisplayNearestPoint(center).id
-  lastExternalDisplayId = id
-  return id
+  return screen.getDisplayNearestPoint(center).id
 }
 
 function readFrontWindowTitle(): string | undefined {
@@ -168,13 +166,9 @@ export function getFrontmostAppDisplayId(): number {
 }
 
 /**
- * Fast display lookup for pill/overlay positioning — never blocks on AppleScript.
- * Background refresh keeps lastExternalDisplayId up to date.
+ * Fast display lookup for pill positioning — follows the cursor (matches overlay follow).
  */
 export function getFollowDisplayId(): number {
-  if (lastExternalDisplayId !== null) {
-    return lastExternalDisplayId
-  }
   return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id
 }
 
@@ -254,21 +248,202 @@ export function stopFollowDisplayRefresh(): void {
   followRefreshInFlight = false
 }
 
+function escapeAppleScriptString(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+function isPointInClarifiWindow(x: number, y: number): boolean {
+  try {
+    // Lazy require avoids circular imports with overlay/dictationPill.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getOverlayWindow } = require('./overlay') as {
+      getOverlayWindow: () => BrowserWindow | null
+    }
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getDictationPillWindow } = require('./dictationPill') as {
+      getDictationPillWindow: () => BrowserWindow | null
+    }
+
+    for (const win of [getOverlayWindow(), getDictationPillWindow()]) {
+      if (!win || win.isDestroyed() || !win.isVisible()) continue
+      const bounds = win.getBounds()
+      if (
+        x >= bounds.x &&
+        x <= bounds.x + bounds.width &&
+        y >= bounds.y &&
+        y <= bounds.y + bounds.height
+      ) {
+        return true
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return false
+}
+
+function getAppAtScreenPoint(x: number, y: number): string | null {
+  if (process.platform === 'darwin') {
+    const script = `
+tell application "System Events"
+  set px to ${Math.round(x)}
+  set py to ${Math.round(y)}
+  repeat with proc in application processes
+    if visible of proc then
+      set procName to name of proc as text
+      if procName is not "Clarifi" and procName does not contain "Electron" then
+        try
+          repeat with win in windows of proc
+            set winPos to position of win
+            set winSize to size of win
+            set leftEdge to item 1 of winPos
+            set topEdge to item 2 of winPos
+            set rightEdge to leftEdge + (item 1 of winSize)
+            set bottomEdge to topEdge + (item 2 of winSize)
+            if px >= leftEdge and px <= rightEdge and py >= topEdge and py <= bottomEdge then
+              return procName
+            end if
+          end repeat
+        end try
+      end if
+    end if
+  end repeat
+end tell
+return ""
+`
+    const result = runOsascript(script, 2500)
+    const name = result?.trim()
+    if (name && !isClarifiProcess(name)) return name
+    return null
+  }
+
+  if (process.platform === 'win32') {
+    try {
+      const result = execSync(
+        `powershell -NoProfile -Command "Add-Type @' using System; using System.Runtime.InteropServices; using System.Text; public class W { [DllImport(\\\"user32.dll\\\")] public static extern IntPtr WindowFromPoint(System.Drawing.Point p); [DllImport(\\\"user32.dll\\\")] public static extern int GetWindowText(IntPtr h, StringBuilder s, int c); [DllImport(\\\"user32.dll\\\")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint id); } '@; $p=New-Object System.Drawing.Point ${Math.round(x)},${Math.round(y)}; $h=[W]::WindowFromPoint($p); if ($h -eq [IntPtr]::Zero) { exit 1 }; [uint32]$pid=0; [void][W]::GetWindowThreadProcessId($h,[ref]$pid); if ($pid -gt 0) { (Get-Process -Id $pid).ProcessName }"`,
+        { encoding: 'utf-8', timeout: 2500 },
+      ).trim()
+      if (result && !isClarifiProcess(result)) return result
+    } catch {
+      return null
+    }
+  }
+
+  return null
+}
+
+function readWindowTitleForProcess(appName: string): string | undefined {
+  if (process.platform !== 'darwin') return undefined
+  const escaped = escapeAppleScriptString(appName)
+  const script = `
+tell application "System Events"
+  tell process "${escaped}"
+    try
+      if (count of windows) > 0 then
+        return name of window 1 as text
+      end if
+    end try
+  end tell
+end tell
+return ""
+`
+  const title = runOsascript(script, 1500)
+  return title?.trim() || undefined
+}
+
+function readFocusedFieldInProcess(appName: string): string | null {
+  if (!accessibilityTrusted()) return null
+  if (process.platform !== 'darwin') return null
+
+  const escaped = escapeAppleScriptString(appName)
+  const script = `
+tell application "System Events"
+  tell process "${escaped}"
+    try
+      set focusedEl to value of attribute "AXFocusedUIElement"
+      try
+        set focusedValue to value of focusedEl
+        if focusedValue is not missing value then
+          return focusedValue as text
+        end if
+      end try
+    end try
+  end tell
+end tell
+return ""
+`
+  const value = runOsascript(script, 4000)
+  if (!value) return null
+  return value.trim() || null
+}
+
+function setFocusedFieldInProcess(appName: string, nextValue: string): boolean {
+  if (!accessibilityTrusted()) return false
+  if (process.platform !== 'darwin') return false
+
+  const escapedApp = escapeAppleScriptString(appName)
+  const payload = nextValue.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+  const script = `
+tell application "System Events"
+  tell process "${escapedApp}"
+    try
+      set focusedEl to value of attribute "AXFocusedUIElement"
+      set value of focusedEl to "${payload}"
+      return "ok"
+    end try
+  end tell
+end tell
+return "fail"
+`
+  return runOsascript(script, 4000) === 'ok'
+}
+
+function resolveCaptureTargetApp(cursor: { x: number; y: number }): string | null {
+  const currentFront = getFrontmostAppNameCached(true)
+  const clarifiFrontmost = isClarifiProcess(currentFront)
+  const onClarifiUi = isPointInClarifiWindow(cursor.x, cursor.y)
+
+  if (currentFront && !clarifiFrontmost) {
+    return currentFront
+  }
+
+  if (lastExternalFrontmostApp && !isClarifiProcess(lastExternalFrontmostApp)) {
+    if (clarifiFrontmost || onClarifiUi) {
+      return lastExternalFrontmostApp
+    }
+  }
+
+  if (!onClarifiUi) {
+    const underCursor = getAppAtScreenPoint(cursor.x, cursor.y)
+    if (underCursor && !isClarifiProcess(underCursor)) {
+      return underCursor
+    }
+  }
+
+  if (lastExternalFrontmostApp && !isClarifiProcess(lastExternalFrontmostApp)) {
+    return lastExternalFrontmostApp
+  }
+
+  return null
+}
+
 /** Snapshot target app + display at session start — frozen for insert. */
 export function captureDictationTarget(): DictationTargetSnapshot | null {
   trackExternalFrontmostApp(true)
-  const app = getDictationTargetApp()
+  const cursor = screen.getCursorScreenPoint()
+  const app = resolveCaptureTargetApp(cursor)
   if (!app || isClarifiProcess(app)) return null
 
-  const fieldPreview = readFocusedFieldValue()?.slice(0, 80)
-  const windowTitle = readFrontWindowTitle()
-  const displayId = getFrontmostAppDisplayId()
+  const fieldPreview = readFocusedFieldInProcess(app)?.slice(0, 80)
+  const windowTitle = readWindowTitleForProcess(app) ?? readFrontWindowTitle()
+  const displayId = screen.getDisplayNearestPoint(cursor).id
 
   return {
     app,
     displayId,
     windowTitle,
     fieldPreview: fieldPreview || undefined,
+    cursor: { x: cursor.x, y: cursor.y },
   }
 }
 
@@ -290,10 +465,6 @@ export function trackExternalFrontmostApp(force = false): void {
   const app = getFrontmostAppNameCached(force)
   if (app && !isClarifiProcess(app)) {
     lastExternalFrontmostApp = app
-    const center = getFrontmostWindowCenterSync()
-    if (center) {
-      lastExternalDisplayId = screen.getDisplayNearestPoint(center).id
-    }
   }
 }
 
@@ -350,7 +521,8 @@ function activateApplication(appName: string): boolean {
   return false
 }
 
-function readFocusedFieldValue(): string | null {
+function readFocusedFieldValue(appName?: string): string | null {
+  if (appName) return readFocusedFieldInProcess(appName)
   if (!accessibilityTrusted()) return null
 
   const script = `
@@ -376,7 +548,8 @@ end tell
   return value.trim() || null
 }
 
-function setFocusedFieldValue(nextValue: string): boolean {
+function setFocusedFieldValue(nextValue: string, appName?: string): boolean {
+  if (appName) return setFocusedFieldInProcess(appName, nextValue)
   if (!accessibilityTrusted()) return false
 
   const payload = nextValue.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
@@ -466,14 +639,24 @@ export type DictationInsertResult = {
   clipboardFallback?: boolean
 }
 
+function resolveInsertTarget(
+  target?: string | null | DictationTargetSnapshot,
+): { app: string | null; snapshot: DictationTargetSnapshot | null } {
+  if (target && typeof target === 'object' && typeof target.app === 'string') {
+    return { app: target.app, snapshot: target }
+  }
+  const app = typeof target === 'string' ? target.trim() || getDictationTargetApp() : getDictationTargetApp()
+  return { app, snapshot: null }
+}
+
 export async function insertTextIntoExternalField(
   text: string,
-  targetApp?: string | null,
+  target?: string | null | DictationTargetSnapshot,
 ): Promise<DictationInsertResult> {
   const trimmed = text.trim()
   if (!trimmed) return { ok: false, error: 'insert_failed' }
 
-  const app = targetApp?.trim() || getDictationTargetApp()
+  const { app, snapshot } = resolveInsertTarget(target)
   if (!app || isClarifiProcess(app)) {
     return { ok: false, error: 'no_target_app', targetApp: app }
   }
@@ -484,7 +667,7 @@ export async function insertTextIntoExternalField(
     }
 
     activateApplication(app)
-    await delay(100)
+    await delay(150)
 
     if (prefersPasteInsert(app)) {
       if (await pasteViaClipboard(trimmed)) {
@@ -492,13 +675,13 @@ export async function insertTextIntoExternalField(
       }
     }
 
-    const existing = readFocusedFieldValue()
+    const existing = readFocusedFieldInProcess(app) ?? snapshot?.fieldPreview ?? null
     const merged =
       existing && existing.length > 0
         ? `${existing.replace(/\s+$/, '')}\n\n${trimmed}`
         : trimmed
 
-    if (setFocusedFieldValue(merged)) {
+    if (setFocusedFieldInProcess(app, merged)) {
       return { ok: true, method: 'accessibility', targetApp: app }
     }
 
@@ -526,13 +709,13 @@ export async function insertTextIntoExternalField(
 export async function replaceSelectionInExternalField(
   text: string,
   selectedText: string,
-  targetApp?: string | null,
+  target?: string | null | DictationTargetSnapshot,
 ): Promise<DictationInsertResult> {
   const trimmed = text.trim()
   const prior = selectedText.trim()
   if (!trimmed || !prior) return { ok: false, error: 'insert_failed' }
 
-  const app = targetApp?.trim() || getDictationTargetApp()
+  const { app } = resolveInsertTarget(target)
   if (!app || isClarifiProcess(app)) {
     return { ok: false, error: 'no_target_app', targetApp: app }
   }
@@ -545,10 +728,10 @@ export async function replaceSelectionInExternalField(
     activateApplication(app)
     await delay(180)
 
-    const existing = readFocusedFieldValue()
+    const existing = readFocusedFieldInProcess(app)
     if (existing && existing.includes(prior)) {
       const nextValue = existing.replace(prior, trimmed)
-      if (setFocusedFieldValue(nextValue)) {
+      if (setFocusedFieldInProcess(app, nextValue)) {
         return { ok: true, method: 'accessibility', targetApp: app }
       }
     }

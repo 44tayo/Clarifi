@@ -52,6 +52,7 @@ export function DictationPill() {
   const [blockedReason, setBlockedReason] = useState('')
   const sessionRef = useRef<DictationSession | null>(null)
   const statusTimerRef = useRef<number | null>(null)
+  const precapturedTargetRef = useRef<DictationTargetSnapshot | null>(null)
 
   const session = useMemo(() => {
     const instance = new DictationSession({
@@ -99,6 +100,7 @@ export function DictationPill() {
       setBlockedReason(payload?.reason ?? '')
     }
     const onStart = (...args: unknown[]) => {
+      precapturedTargetRef.current = null
       const snapshot = args[0] as DictationTargetSnapshot | null | undefined
       void sessionRef.current?.start({
         blocked: blockedRef.current,
@@ -122,12 +124,23 @@ export function DictationPill() {
     void window.electronAPI.invoke('dictation-pill:ready')
   }, [])
 
+  const precaptureTarget = useCallback(() => {
+    if (state !== 'idle') return
+    void window.electronAPI.invoke('dictation:capture-target').then((snapshot) => {
+      precapturedTargetRef.current = snapshot as DictationTargetSnapshot | null
+    })
+  }, [state])
+
   const handleIdleClick = async () => {
     if (state !== 'idle') return
     playUiClick()
-    const snapshot = (await window.electronAPI.invoke('dictation:capture-target')) as
-      | DictationTargetSnapshot
-      | null
+    let snapshot = precapturedTargetRef.current
+    if (!snapshot) {
+      snapshot = (await window.electronAPI.invoke('dictation:capture-target')) as
+        | DictationTargetSnapshot
+        | null
+    }
+    precapturedTargetRef.current = null
     void session.start({ blocked, blockedReason, snapshot })
   }
 
@@ -154,7 +167,10 @@ export function DictationPill() {
   return (
     <div
       className="dp-root"
-      onMouseEnter={() => setHovered(true)}
+      onMouseEnter={() => {
+        setHovered(true)
+        precaptureTarget()
+      }}
       onMouseLeave={() => setHovered(false)}
     >
       <div className="dp-shell">

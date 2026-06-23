@@ -10,6 +10,7 @@ export type DictationTargetSnapshot = {
   displayId: number
   windowTitle?: string
   fieldPreview?: string
+  cursor?: { x: number; y: number }
 }
 
 export type DictationComposeResult = {
@@ -318,6 +319,7 @@ export class DictationSession {
         audioBase64: base64,
         target: 'auto',
         targetApp: this.targetApp,
+        targetSnapshot: this.targetSnapshot,
       })) as DictationComposeResult
 
       const pasteHint = navigator.platform.toLowerCase().includes('win') ? 'Ctrl+V' : '⌘V'

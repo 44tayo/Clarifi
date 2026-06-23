@@ -1103,6 +1103,13 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
       audioBase64?: string
       target?: 'auto' | 'overlay' | 'focused_field'
       targetApp?: string | null
+      targetSnapshot?: {
+        app?: string
+        displayId?: number
+        windowTitle?: string
+        fieldPreview?: string
+        cursor?: { x?: number; y?: number }
+      } | null
     }
     if (!payload?.audioBase64 || typeof payload.audioBase64 !== 'string') {
       throw new Error('audioBase64 is required')
@@ -1124,9 +1131,36 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
           ? payload.targetApp.slice(0, 256)
           : undefined
 
+    const targetSnapshot =
+      payload.targetSnapshot &&
+      typeof payload.targetSnapshot.app === 'string' &&
+      typeof payload.targetSnapshot.displayId === 'number'
+        ? {
+            app: payload.targetSnapshot.app.slice(0, 256),
+            displayId: payload.targetSnapshot.displayId,
+            windowTitle:
+              typeof payload.targetSnapshot.windowTitle === 'string'
+                ? payload.targetSnapshot.windowTitle.slice(0, 256)
+                : undefined,
+            fieldPreview:
+              typeof payload.targetSnapshot.fieldPreview === 'string'
+                ? payload.targetSnapshot.fieldPreview.slice(0, 256)
+                : undefined,
+            cursor:
+              typeof payload.targetSnapshot.cursor?.x === 'number' &&
+              typeof payload.targetSnapshot.cursor?.y === 'number'
+                ? {
+                    x: payload.targetSnapshot.cursor.x,
+                    y: payload.targetSnapshot.cursor.y,
+                  }
+                : undefined,
+          }
+        : undefined
+
     return composeDictationFromAudio(payload.audioBase64, {
       target,
       targetApp,
+      targetSnapshot,
     })
   })
 
