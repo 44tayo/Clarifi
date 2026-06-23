@@ -14,15 +14,6 @@ VERSION="$(node -p "require('$ROOT/package.json').version")"
 SIGN_SCRIPT="$ROOT/scripts/adhoc-sign-mac-app.sh"
 DMG="$ROOT/release/Clarifi-${VERSION}-${ARCH}.dmg"
 APP_NAME="$(basename "$APP_PATH")"
-DEBUG_LOG="$ROOT/../.cursor/debug-6989d7.log"
-
-log_debug() {
-  local hypothesis_id="$1"
-  local message="$2"
-  local data="${3:-{}}"
-  printf '{"sessionId":"6989d7","hypothesisId":"%s","location":"sign-and-dmg-mac-app.sh","message":"%s","data":%s,"timestamp":%s}\n' \
-    "$hypothesis_id" "$message" "$data" "$(date +%s000)" >> "$DEBUG_LOG" 2>/dev/null || true
-}
 
 echo "Ad-hoc signing $APP_PATH..."
 bash "$SIGN_SCRIPT" "$APP_PATH"
@@ -60,7 +51,6 @@ if hdiutil attach -readwrite -nobrowse -quiet -mountpoint "$MOUNT_POINT" "$RW_DM
   ln -s /Applications "$MOUNT_POINT/Applications"
   mkdir -p "$MOUNT_POINT/.background"
   cp "$DMG_BACKGROUND" "$MOUNT_POINT/.background/background.png"
-  log_debug "H1" "dmg-mounted-for-layout" "{\"mount\":\"$MOUNT_POINT\"}"
 
   osascript <<EOF || true
 tell application "Finder"
@@ -86,7 +76,6 @@ tell application "Finder"
 end tell
 EOF
   hdiutil detach "$MOUNT_POINT" -quiet || hdiutil detach "$MOUNT_POINT" -force -quiet || true
-  log_debug "H1" "dmg-layout-complete" "{\"rwDmg\":\"$RW_DMG\"}"
 fi
 rm -rf "$MOUNT_POINT"
 
