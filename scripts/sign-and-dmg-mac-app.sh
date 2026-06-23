@@ -25,51 +25,42 @@ if ! codesign --verify --deep "$APP_PATH" 2>/dev/null; then
   exit 1
 fi
 
-echo "Creating DMG from signed app..."
-STAGE="$(mktemp -d "${TMPDIR:-/tmp}/clarifi-dmg.XXXXXX")"
-trap 'rm -rf "$STAGE"' EXIT
-ditto "$APP_PATH" "$STAGE/$APP_NAME"
-ln -s /Applications "$STAGE/Applications"
-rm -f "$DMG"
-hdiutil create \
-  -volname "Clarifi" \
-  -srcfolder "$STAGE" \
-  -ov \
-  -format UDZO \
-  "$DMG" >/dev/null
+echo "Creating branded DMG from signed app..."
+bash "$ROOT/scripts/build-dmg-background.sh"
 
-if [[ ! -f "$DMG" ]]; then
-  echo "ERROR: Expected DMG not found after hdiutil create: $DMG" >&2
+DMG_BACKGROUND="$ROOT/build/dmg-background.png"
+if [[ ! -f "$DMG_BACKGROUND" ]]; then
+  echo "ERROR: DMG background image missing: $DMG_BACKGROUND" >&2
   exit 1
 fi
 
-# Standard drag-to-Applications window layout (best-effort).
-MOUNT_POINT="$(mktemp -d "${TMPDIR:-/tmp}/clarifi-dmg-mount.XXXXXX")"
-if hdiutil attach -nobrowse -quiet -mountpoint "$MOUNT_POINT" "$DMG"; then
-  osascript <<EOF || true
-tell application "Finder"
-  set dmgFolder to POSIX file "$MOUNT_POINT" as alias
-  tell folder dmgFolder
-    open
-    set w to container window
-    set current view of w to icon view
-    set toolbar visible of w to false
-    set statusbar visible of w to false
-    set bounds of w to {200, 120, 740, 440}
-    set theViewOptions to icon view options of w
-    set arrangement of theViewOptions to not arranged
-    set icon size of theViewOptions to 96
-    set position of item "$APP_NAME" to {140, 160}
-    set position of item "Applications" to {400, 160}
-    close
-    open
-    update without registering applications
-    delay 1
-  end tell
-end tell
-EOF
-  hdiutil detach "$MOUNT_POINT" -quiet || hdiutil detach "$MOUNT_POINT" -force -quiet || true
+CREATE_DMG="$ROOT/scripts/create-dmg"
+if [[ ! -x "$CREATE_DMG" ]]; then
+  echo "Fetching create-dmg helper..."
+  curl -fsSL "https://raw.githubusercontent.com/create-dmg/create-dmg/v1.2.1/create-dmg" -o "$CREATE_DMG"
+  chmod +x "$CREATE_DMG"
 fi
-rm -rf "$MOUNT_POINT"
+
+STAGE="$(mktemp -d "${TMPDIR:-/tmp}/clarifi-dmg.XXXXXX")"
+trap 'rm -rf "$STAGE"' EXIT
+ditto "$APP_PATH" "$STAGE/$APP_NAME"
+
+rm -f "$DMG"
+"$CREATE_DMG" \
+  --volname "Clarifi" \
+  --background "$DMG_BACKGROUND" \
+  --window-pos 200 120 \
+  --window-size 540 320 \
+  --icon-size 96 \
+  --icon "$APP_NAME" 140 160 \
+  --app-drop-link 400 160 \
+  --no-internet-enable \
+  "$DMG" \
+  "$STAGE" >/dev/null
+
+if [[ ! -f "$DMG" ]]; then
+  echo "ERROR: Expected DMG not found after create-dmg: $DMG" >&2
+  exit 1
+fi
 
 echo "Signed DMG ready: $DMG ($(du -h "$DMG" | cut -f1))"

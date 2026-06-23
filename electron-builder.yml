@@ -7,6 +7,7 @@ directories:
 files:
   - dist/**/*
   - dist-electron/**/*
+npmRebuild: false
 afterPack: scripts/before-sign.cjs
 afterSign: scripts/notarize.cjs
 mac:
@@ -52,6 +53,11 @@ dmg:
 win:
   target: nsis
   icon: build/icon.ico
+  extraResources:
+    - from: resources/dictation_ptt.node
+      to: dictation_ptt.node
+      filter:
+        - "**/*"
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true

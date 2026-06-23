@@ -15,6 +15,8 @@
     "electron:dev-shell": "cross-env NODE_ENV=development CLARIFI_DEV_SHELL=1 vite",
     "build": "tsc --noEmit && vite build",
     "build:icons": "bash scripts/build-icons.sh",
+    "build:dmg-background": "bash scripts/build-dmg-background.sh",
+    "build:native:win": "node scripts/build-native-win.mjs",
     "build:helper:mac": "bash swift/compile.sh && bash scripts/build-native.sh",
     "build:native": "bash scripts/build-native.sh",
     "prebuild:mac": "npm run build:helper:mac",
@@ -28,7 +30,7 @@
     "build:mac:unsigned": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_NOTARIZE=1 npm run build:mac",
     "publish:mac:unsigned": "bash scripts/publish-mac-unsigned.sh",
     "install:mac:unsigned": "bash scripts/install-mac-unsigned.sh",
-    "build:win": "tsc --noEmit && vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --x64",
+    "build:win": "npm run build:native:win && tsc --noEmit && vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --x64",
     "preview": "vite preview"
   },
   "dependencies": {
