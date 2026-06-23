@@ -7,6 +7,7 @@ directories:
 files:
   - dist/**/*
   - dist-electron/**/*
+npmRebuild: false
 afterPack: scripts/before-sign.cjs
 afterSign: scripts/notarize.cjs
 mac:

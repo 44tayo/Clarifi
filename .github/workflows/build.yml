@@ -87,6 +87,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Rebuild native modules for Electron
+        shell: bash
+        run: npx --yes @electron/rebuild -f -w better-sqlite3 -w keytar
+
       - name: Build application
         shell: bash
         env:
