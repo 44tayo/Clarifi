@@ -53,6 +53,7 @@ export function DictationPill() {
   const sessionRef = useRef<DictationSession | null>(null)
   const statusTimerRef = useRef<number | null>(null)
   const precapturedTargetRef = useRef<DictationTargetSnapshot | null>(null)
+  const precapturedAtRef = useRef<number>(0)
 
   const session = useMemo(() => {
     const instance = new DictationSession({
@@ -128,19 +129,24 @@ export function DictationPill() {
     if (state !== 'idle') return
     void window.electronAPI.invoke('dictation:capture-target').then((snapshot) => {
       precapturedTargetRef.current = snapshot as DictationTargetSnapshot | null
+      precapturedAtRef.current = Date.now()
     })
   }, [state])
 
   const handleIdleClick = async () => {
     if (state !== 'idle') return
     playUiClick()
-    let snapshot = precapturedTargetRef.current
+    const stale =
+      precapturedTargetRef.current &&
+      Date.now() - precapturedAtRef.current > 2000
+    let snapshot = stale ? null : precapturedTargetRef.current
     if (!snapshot) {
       snapshot = (await window.electronAPI.invoke('dictation:capture-target')) as
         | DictationTargetSnapshot
         | null
     }
     precapturedTargetRef.current = null
+    precapturedAtRef.current = 0
     void session.start({ blocked, blockedReason, snapshot })
   }
 
@@ -171,7 +177,13 @@ export function DictationPill() {
         setHovered(true)
         precaptureTarget()
       }}
-      onMouseLeave={() => setHovered(false)}
+      onMouseLeave={() => {
+        setHovered(false)
+        if (precapturedAtRef.current && Date.now() - precapturedAtRef.current > 2000) {
+          precapturedTargetRef.current = null
+          precapturedAtRef.current = 0
+        }
+      }}
     >
       <div className="dp-shell">
         {status ? <p className="dp-status">{status}</p> : null}

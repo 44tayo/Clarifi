@@ -165,11 +165,20 @@ export function getFrontmostAppDisplayId(): number {
   return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id
 }
 
-/**
- * Fast display lookup for pill positioning — follows the cursor (matches overlay follow).
- */
 export function getFollowDisplayId(): number {
-  return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id
+  const front = getFrontmostAppNameCached(false)
+  if (front && !isClarifiProcess(front)) {
+    return getFrontmostAppDisplayId()
+  }
+
+  const cursor = screen.getCursorScreenPoint()
+  const underCursor = getAppAtScreenPoint(cursor.x, cursor.y)
+  if (underCursor && !isClarifiProcess(underCursor)) {
+    const center = getWindowCenterForAppSync(underCursor)
+    if (center) return displayIdFromCenter(center)
+  }
+
+  return screen.getDisplayNearestPoint(cursor).id
 }
 
 async function refreshFollowDisplayAsync(): Promise<void> {
@@ -588,7 +597,51 @@ function pasteAtFrontmost(): boolean {
   return false
 }
 
-const PASTE_FIRST_APPS = ['cursor', 'visual studio code', 'code', 'sublime', 'webstorm', 'intellij', 'zed']
+function clickAtScreenPoint(x: number, y: number): boolean {
+  if (process.platform === 'darwin') {
+    if (!accessibilityTrusted()) return false
+    const script = `
+tell application "System Events"
+  click at {${Math.round(x)}, ${Math.round(y)}}
+end tell
+`
+    return runOsascript(script, 2000) !== null
+  }
+
+  if (process.platform === 'win32') {
+    try {
+      execSync(
+        `powershell -NoProfile -Command "Add-Type @' using System; using System.Runtime.InteropServices; public class M { [DllImport(\\\"user32.dll\\\")] public static extern bool SetCursorPos(int x, int y); [DllImport(\\\"user32.dll\\\")] public static extern void mouse_event(uint f, uint dx, uint dy, uint d, int i); } '@; [M]::SetCursorPos(${Math.round(x)},${Math.round(y)})|Out-Null; [M]::mouse_event(0x0002,0,0,0,0); [M]::mouse_event(0x0004,0,0,0,0)"`,
+        { timeout: 2000 },
+      )
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  return false
+}
+
+const PASTE_FIRST_APPS = [
+  'cursor',
+  'visual studio code',
+  'code',
+  'sublime',
+  'webstorm',
+  'intellij',
+  'zed',
+  'chrome',
+  'google chrome',
+  'safari',
+  'firefox',
+  'arc',
+  'brave',
+  'mail',
+  'gmail',
+  'microsoft edge',
+  'edge',
+]
 
 function prefersPasteInsert(appName: string): boolean {
   const lower = appName.toLowerCase()
@@ -660,6 +713,11 @@ export async function insertTextIntoExternalField(
 
     activateApplication(app)
     await delay(150)
+
+    if (snapshot?.cursor) {
+      clickAtScreenPoint(snapshot.cursor.x, snapshot.cursor.y)
+      await delay(80)
+    }
 
     if (prefersPasteInsert(app)) {
       if (await pasteViaClipboard(trimmed)) {

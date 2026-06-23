@@ -21,7 +21,7 @@ let displayListenerAttached = false
 let lastFollowedDisplayId: number | null = null
 let lockedDisplayId: number | null = null
 let pillFollowPollTimer: ReturnType<typeof setInterval> | null = null
-const PILL_FOLLOW_POLL_MS = 500
+const PILL_FOLLOW_POLL_MS = 250
 let pendingSessionStart: DictationTargetSnapshot | null | undefined = undefined
 
 function attachDisplayListener(): void {

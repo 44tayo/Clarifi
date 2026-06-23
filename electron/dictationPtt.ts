@@ -2,6 +2,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 
 import { getDictationEnabled } from './audioPreferences'
+import { captureDictationTarget } from './dictationInsert'
 import { resolvePttKeyFromPrefs } from './pttKeybind'
 import {
   refreshDictationBlockedFromAudioSession,
@@ -49,7 +50,8 @@ function handlePttEvent(event: string): void {
   if (event === 'down') {
     if (pttDown) return
     pttDown = true
-    sendDictationSessionStart()
+    const snapshot = captureDictationTarget()
+    sendDictationSessionStart(snapshot)
     return
   }
 

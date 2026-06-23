@@ -30,6 +30,17 @@ static void tsfnCallback(napi_env env, napi_value js_callback, void* context, vo
   napi_call_function(env, undefined, js_callback, 1, argv, &result);
 }
 
+static bool isFnPttMode() {
+  return g_targetKeyCode.load() == 0;
+}
+
+static bool isFnGlobeEvent(CGEventType type, CGEventFlags flags, int64_t keyCode) {
+  if (!isFnPttMode()) return false;
+  if (type == kCGEventFlagsChanged && (flags & kCGEventFlagMaskSecondaryFn) != 0) return true;
+  if (keyCode == 63) return true;
+  return false;
+}
+
 static bool isPttKeyDown(CGEventType type, CGEventFlags flags, int64_t keyCode) {
   const int64_t target = g_targetKeyCode.load();
   if (target == 0) {
@@ -72,6 +83,10 @@ static CGEventRef tapCallback(CGEventTapProxy proxy, CGEventType type, CGEventRe
     emitPttEvent("up");
   }
 
+  if (isFnGlobeEvent(type, flags, keyCode)) {
+    return nullptr;
+  }
+
   return event;
 }
 
@@ -79,7 +94,7 @@ static void runTapLoop() {
   g_eventTap = CGEventTapCreate(
     kCGSessionEventTap,
     kCGHeadInsertEventTap,
-    kCGEventTapOptionListenOnly,
+    kCGEventTapOptionDefault,
     CGEventMaskBit(kCGEventFlagsChanged) | CGEventMaskBit(kCGEventKeyDown) | CGEventMaskBit(kCGEventKeyUp),
     tapCallback,
     nullptr);

@@ -213,6 +213,7 @@
   position: absolute;
   top: 0.5rem;
   right: 0.5rem;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
@@ -234,7 +235,8 @@
 /* Gradient media frames (Notto-style) */
 .dh-media-frame {
   margin: 0.75rem 0 0;
-  padding: 1.25rem 1rem;
+  padding: 0;
+  overflow: hidden;
   border-radius: 14px;
   background: linear-gradient(145deg, #7c3aed 0%, #4f46e5 38%, #2563eb 100%);
 }
@@ -253,7 +255,7 @@
 .dh-guide-img {
   width: 100%;
   height: auto;
-  border-radius: 10px;
+  border-radius: inherit;
   display: block;
 }
 

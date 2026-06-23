@@ -34,21 +34,43 @@ function DownloadIcon() {
 }
 
 function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false)
+  const [label, setLabel] = useState<'Copy' | 'Copied' | 'Copy failed'>('Copy')
 
   const copy = useCallback(async () => {
+    const show = (next: 'Copied' | 'Copy failed') => {
+      setLabel(next)
+      window.setTimeout(() => setLabel('Copy'), 2000)
+    }
+
     try {
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 2000)
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+        show('Copied')
+        return
+      }
     } catch {
-      /* ignore */
+      /* fall through */
+    }
+
+    try {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.setAttribute('readonly', '')
+      textarea.style.position = 'fixed'
+      textarea.style.left = '-9999px'
+      document.body.appendChild(textarea)
+      textarea.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(textarea)
+      show(ok ? 'Copied' : 'Copy failed')
+    } catch {
+      show('Copy failed')
     }
   }, [text])
 
   return (
     <button type="button" className="dh-copy-btn" onClick={() => void copy()}>
-      {copied ? 'Copied' : 'Copy'}
+      {label}
     </button>
   )
 }
