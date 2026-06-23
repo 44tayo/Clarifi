@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { DictationSession, type DictationSessionState, type DictationTargetSnapshot } from './lib/dictationSession'
+import { playUiClick } from './lib/uiSounds'
 
 import './dictation-pill.css'
 
@@ -123,6 +124,7 @@ export function DictationPill() {
 
   const handleIdleClick = async () => {
     if (state !== 'idle') return
+    playUiClick()
     const snapshot = (await window.electronAPI.invoke('dictation:capture-target')) as
       | DictationTargetSnapshot
       | null
@@ -130,10 +132,12 @@ export function DictationPill() {
   }
 
   const handleCancel = () => {
+    playUiClick()
     session.cancel()
   }
 
   const handleFinish = () => {
+    playUiClick()
     void session.finish()
   }
 

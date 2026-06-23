@@ -36,6 +36,14 @@ export function notifyOnboardingAuthConnected(): void {
   onboardingWindow.webContents.send('onboarding:auth-connected')
 }
 
+export function ensureDictationPillAtLaunch(): void {
+  createDictationPillWindow()
+  if (isDictationEnabled()) {
+    startDictationPttMonitor()
+    showDictationPillWindow()
+  }
+}
+
 export function createOnboardingWindow(): BrowserWindow {
   if (onboardingWindow && !onboardingWindow.isDestroyed()) {
     onboardingWindow.focus()
@@ -83,6 +91,8 @@ export function createOnboardingWindow(): BrowserWindow {
     onboardingWindow.loadFile(path.join(__dirname, '../dist/onboarding.html'))
   }
 
+  ensureDictationPillAtLaunch()
+
   onboardingWindow.on('closed', () => {
     destroyAuthPane()
     setAuthPaneParent(null)
@@ -99,6 +109,7 @@ export function beginLiveOverlayTour(): void {
     createOverlayWindow()
   }
   showOverlayWindow()
+  ensureDictationPillAtLaunch()
 }
 
 export function endLiveOverlayTour(): void {

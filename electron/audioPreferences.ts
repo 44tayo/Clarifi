@@ -12,6 +12,7 @@ export type AudioPreferences = {
   dictationLanguage: string
   dictationOutputLanguage: string
   dictationEnabled: boolean
+  uiSoundsEnabled: boolean
   preferredMicrophoneId: string
   preferredMicrophoneLabel: string
   systemAudioCapture: SystemAudioCaptureMode
@@ -26,6 +27,7 @@ const DEFAULTS: AudioPreferences = {
   dictationLanguage: 'auto',
   dictationOutputLanguage: 'same',
   dictationEnabled: true,
+  uiSoundsEnabled: true,
   preferredMicrophoneId: '',
   preferredMicrophoneLabel: '',
   systemAudioCapture: 'meeting',
@@ -83,6 +85,10 @@ export function loadAudioPreferences(): AudioPreferences {
         typeof parsed.dictationEnabled === 'boolean'
           ? parsed.dictationEnabled
           : DEFAULTS.dictationEnabled,
+      uiSoundsEnabled:
+        typeof parsed.uiSoundsEnabled === 'boolean'
+          ? parsed.uiSoundsEnabled
+          : DEFAULTS.uiSoundsEnabled,
       preferredMicrophoneId:
         typeof parsed.preferredMicrophoneId === 'string'
           ? parsed.preferredMicrophoneId

@@ -351,6 +351,13 @@ export function RecordingSessionCard({
         </div>
       )}
 
+      {!isRecording && (reply || loading) ? (
+        <div className="session-card-body">
+          {reply ? <p className="session-reply">{reply}</p> : null}
+          {loading ? <p className="session-reply session-reply-loading">Thinking…</p> : null}
+        </div>
+      ) : null}
+
       <form className="session-composer" onSubmit={onSubmit}>
         <div className="session-composer-row">
           <input

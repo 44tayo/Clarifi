@@ -2,9 +2,9 @@ import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { anthropicShortLabel } from './lib/anthropic-models'
 import { entriesToDisplayLines, type SpeakerLabels } from './lib/transcriptSpeakers'
 import './overlay.css'
-import {
-  RecordingSessionCard,
-} from './components/RecordingSessionCard'
+import { OverlayChatPanel } from './components/OverlayChatPanel'
+import { RecordingSessionCard } from './components/RecordingSessionCard'
+import { playUiClick, playUiDrag, playUiToggle, setUiSoundsEnabled } from './lib/uiSounds'
 
 function ToolbarTooltip({
   label,
@@ -325,6 +325,7 @@ const OVERLAY_HEIGHT_COLLAPSED = 168
 const OVERLAY_HEIGHT_CONNECT = 204
 const OVERLAY_HEIGHT_RECORDING = 400
 const OVERLAY_HEIGHT_EXPANDED = 360
+const OVERLAY_HEIGHT_CHAT = 480
 
 const OVERLAY_MIN_WIDTH = 480
 const OVERLAY_MAX_WIDTH = 900
@@ -352,6 +353,7 @@ function ResizeHandles({
   const onMouseDown = (edge: ResizeEdge) => (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
+    playUiDrag()
     dragRef.current = {
       edge,
       startX: e.screenX,
@@ -468,7 +470,7 @@ export default function Overlay() {
   const [dictationEnabled, setDictationEnabled] = useState(true)
   const [stealthFlash, setStealthFlash] = useState(false)
   const [screenContextEnabled, setScreenContextEnabled] = useState(false)
-  const [, setChatStatus] = useState('')
+  const [chatStatus, setChatStatus] = useState('')
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
@@ -499,8 +501,11 @@ export default function Overlay() {
   const [sessionReply, setSessionReply] = useState('')
   const [sessionLoading, setSessionLoading] = useState(false)
   const [tourStep, setTourStep] = useState<string | null>(null)
+  const [showScrollDown, setShowScrollDown] = useState(false)
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const prevPanelForTourRef = useRef<PanelMode>('bar')
+  const chatBodyRef = useRef<HTMLDivElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const isCapturingRef = useRef(false)
   const mimeTypeRef = useRef('audio/webm')
@@ -516,6 +521,7 @@ export default function Overlay() {
   const needsConnect = connectionState === 'needs_connect'
 
   const isDropdownPanel = panelMode === 'history'
+  const isChatPanel = panelMode === 'chat' || chatLoading
   const hasActiveChat = chatMessages.length > 0
   const isSessionRecap = panelMode === 'session_recap'
   const allChatSessions = (() => {
@@ -553,7 +559,9 @@ export default function Overlay() {
       : isRecording
         ? OVERLAY_HEIGHT_RECORDING
         : OVERLAY_HEIGHT_COLLAPSED
-    if (isDropdownPanel) {
+    if (panelMode === 'chat' || chatLoading) {
+      height = OVERLAY_HEIGHT_CHAT
+    } else if (isDropdownPanel) {
       height = OVERLAY_HEIGHT_EXPANDED
     }
     void window.electronAPI.invoke('overlay:get-bounds').then((bounds) => {
@@ -561,7 +569,7 @@ export default function Overlay() {
       const width = typeof b?.width === 'number' ? b.width : OVERLAY_MIN_WIDTH
       void window.electronAPI.invoke('overlay:set-bounds', { width, height, persist: true })
     })
-  }, [needsConnect, isRecording, isDropdownPanel])
+  }, [needsConnect, isRecording, isDropdownPanel, panelMode, chatLoading])
 
   useEffect(() => {
     void window.electronAPI.invoke('overlay:set-interactive', true)
@@ -671,14 +679,24 @@ export default function Overlay() {
       setPrefs(data as PublicPreferences)
     })
     void window.electronAPI.invoke('audio:prefs-load').then((data) => {
-      const prefs = data as { transcriptionMode?: 'dual' | 'group'; dictationEnabled?: boolean }
+      const prefs = data as {
+        transcriptionMode?: 'dual' | 'group'
+        dictationEnabled?: boolean
+        uiSoundsEnabled?: boolean
+      }
       if (prefs.transcriptionMode) setTranscriptionMode(prefs.transcriptionMode)
       if (typeof prefs.dictationEnabled === 'boolean') setDictationEnabled(prefs.dictationEnabled)
+      if (typeof prefs.uiSoundsEnabled === 'boolean') setUiSoundsEnabled(prefs.uiSoundsEnabled)
     })
     window.electronAPI.on('audio:prefs-changed', (data) => {
-      const prefs = data as { transcriptionMode?: 'dual' | 'group'; dictationEnabled?: boolean }
+      const prefs = data as {
+        transcriptionMode?: 'dual' | 'group'
+        dictationEnabled?: boolean
+        uiSoundsEnabled?: boolean
+      }
       if (prefs.transcriptionMode) setTranscriptionMode(prefs.transcriptionMode)
       if (typeof prefs.dictationEnabled === 'boolean') setDictationEnabled(prefs.dictationEnabled)
+      if (typeof prefs.uiSoundsEnabled === 'boolean') setUiSoundsEnabled(prefs.uiSoundsEnabled)
     })
   }, [])
 
@@ -811,7 +829,75 @@ export default function Overlay() {
     })
   }, [loadSession])
 
+  const persistSession = useCallback(
+    async (sessionId: string, messages: ChatMessage[]) => {
+      if (messages.length === 0) return
+      const existing = chatSessions.find((s) => s.id === sessionId)
+      const session: ChatSession = {
+        id: sessionId,
+        title: existing?.title ?? sessionTitleFromMessages(messages),
+        createdAt: existing?.createdAt ?? Date.now(),
+        messages,
+        archived: existing?.archived,
+      }
+      const result = (await window.electronAPI.invoke('chat:history-save-session', {
+        session,
+      })) as { sessions?: ChatSession[] }
+      if (Array.isArray(result?.sessions)) {
+        setChatSessions(result.sessions)
+      }
+    },
+    [chatSessions],
+  )
+
+  const checkScroll = useCallback(() => {
+    const el = chatBodyRef.current
+    if (!el) return
+    const hasOverflow = el.scrollHeight > el.clientHeight + 4
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24
+    setShowScrollDown(hasOverflow && !atBottom)
+  }, [])
+
+  useEffect(() => {
+    const el = chatBodyRef.current
+    if (!el) return
+    el.addEventListener('scroll', checkScroll)
+    checkScroll()
+    return () => el.removeEventListener('scroll', checkScroll)
+  }, [chatMessages, chatLoading, checkScroll, panelMode])
+
+  useEffect(() => {
+    const el = chatBodyRef.current
+    if (el && (chatMessages.length > 0 || chatLoading)) {
+      el.scrollTop = el.scrollHeight
+      checkScroll()
+    }
+  }, [chatMessages, chatLoading, checkScroll])
+
+  const copyToClipboard = async (text: string, index: number) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedIndex(index)
+      window.setTimeout(() => setCopiedIndex(null), 1500)
+    } catch {
+      // clipboard unavailable
+    }
+  }
+
+  const scrollToBottom = () => {
+    const el = chatBodyRef.current
+    if (el) {
+      el.scrollTop = el.scrollHeight
+      setShowScrollDown(false)
+    }
+  }
+
+  const handleBack = () => {
+    setPanelMode('bar')
+  }
+
   const toggleFollow = async () => {
+    playUiToggle()
     const result = (await window.electronAPI.invoke('overlay:toggle-follow')) as {
       enabled?: boolean
     }
@@ -821,6 +907,7 @@ export default function Overlay() {
   }
 
   const toggleStealth = async () => {
+    playUiToggle()
     const next = !stealthEnabled
     setStealthEnabled(next)
     setStealthFlash(true)
@@ -841,6 +928,7 @@ export default function Overlay() {
   }
 
   const toggleDictation = async () => {
+    playUiToggle()
     const next = !dictationEnabled
     setDictationEnabled(next)
     try {
@@ -856,6 +944,7 @@ export default function Overlay() {
   }
 
   const toggleScreenContext = async () => {
+    playUiToggle()
     const next = !screenContextEnabled
     setScreenContextEnabled(next)
     try {
@@ -1118,6 +1207,7 @@ export default function Overlay() {
   }
 
   const togglePauseSession = () => {
+    playUiClick()
     if (isPaused) {
       void resumeSession()
     } else {
@@ -1203,6 +1293,7 @@ export default function Overlay() {
     viewingAudioSession?.speakerLabels ?? liveSpeakerLabels
 
   const toggleRecording = () => {
+    playUiToggle()
     if (isRecording) {
       void stopRecording()
     } else {
@@ -1216,6 +1307,7 @@ export default function Overlay() {
 
   const toggleHistory = () => {
     if (chatLoading || isRecording || isSessionRecap) return
+    playUiClick()
     if (panelMode === 'history') {
       closeDropdownToNewChat()
       return
@@ -1358,7 +1450,7 @@ export default function Overlay() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!query.trim() || sessionLoading) return
+    if (!query.trim() || sessionLoading || chatLoading) return
     if (needsConnect) {
       setStatus('Connect your account on the website first')
       return
@@ -1371,7 +1463,97 @@ export default function Overlay() {
       void window.electronAPI.invoke('onboarding:tutorial-signal', { type: 'enter' })
     }
 
-    await submitSessionQuery(message)
+    if (isRecording) {
+      await submitSessionQuery(message)
+      return
+    }
+
+    setPanelMode('chat')
+    setChatLoading(true)
+    setChatStatus('Thinking...')
+
+    let sessionId = activeSessionId
+    if (!sessionId) {
+      sessionId = crypto.randomUUID()
+      setActiveSessionId(sessionId)
+    }
+
+    const userMessage: ChatMessage = { role: 'user', content: message }
+    const messagesWithUser = [...chatMessages, userMessage]
+    setChatMessages(messagesWithUser)
+    void persistSession(sessionId, messagesWithUser)
+
+    try {
+      const contextEntries = fullTranscript.length > 0 ? fullTranscript : transcript
+      const contextTranscript = entriesToDisplayLines(contextEntries, activeSpeakerLabels)
+
+      const result = (await window.electronAPI.invoke('llm:chat', {
+        message,
+        transcriptLines: contextTranscript,
+        useScreenContext: screenContextEnabled,
+      })) as { reply?: string; error?: string }
+
+      let assistantMessage: ChatMessage | null = null
+
+      if (result.error === 'rate_limit' || result.error === 'rate_limit_exceeded') {
+        setChatStatus('Usage limit reached — try again later')
+        assistantMessage = { role: 'assistant', content: 'Usage limit reached — try again later' }
+      } else if (result.error === 'auth_expired' || result.error === 'not_authenticated') {
+        setChatStatus('Account not connected — connect again on the website')
+        setConnectionState('needs_connect')
+        assistantMessage = {
+          role: 'assistant',
+          content: 'Account not connected. Connect on the website while signed in.',
+        }
+      } else if (result.error === 'api_key_missing') {
+        setChatStatus('API key not configured')
+        assistantMessage = { role: 'assistant', content: 'API key not configured for the active model.' }
+      } else if (result.error === 'permission_denied') {
+        setChatStatus('Screen recording permission required')
+        assistantMessage = {
+          role: 'assistant',
+          content: 'Screen recording permission required — enable in System Settings',
+        }
+      } else if (result.error === 'capture_failed') {
+        setChatStatus('Could not capture screen')
+        assistantMessage = { role: 'assistant', content: 'Could not capture screen — try again' }
+      } else if (result.error === 'chat_failed') {
+        setChatStatus('Chat request failed')
+        assistantMessage = { role: 'assistant', content: 'Chat request failed — try again' }
+      } else if (result.error === 'empty_reply') {
+        setChatStatus('No reply received')
+        assistantMessage = { role: 'assistant', content: 'No reply received' }
+      } else if (result.reply) {
+        assistantMessage = {
+          role: 'assistant',
+          content: result.reply,
+          usedScreen: screenContextEnabled,
+        }
+        setChatStatus('')
+      } else {
+        setChatStatus('Could not get a reply')
+        assistantMessage = { role: 'assistant', content: 'Could not get a reply — try again.' }
+      }
+
+      if (assistantMessage && sessionId) {
+        const fullMessages = [...messagesWithUser, assistantMessage]
+        setChatMessages(fullMessages)
+        void persistSession(sessionId, fullMessages)
+      }
+    } catch (err) {
+      console.error('Chat error:', err)
+      setChatStatus('Chat failed')
+      if (sessionId) {
+        const fullMessages = [
+          ...messagesWithUser,
+          { role: 'assistant' as const, content: 'Something went wrong. Please try again.' },
+        ]
+        setChatMessages(fullMessages)
+        void persistSession(sessionId, fullMessages)
+      }
+    } finally {
+      setChatLoading(false)
+    }
   }
 
   const renderConnectBanner = () => {
@@ -1649,7 +1831,14 @@ export default function Overlay() {
         </ToolbarTooltip>
 
         {(hasActiveChat || panelMode === 'chat') && (
-          <button type="button" className="toolbar-new-chat" onClick={handleNewChat}>
+          <button
+            type="button"
+            className="toolbar-new-chat"
+            onClick={() => {
+              playUiClick()
+              handleNewChat()
+            }}
+          >
             New Chat
           </button>
         )}
@@ -1670,34 +1859,56 @@ export default function Overlay() {
 
   return (
     <div
-      className="overlay-root overlay-root-simple"
+      className={`overlay-root ${isChatPanel ? 'overlay-root-chat' : 'overlay-root-simple'}`}
       onMouseDown={() => {
         void window.electronAPI.invoke('overlay:set-interactive', true)
       }}
     >
       <ResizeHandles onResize={applyBounds} />
-      <div
-        className={`overlay-bar overlay-bar-simple${stealthEnabled ? ' overlay-stealth-active' : ''}${stealthFlash ? ' overlay-stealth-flash' : ''}`}
-      >
-        {renderConnectBanner()}
-        <RecordingSessionCard
-          isRecording={isRecording}
-          isPaused={isPaused}
+      {isChatPanel ? (
+        <OverlayChatPanel
           query={query}
           onQueryChange={setQuery}
           onSubmit={(e) => void handleSubmit(e)}
+          onBack={handleBack}
+          messages={chatMessages}
+          loading={chatLoading}
+          status={chatStatus}
           screenContextEnabled={screenContextEnabled}
-          loading={sessionLoading}
-          reply={sessionReply}
-          disabled={needsConnect}
-          transcript={fullTranscript.length > 0 ? fullTranscript : transcript}
-          transcriptionActivity={transcriptionActivity}
-          liveActions={liveActions}
-          assistError={liveAssistError}
-          onRecap={() => void runRecap()}
+          chatBodyRef={chatBodyRef}
+          showScrollDown={showScrollDown}
+          onScrollDown={scrollToBottom}
+          onCopy={(text, i) => void copyToClipboard(text, i)}
+          copiedIndex={copiedIndex}
+          tourHighlight={tourHighlight('chat')}
+          toolbar={renderToolbar()}
+          onBackClickSound={playUiClick}
+          onSubmitClickSound={playUiClick}
         />
-        {renderToolbar()}
-      </div>
+      ) : (
+        <div
+          className={`overlay-bar overlay-bar-simple${stealthEnabled ? ' overlay-stealth-active' : ''}${stealthFlash ? ' overlay-stealth-flash' : ''}`}
+        >
+          {renderConnectBanner()}
+          <RecordingSessionCard
+            isRecording={isRecording}
+            isPaused={isPaused}
+            query={query}
+            onQueryChange={setQuery}
+            onSubmit={(e) => void handleSubmit(e)}
+            screenContextEnabled={screenContextEnabled}
+            loading={sessionLoading}
+            reply={sessionReply}
+            disabled={needsConnect}
+            transcript={fullTranscript.length > 0 ? fullTranscript : transcript}
+            transcriptionActivity={transcriptionActivity}
+            liveActions={liveActions}
+            assistError={liveAssistError}
+            onRecap={() => void runRecap()}
+          />
+          {renderToolbar()}
+        </div>
+      )}
       {isDropdownPanel && renderHistoryDropdown()}
     </div>
   )

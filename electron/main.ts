@@ -8,6 +8,7 @@ import { registerHandlers } from './ipc/handlers'
 import { loadRuntimeEnv } from './keys'
 import {
   createOnboardingWindow,
+  ensureDictationPillAtLaunch,
   getOnboardingWindow,
   notifyOnboardingAuthConnected,
 } from './onboarding'
@@ -107,11 +108,13 @@ async function showClarifiUI(): Promise<void> {
 
   const onboardingDone = await isOnboardingComplete()
   if (!onboardingDone) {
-    destroyOverlayWindow()
-    destroyDictationPillWindow()
-    stopDictationPttMonitor()
-    const onboarding = createOnboardingWindow()
-    onboarding.focus()
+    const existing = getOnboardingWindow()
+    if (!existing || existing.isDestroyed()) {
+      createOnboardingWindow()
+    } else {
+      existing.focus()
+    }
+    ensureDictationPillAtLaunch()
     return
   }
 
@@ -197,10 +200,8 @@ async function launchClarifi(): Promise<void> {
   const onboardingDone = await isOnboardingComplete()
 
   if (!onboardingDone) {
-    destroyOverlayWindow()
-    destroyDictationPillWindow()
-    stopDictationPttMonitor()
     createOnboardingWindow()
+    ensureDictationPillAtLaunch()
     return
   }
 
