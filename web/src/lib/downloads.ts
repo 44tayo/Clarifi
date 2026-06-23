@@ -8,7 +8,8 @@ export const MAC_DMG_X64_FILENAME = 'Clarifi-0.1.0-x64.dmg'
 /** @deprecated Use MAC_DMG_ARM64_FILENAME */
 export const MAC_DMG_FILENAME = MAC_DMG_ARM64_FILENAME
 export const WIN_EXE_FILENAME = 'Clarifi Setup 0.1.0.exe'
-export const MAC_QUARANTINE_COMMAND = 'xattr -cr /Applications/Clarifi.app'
+export const MAC_QUARANTINE_COMMAND =
+  'xattr -r -d com.apple.quarantine /Applications/Clarifi.app'
 
 export type MacArch = 'arm64' | 'x64'
 export type DownloadTarget = 'mac-arm64' | 'mac-x64' | 'windows'

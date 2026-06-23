@@ -1,16 +1,12 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 
 import { triggerPlatformDownload } from '@/components/DownloadClarifi'
-import {
-  AccessibilityDialogMock,
-  DamagedDialogMock,
-  SmartScreenMock,
-  TerminalMock,
-} from '@/components/download/DownloadPageMocks'
+import { SmartScreenMock } from '@/components/download/DownloadPageMocks'
 import { MarketingNav } from '@/components/marketing/MarketingNav'
 import { useCustomerPlatform } from '@/hooks/useCustomerPlatform'
 import {
@@ -57,6 +53,22 @@ function CopyButton({ text }: { text: string }) {
   )
 }
 
+function GuideScreenshot({
+  src,
+  alt,
+  variant = 'mac',
+}: {
+  src: string
+  alt: string
+  variant?: 'mac' | 'win'
+}) {
+  return (
+    <div className={`dh-media-frame${variant === 'win' ? ' win' : ''}`}>
+      <Image src={src} alt={alt} width={960} height={540} className="dh-guide-img" unoptimized />
+    </div>
+  )
+}
+
 function GuideStep({ num, title, children }: { num: number; title: string; children: ReactNode }) {
   return (
     <div className="dh-step">
@@ -89,37 +101,49 @@ function MacInstallGuide() {
           <strong>Applications</strong>, then eject the disk image. Do not run Clarifi directly from the
           DMG.
         </p>
+        <GuideScreenshot
+          src="/install/mac/step-1-dmg.png"
+          alt="Drag Clarifi into the Applications folder from the DMG installer window"
+        />
       </GuideStep>
 
-      <GuideStep num={2} title={'Fix "can\'t be opened" or "damaged" warnings'}>
+      <GuideStep num={2} title={'Fix "Damaged" warning'}>
         <p>
-          If macOS says Clarifi <strong>can&apos;t be opened</strong> or is <strong>damaged</strong>, click{' '}
-          <strong>Cancel</strong> or <strong>OK</strong> — do not move it to the Trash. In Finder →
-          Applications, <strong>right-click Clarifi → Open → Open</strong> the first time.
+          If macOS says Clarifi is <strong>damaged</strong> or <strong>can&apos;t be opened</strong>, click{' '}
+          <strong>Cancel</strong> or <strong>Done</strong> — do <strong>not</strong> move it to the Trash.
+          In Finder → Applications, <strong>right-click Clarifi → Open → Open</strong> the first time.
         </p>
-        <DamagedDialogMock />
+        <GuideScreenshot
+          src="/install/mac/step-2-warning.png"
+          alt='macOS security dialog showing "Clarifi" not opened because Apple could not verify the app'
+        />
       </GuideStep>
 
-      <GuideStep num={3} title="Run Terminal Command (if needed)">
+      <GuideStep num={3} title="Run Terminal command or Open anyway from settings">
+        <p className="dh-step-option-label">Option A — Terminal</p>
         <p>
-          If right-click Open still fails, open <strong>Terminal</strong> and paste this command, then
-          press Enter:
+          Open <strong>Terminal</strong> (search for it in Spotlight) and paste this command, then press
+          Enter:
         </p>
         <div className="dh-code-block">
           <code>{MAC_QUARANTINE_COMMAND}</code>
           <CopyButton text={MAC_QUARANTINE_COMMAND} />
         </div>
         <p className="dh-step-footnote">This is a one-time setup. Future updates will install automatically.</p>
-        <TerminalMock />
-      </GuideStep>
+        <GuideScreenshot
+          src="/install/mac/step-3-terminal.png"
+          alt="Terminal window with the xattr quarantine removal command for Clarifi"
+        />
 
-      <GuideStep num={4} title="Grant Accessibility">
+        <p className="dh-step-option-label">Option B — System Settings</p>
         <p>
-          When prompted, click <strong>Open System Settings</strong> and toggle the switch for{' '}
-          <strong>Clarifi</strong> to allow accessibility access. This is required for dictation and global
-          shortcuts.
+          Open <strong>System Settings → Privacy &amp; Security → Security</strong>, then click{' '}
+          <strong>Open Anyway</strong> next to Clarifi.
         </p>
-        <AccessibilityDialogMock />
+        <GuideScreenshot
+          src="/install/mac/step-3-settings.png"
+          alt="macOS Privacy and Security settings with Open Anyway button for Clarifi"
+        />
       </GuideStep>
     </>
   )
@@ -135,7 +159,8 @@ function WindowsInstallGuide() {
         How to Install on Windows
       </h2>
       <p className="dh-guide-intro">
-        Run the installer from your Downloads folder. You can choose where Clarifi is installed.
+        Run the installer from your Downloads folder. Windows may show a SmartScreen warning for new apps —
+        here&apos;s how to install Clarifi in under a minute.
       </p>
 
       <GuideStep num={1} title="Run the installer">
