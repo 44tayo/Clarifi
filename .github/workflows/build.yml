@@ -110,7 +110,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: win-build-debug-log
-          path: .cursor/debug-6989d7.log
+          path: |
+            .cursor/debug-6989d7.log
+            .cursor/win-native-build.log
           if-no-files-found: ignore
 
       - name: Upload Windows artifact

@@ -9,7 +9,9 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  rmSync,
   unlinkSync,
+  writeFileSync,
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -17,6 +19,7 @@ import { fileURLToPath } from 'node:url'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const nativeDir = join(root, 'native')
 const DEBUG_LOG = join(root, '.cursor/debug-6989d7.log')
+const BUILD_LOG = join(root, '.cursor/win-native-build.log')
 
 function logDebug(hypothesisId, message, data = {}) {
   // #region agent log
@@ -62,14 +65,18 @@ logDebug('H4', 'native-win-build-start', { electronVersion, binding: 'binding.wi
 
 copyFileSync(bindingPath, bindingBackup)
 copyFileSync(bindingWin, bindingPath)
+rmSync(join(nativeDir, 'build'), { recursive: true, force: true })
 
 try {
   execSync(
     `npx --yes node-gyp@10 rebuild --target=${electronVersion} --arch=x64 --dist-url=https://electronjs.org/headers`,
-    { cwd: nativeDir, stdio: 'inherit' },
+    { cwd: nativeDir, stdio: 'pipe', encoding: 'utf8' },
   )
 } catch (err) {
-  logDebug('H4', 'native-win-build-failed', { error: String(err) })
+  const output = `${err.stdout ?? ''}\n${err.stderr ?? ''}\n${String(err)}`
+  writeFileSync(BUILD_LOG, output)
+  logDebug('H4', 'native-win-build-failed', { error: String(err), log: BUILD_LOG })
+  console.error(output)
   throw err
 } finally {
   copyFileSync(bindingBackup, bindingPath)
