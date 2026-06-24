@@ -92,6 +92,25 @@ export function BlogPostContent({ blocks, image, imageAlt }: BlogPostContentProp
                 </Link>
               </div>
             )
+          case 'link':
+            return block.external ? (
+              <p key={index} className="blog-post-link-wrap">
+                <a
+                  href={block.href}
+                  className="blog-post-link"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {block.text}
+                </a>
+              </p>
+            ) : (
+              <p key={index} className="blog-post-link-wrap">
+                <Link href={block.href} className="blog-post-link">
+                  {block.text}
+                </Link>
+              </p>
+            )
           case 'hr':
             return <hr key={index} className="blog-post-hr" />
           default:

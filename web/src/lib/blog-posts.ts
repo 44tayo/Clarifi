@@ -6,6 +6,7 @@ export type BlogBlock =
   | { type: 'ol'; items: string[] }
   | { type: 'table'; headers: string[]; rows: string[][] }
   | { type: 'cta'; text: string; href: string; label: string }
+  | { type: 'link'; text: string; href: string; external?: boolean }
   | { type: 'hr' }
 
 export type BlogCategory = 'blog' | 'announcement' | 'press'
@@ -33,9 +34,385 @@ export type BlogPost = {
 }
 
 export const BLOG_POSTS: BlogPost[] = [
-    {
-    slug: 'ai-meeting-assistant',
+  {
+    slug: 'clarifi-vs-cluely-granola-lockedin-ai',
     featured: true,
+    title: 'Clarifi vs Cluely, Granola & LockedIn AI: Which AI Meeting Tool Fits You in 2026?',
+    excerpt:
+      'Honest 2026 comparison of Clarifi, Cluely, Granola, and LockedIn AI — real-time copilots vs bot-free notetakers, stealth, pricing, and who each tool is actually for.',
+    date: 'June 24, 2026',
+    readTime: '11 min read',
+    category: 'blog',
+    author: { name: 'Clarifi Team' },
+    image: '/blog/clarifi-vs-cluely-granola-lockedin-ai.png',
+    imageAlt:
+      'Comparison of AI meeting tools — real-time copilot overlay, bot-free AI notepad, and live interview assistant illustrated side by side',
+    metaTitle: 'Clarifi vs Cluely, Granola & LockedIn AI (2026)',
+    metaDescription:
+      'Honest 2026 comparison of Clarifi, Cluely, Granola, and LockedIn AI — real-time copilots vs bot-free notetakers, stealth, pricing, and who each tool is for.',
+    blocks: [
+      {
+        type: 'p',
+        text: 'Short answer: If you need help during a live call — sales demos, interviews, tough Q&A — compare Clarifi, Cluely, and LockedIn AI. If you mainly need better notes after the meeting, Granola is a different category. If a visible recorder bot and a summary later are enough, tools like Otter and Fireflies will do.',
+        strong: true,
+      },
+      {
+        type: 'p',
+        text: '"AI meeting assistant" is one label for three different jobs. Picking the wrong category is the most common mistake — and the reason so many comparison articles feel useless.',
+      },
+      { type: 'hr' },
+      {
+        type: 'h2',
+        id: 'what-they-are',
+        text: 'What these tools actually are (three different categories)',
+      },
+      {
+        type: 'p',
+        text: 'Before comparing brand names, separate the categories:',
+      },
+      {
+        type: 'ol',
+        items: [
+          'Real-time copilot — listens live and helps you respond in the moment (answers, prompts, objection handling).',
+          'Bot-free notetaker — captures audio on your device, you jot sparse notes, AI expands them after the call.',
+          'Bot notetaker — joins as a participant, records, transcribes, and summarizes when the meeting ends.',
+        ],
+      },
+      {
+        type: 'p',
+        text: 'Clarifi, Cluely, and LockedIn AI compete in the first bucket. Granola owns the second. Otter, Fireflies, and Fathom are the classic third.',
+      },
+      {
+        type: 'h2',
+        id: 'comparison',
+        text: 'Quick comparison: Clarifi vs Cluely vs Granola vs LockedIn AI',
+      },
+      {
+        type: 'table',
+        headers: [
+          'Tool',
+          'Category',
+          'Best for',
+          'Bot joins?',
+          'Live help',
+          'Post-call notes',
+          'Stealth',
+          'Team sharing',
+          'Pricing',
+        ],
+        rows: [
+          [
+            'Clarifi',
+            'Real-time copilot',
+            'Sales, founders, high-stakes live calls',
+            'No',
+            'Yes — desktop overlay',
+            'Session recaps & transcripts',
+            'Pro+ screen-share stealth',
+            'Pro+ Communities',
+            'Pro $19/mo · Pro+ $39/seat · 7-day trial',
+          ],
+          [
+            'Cluely',
+            'Real-time copilot + notes',
+            'Live prompts, interviews, general meetings',
+            'No (marketed)',
+            'Yes — keyboard shortcut assist',
+            'Instant meeting notes',
+            'Marketed as screen-share invisible',
+            'Individual-first',
+            'Check cluely.com',
+          ],
+          [
+            'Granola',
+            'Bot-free AI notepad',
+            'Executives, consultants, note-heavy workflows',
+            'No',
+            'Light — you type; AI augments after',
+            'Core strength',
+            'Privacy / no bot in room',
+            'Team workspaces (paid)',
+            'Free tier + paid · verify live',
+          ],
+          [
+            'LockedIn AI',
+            'Interview copilot',
+            'Live interviews, coding assessments',
+            'Varies',
+            'Yes — coaching + suggested answers',
+            'Session reports (their positioning)',
+            'Stealth-focused',
+            'Individual / interview use',
+            'Check lockedinai.com',
+          ],
+        ],
+      },
+      {
+        type: 'p',
+        text: 'Always verify competitor pricing and features before you buy — comparison pages go stale fast.',
+      },
+      { type: 'h2', id: 'clarifi', text: 'Clarifi — real-time copilot for live calls' },
+      {
+        type: 'p',
+        text: 'Clarifi runs as a desktop overlay during Zoom, Google Meet, and Teams. It listens to the conversation, transcribes, generates recaps, and lets you ask questions about the meeting in real time — without adding a bot to the guest list.',
+      },
+      { type: 'h3', text: 'Strengths' },
+      {
+        type: 'ul',
+        items: [
+          'Built for the moment a prospect asks something you did not rehearse',
+          'No "AI notetaker joined the meeting" awkwardness',
+          'Voice dictation into any app on Pro and Pro+',
+          'Pro+ screen-share stealth when you need the overlay invisible on shared screens',
+          'Pro+ Communities — share meeting recaps, transcripts, and notes with a Pro+ team in organized folders',
+          'Custom modes, keybinds, and screen context for power users',
+        ],
+      },
+      { type: 'h3', text: 'Tradeoffs' },
+      {
+        type: 'ul',
+        items: [
+          'Not a post-meeting-only notepad like Granola — value is live plus session review',
+          'Not specialized for coding interviews the way LockedIn AI positions itself',
+          'Requires a paid plan after the 7-day trial',
+        ],
+      },
+      {
+        type: 'p',
+        text: 'Best for: Sales reps, founders, recruiters, and operators who lose deals or credibility in live Q&A — not people who only need a summary email an hour later.',
+      },
+      { type: 'h2', id: 'cluely', text: 'Cluely — live assistant and meeting notes' },
+      {
+        type: 'p',
+        text: 'Cluely markets itself as a live AI meeting assistant: real-time transcription, in-meeting help via keyboard shortcut, and polished notes — with heavy emphasis on staying invisible (no bot, invisible on screen share).',
+      },
+      { type: 'h3', text: 'Strengths' },
+      {
+        type: 'ul',
+        items: [
+          'Strong positioning for "help me now" on calls',
+          'Notes and live assist in one product',
+          'Broad language and platform messaging',
+        ],
+      },
+      { type: 'h3', text: 'Tradeoffs' },
+      {
+        type: 'ul',
+        items: [
+          'Overlaps with Clarifi on real-time use cases — evaluate both on workflow fit and team sharing needs',
+          '"Undetectable" is a product design goal, not a guarantee in every screen-share setup — test your stack',
+          'Less oriented toward team-wide shared knowledge than Clarifi Pro+ Communities',
+        ],
+      },
+      {
+        type: 'p',
+        text: 'Best for: Individuals who want live prompts and automatic notes in one tool.',
+      },
+      {
+        type: 'link',
+        text: 'Visit Cluely →',
+        href: 'https://cluely.com',
+        external: true,
+      },
+      { type: 'h2', id: 'granola', text: 'Granola — bot-free AI notepad' },
+      {
+        type: 'p',
+        text: 'Granola does not try to be a live sales copilot. It captures meeting audio on your device (no bot), you write minimal notes during the call, and AI turns that into structured output afterward — action items, decisions, follow-ups.',
+      },
+      { type: 'h3', text: 'Strengths' },
+      {
+        type: 'ul',
+        items: [
+          'Excellent for people who think on the call and hate wall-of-text auto-transcripts',
+          'Strong privacy story: no bot in the room, notes you control',
+          'Popular with executives and consultants in back-to-back meeting cultures',
+        ],
+      },
+      { type: 'h3', text: 'Tradeoffs' },
+      {
+        type: 'ul',
+        items: [
+          'You do not get the same "answer this objection in three seconds" workflow as Clarifi or Cluely',
+          'Value peaks after the meeting, not in the critical seconds of a hard question',
+        ],
+      },
+      {
+        type: 'p',
+        text: 'Best for: Knowledge workers who want better documentation, not live coaching. When Granola beats a copilot: internal syncs and 1:1s where being present matters more than real-time AI. When a copilot beats Granola: sales calls, interviews, and negotiations — anywhere silence costs money.',
+      },
+      {
+        type: 'link',
+        text: 'Visit Granola →',
+        href: 'https://www.granola.ai',
+        external: true,
+      },
+      { type: 'h2', id: 'lockedin-ai', text: 'LockedIn AI — interview and technical copilot' },
+      {
+        type: 'p',
+        text: 'LockedIn AI focuses on live interviews and technical assessments: suggested answers, coaching feedback, document context (resume, job description), and coding assistance — with stealth as a core theme.',
+      },
+      { type: 'h3', text: 'Strengths' },
+      {
+        type: 'ul',
+        items: [
+          'Deep fit for job seekers and technical interview loops',
+          'Dual-layer copilot plus coach positioning',
+          'Tailoring to your background and the role',
+        ],
+      },
+      { type: 'h3', text: 'Tradeoffs' },
+      {
+        type: 'ul',
+        items: [
+          'Narrower everyday meeting workflow than a general sales copilot',
+          'Not positioned as a team knowledge product for sharing call recaps across an org',
+        ],
+      },
+      {
+        type: 'p',
+        text: 'Best for: Candidates in live interviews and coding screens — not necessarily a revenue team running daily pipeline calls.',
+      },
+      {
+        type: 'link',
+        text: 'Visit LockedIn AI →',
+        href: 'https://www.lockedinai.com',
+        external: true,
+      },
+      { type: 'h2', id: 'notetakers', text: 'Otter, Fireflies & Fathom — when a notetaker is enough' },
+      {
+        type: 'p',
+        text: 'These tools join as a visible participant (or equivalent), record, transcribe, and summarize. They excel at async handoffs, compliance-friendly documentation, and searchable meeting libraries.',
+      },
+      {
+        type: 'p',
+        text: 'They are weak when a bot on the call hurts trust (sales, interviews, sensitive clients) or when you needed help during the objection, not in the recap.',
+      },
+      {
+        type: 'link',
+        text: 'Read: AI Meeting Assistant — notetaker vs real-time copilot explained →',
+        href: '/blog/ai-meeting-assistant',
+      },
+      { type: 'h2', id: 'how-to-choose', text: 'How to choose' },
+      { type: 'h3', text: 'Choose Clarifi if' },
+      {
+        type: 'ul',
+        items: [
+          'Live calls drive revenue, hiring, or trust',
+          'You want help while the conversation is happening',
+          'You refuse to add a bot to the guest list',
+          'You need Pro+ stealth on screen share or Pro+ team sharing of session content',
+        ],
+      },
+      { type: 'h3', text: 'Choose Cluely if' },
+      {
+        type: 'ul',
+        items: [
+          'You want a single tool for live assist plus auto notes and their UX fits your workflow',
+          'You are comparing primarily on real-time invisible assist',
+        ],
+      },
+      { type: 'h3', text: 'Choose Granola if' },
+      {
+        type: 'ul',
+        items: [
+          'Your pain is documentation after meetings, not live Q&A',
+          'You prefer typing sparse notes and letting AI structure them later',
+          'Bot-free privacy is non-negotiable',
+        ],
+      },
+      { type: 'h3', text: 'Choose LockedIn AI if' },
+      {
+        type: 'ul',
+        items: ['Your primary use case is interviews and technical screens, not daily sales calls'],
+      },
+      { type: 'h3', text: 'Choose Otter / Fireflies / Fathom if' },
+      {
+        type: 'ul',
+        items: ['Post-call summaries are enough and a meeting bot is acceptable'],
+      },
+      { type: 'h2', id: 'clarifi-pricing', text: 'Clarifi pricing and trial' },
+      {
+        type: 'p',
+        text: 'Clarifi offers a 7-day free trial on both paid plans:',
+      },
+      {
+        type: 'ul',
+        items: [
+          'Pro — $19/month: unlimited AI, meeting notetaking, voice dictation, custom modes and keybinds, screen context',
+          'Pro+ — $39/seat/month: everything in Pro, screen-share undetectability, shared team Communities',
+        ],
+      },
+      {
+        type: 'p',
+        text: 'Do not treat competitor prices as facts in this article — check their sites the week you subscribe.',
+      },
+      { type: 'h2', id: 'faq', text: 'FAQ' },
+      { type: 'h3', text: 'What is the difference between Clarifi and Cluely?' },
+      {
+        type: 'p',
+        text: 'Both are real-time AI meeting assistants that avoid joining as a bot. Clarifi emphasizes live sales and meeting copilot workflows, voice dictation, Pro+ screen-share stealth, and Pro+ Communities for sharing recaps and transcripts with a team. Cluely emphasizes live prompts plus instant meeting notes in one app. The better fit depends on whether you prioritize team sharing and your overlay workflow versus their all-in-one notes experience.',
+      },
+      { type: 'h3', text: 'Is Granola a good Cluely or Clarifi alternative?' },
+      {
+        type: 'p',
+        text: 'Granola solves a different problem. It is a bot-free AI notepad optimized for structured notes after meetings, not live objection handling during a sales call. If you need real-time answers, compare Clarifi and Cluely. If you need better post-meeting documentation, Granola belongs on your shortlist.',
+      },
+      { type: 'h3', text: 'Which AI meeting tool is best for sales calls?' },
+      {
+        type: 'p',
+        text: 'For live sales calls, prioritize real-time copilots (Clarifi, Cluely) over post-meeting notetakers. Sales deals are often won or lost in unscripted Q&A. Tools that only summarize after the call cannot recover a pause that already happened.',
+      },
+      { type: 'h3', text: 'Do Clarifi, Cluely, and Granola join Zoom as a bot?' },
+      {
+        type: 'p',
+        text: 'Clarifi, Cluely, and Granola all market a no-bot or bot-free experience compared with traditional notetakers like Otter and Fireflies. Always confirm behavior in your exact meeting setup before relying on it in a client-facing call.',
+      },
+      { type: 'h3', text: 'What is LockedIn AI best for?' },
+      {
+        type: 'p',
+        text: 'LockedIn AI is built for live interviews and technical assessments — suggested answers, coaching, and coding help — rather than general team meeting documentation or shared sales playbooks.',
+      },
+      { type: 'h3', text: 'Is an undetectable AI meeting assistant ethical?' },
+      {
+        type: 'p',
+        text: 'Using AI to answer accurately and prepare better is different from misrepresenting your skills or inventing facts. For a deeper ethics breakdown, see our post on using AI in meetings.',
+      },
+      {
+        type: 'link',
+        text: 'Read: Is Using AI in Meetings Cheating? →',
+        href: '/blog/is-using-ai-in-meetings-cheating',
+      },
+      { type: 'h2', id: 'bottom-line', text: 'Bottom line' },
+      {
+        type: 'p',
+        text: 'The best AI meeting tool in 2026 is not one name on a list — it is the one that matches when you need help. Granola wins post-meeting clarity. LockedIn AI wins interview loops. Cluely and Clarifi compete for live assistance without a bot. Clarifi is built for people whose meetings are too expensive to summarize an hour late — with Pro+ stealth and team communities when the whole org needs shared context, not just a personal overlay.',
+      },
+      {
+        type: 'cta',
+        text: 'Try Clarifi free for 7 days — real-time help on every call, no bot on the guest list.',
+        href: '/download',
+        label: 'Start your free trial →',
+      },
+      {
+        type: 'cta',
+        text: 'Compare Pro and Pro+ — stealth, communities, and everything included.',
+        href: '/pricing',
+        label: 'See pricing →',
+      },
+      {
+        type: 'cta',
+        text: 'Still weighing the ethics of AI on live calls?',
+        href: '/blog/is-using-ai-in-meetings-cheating',
+        label: 'Read the ethics guide →',
+      },
+      {
+        type: 'p',
+        text: 'Questions or takes? Find us on X @Clarifi_ai.',
+      },
+    ],
+  },
+  {
+    slug: 'ai-meeting-assistant',
     title: 'AI Meeting Assistant: Do You Actually Need One in 2026?',
     excerpt:
       'AI meeting assistants are everywhere — but do you need one? We compare notetakers vs real-time copilots, who they\'re for, and what to look for.',

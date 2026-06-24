@@ -4,6 +4,7 @@ import { MarketingNav } from '@/components/marketing/MarketingNav'
 import { BlogPostContent } from '@/components/blog/BlogPostContent'
 import { WaitlistSiteFooter } from '@/components/waitlist/WaitlistPageSections'
 import { BLOG_POST_SLUGS, getBlogPost } from '@/lib/blog-posts'
+import { getSiteOrigin } from '@/lib/site-url'
 import '@/components/waitlist/waitlist.css'
 import '../../landing-blog.css'
 
@@ -78,6 +79,40 @@ function FaqJsonLd({ slug }: { slug: string }) {
   )
 }
 
+function BlogPostingJsonLd({ slug }: { slug: string }) {
+  const post = getBlogPost(slug)
+  if (!post) return null
+
+  const origin = getSiteOrigin()
+  const schema = {
+    '@context': 'https://schema.org',
+    '@type': 'BlogPosting',
+    headline: post.title,
+    description: post.metaDescription,
+    image: `${origin}${post.image}`,
+    datePublished: new Date(post.date).toISOString(),
+    author: {
+      '@type': 'Organization',
+      name: post.author.name,
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: 'Clarifi',
+    },
+    mainEntityOfPage: {
+      '@type': 'WebPage',
+      '@id': `${origin}/blog/${slug}`,
+    },
+  }
+
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+    />
+  )
+}
+
 export default async function BlogPostPage({ params }: PageProps) {
   const { slug } = await params
   const post = getBlogPost(slug)
@@ -86,6 +121,7 @@ export default async function BlogPostPage({ params }: PageProps) {
   return (
     <div className="blog-root landing-root waitlist-page">
       <FaqJsonLd slug={slug} />
+      <BlogPostingJsonLd slug={slug} />
       <MarketingNav active="blog" showBack />
       <article className="blog-post" data-reveal>
         <h1>{post.title}</h1>

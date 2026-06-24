@@ -465,6 +465,21 @@
   box-shadow: 0 6px 24px rgba(43, 108, 255, 0.4);
 }
 
+.blog-post-link-wrap {
+  margin: 0.75rem 0 1rem;
+}
+
+.blog-post-link {
+  color: #2b6cff;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.blog-post-link:hover {
+  color: #1d5ae6;
+}
+
 .blog-post-back {
   margin-top: 2.5rem;
   padding-top: 1.5rem;
