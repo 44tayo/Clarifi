@@ -1,7 +1,11 @@
 import { execSync } from 'child_process'
 import { clipboard, screen, systemPreferences, BrowserWindow } from 'electron'
 import { runOsascript, runOsascriptAsync } from './osascript'
-import { getFrontmostAppNameCached } from './proactive/textExtraction'
+import {
+  getFrontmostAppNameCached,
+  inferDictationSurface,
+  type DictationSurface,
+} from './proactive/textExtraction'
 
 let lastExternalFrontmostApp: string | null = null
 let trackingTimer: ReturnType<typeof setInterval> | null = null
@@ -166,11 +170,15 @@ export function getFrontmostAppDisplayId(): number {
 }
 
 /**
- * Display for dictation pill positioning — follows the cursor display (same signal
- * as overlay "Follow screen"), but independent of that toggle.
+ * Display for dictation pill positioning — prefers the frontmost window's display
+ * so Cmd+Tab / monitor switches move the pill without requiring cursor movement.
  */
 export function getFollowDisplayId(): number {
-  return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id
+  return getActiveDisplayIdForPill()
+}
+
+export function getActiveDisplayIdForPill(): number {
+  return getFrontmostAppDisplayId()
 }
 
 async function refreshFollowDisplayAsync(): Promise<void> {
@@ -615,29 +623,29 @@ end tell
   return false
 }
 
-const PASTE_FIRST_APPS = [
-  'cursor',
-  'visual studio code',
-  'code',
-  'sublime',
-  'webstorm',
-  'intellij',
-  'zed',
-  'chrome',
-  'google chrome',
-  'safari',
-  'firefox',
-  'arc',
-  'brave',
-  'mail',
-  'gmail',
-  'microsoft edge',
-  'edge',
-]
+function mergeDictationText(
+  existing: string | null,
+  trimmed: string,
+  surface: DictationSurface,
+): string {
+  if (!existing || existing.length === 0) return trimmed
+  const prior = existing.replace(/\s+$/, '')
+  if (surface === 'email') {
+    return `${prior}\n\n${trimmed}`
+  }
+  if (surface === 'chat' || surface === 'code') {
+    return `${prior} ${trimmed}`
+  }
+  return `${prior} ${trimmed}`
+}
 
-function prefersPasteInsert(appName: string): boolean {
-  const lower = appName.toLowerCase()
-  return PASTE_FIRST_APPS.some((name) => lower.includes(name))
+async function focusFieldAtCursor(app: string): Promise<{ x: number; y: number } | null> {
+  const cursor = screen.getCursorScreenPoint()
+  activateApplication(app)
+  await delay(120)
+  clickAtScreenPoint(cursor.x, cursor.y)
+  await delay(100)
+  return cursor
 }
 
 async function pasteViaClipboard(text: string): Promise<boolean> {
@@ -703,40 +711,25 @@ export async function insertTextIntoExternalField(
       return { ok: false, error: 'accessibility_required' }
     }
 
-    activateApplication(app)
-    await delay(150)
-
-    if (snapshot?.cursor) {
-      clickAtScreenPoint(snapshot.cursor.x, snapshot.cursor.y)
-      await delay(80)
-    }
-
-    if (prefersPasteInsert(app)) {
-      if (await pasteViaClipboard(trimmed)) {
-        return { ok: true, method: 'paste', targetApp: app }
-      }
-    }
-
-    const existing = readFocusedFieldInProcess(app) ?? snapshot?.fieldPreview ?? null
-    const merged =
-      existing && existing.length > 0
-        ? `${existing.replace(/\s+$/, '')}\n\n${trimmed}`
-        : trimmed
-
-    if (setFocusedFieldInProcess(app, merged)) {
-      return { ok: true, method: 'accessibility', targetApp: app }
-    }
+    const surface = inferDictationSurface(app)
+    await focusFieldAtCursor(app)
 
     if (await pasteViaClipboard(trimmed)) {
       return { ok: true, method: 'paste', targetApp: app }
+    }
+
+    const existing = readFocusedFieldInProcess(app) ?? snapshot?.fieldPreview ?? null
+    const merged = mergeDictationText(existing, trimmed, surface)
+
+    if (setFocusedFieldInProcess(app, merged)) {
+      return { ok: true, method: 'accessibility', targetApp: app }
     }
 
     return { ok: false, error: 'insert_failed', targetApp: app }
   }
 
   if (process.platform === 'win32') {
-    activateApplication(app)
-    await delay(100)
+    await focusFieldAtCursor(app)
     if (await pasteViaClipboard(trimmed)) {
       return { ok: true, method: 'paste', targetApp: app }
     }
@@ -767,8 +760,7 @@ export async function replaceSelectionInExternalField(
       return { ok: false, error: 'accessibility_required' }
     }
 
-    activateApplication(app)
-    await delay(180)
+    await focusFieldAtCursor(app)
 
     const existing = readFocusedFieldInProcess(app)
     if (existing && existing.includes(prior)) {
@@ -787,8 +779,7 @@ export async function replaceSelectionInExternalField(
   }
 
   if (process.platform === 'win32') {
-    activateApplication(app)
-    await delay(180)
+    await focusFieldAtCursor(app)
     if (await pasteViaClipboard(trimmed)) {
       return { ok: true, method: 'paste', targetApp: app }
     }

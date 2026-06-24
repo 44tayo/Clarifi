@@ -21,7 +21,6 @@ import {
   setDictationPillInteractive,
   showDictationPillWindow,
   unlockPillDisplay,
-  lockPillToDisplay,
 } from '../dictationPill'
 import {
   captureDictationTarget,
@@ -1311,11 +1310,7 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
   })
 
   registerValidatedHandler('dictation:capture-target', {}, () => {
-    const snapshot = captureDictationTarget()
-    if (snapshot) {
-      lockPillToDisplay(snapshot.displayId)
-    }
-    return snapshot
+    return captureDictationTarget()
   })
 
   registerValidatedHandler('dictation:session-idle', {}, () => {

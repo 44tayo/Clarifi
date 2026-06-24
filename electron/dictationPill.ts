@@ -5,7 +5,7 @@ import { getIsRecording } from './audio'
 import { getDictationEnabled } from './audioPreferences'
 import {
   captureDictationTarget,
-  getFollowDisplayId,
+  getActiveDisplayIdForPill,
   type DictationTargetSnapshot,
 } from './dictationInsert'
 
@@ -21,7 +21,7 @@ let displayListenerAttached = false
 let lastFollowedDisplayId: number | null = null
 let lockedDisplayId: number | null = null
 let pillFollowPollTimer: ReturnType<typeof setInterval> | null = null
-const PILL_FOLLOW_POLL_MS = 250
+const PILL_FOLLOW_POLL_MS = 150
 let pendingSessionStart: DictationTargetSnapshot | null | undefined = undefined
 
 function attachDisplayListener(): void {
@@ -37,8 +37,7 @@ function attachDisplayListener(): void {
 }
 
 function resolveFollowDisplayId(): number {
-  if (lockedDisplayId !== null) return lockedDisplayId
-  return getFollowDisplayId()
+  return getActiveDisplayIdForPill()
 }
 
 function positionPillWindow(window: BrowserWindow, displayId?: number): void {
@@ -56,6 +55,9 @@ function followPillToActiveDisplay(): void {
   if (!pillWindow || pillWindow.isDestroyed() || !pillWindow.isVisible()) return
 
   const targetDisplayId = resolveFollowDisplayId()
+  if (lockedDisplayId !== null && lockedDisplayId !== targetDisplayId) {
+    lockedDisplayId = targetDisplayId
+  }
   if (targetDisplayId === lastFollowedDisplayId) return
   positionPillWindow(pillWindow, targetDisplayId)
   lastFollowedDisplayId = targetDisplayId
@@ -65,7 +67,6 @@ function startPillDisplayFollowPoll(): void {
   if (pillFollowPollTimer) return
   followPillToActiveDisplay()
   pillFollowPollTimer = setInterval(() => {
-    if (lockedDisplayId !== null) return
     followPillToActiveDisplay()
   }, PILL_FOLLOW_POLL_MS)
 }

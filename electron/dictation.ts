@@ -28,7 +28,8 @@ function buildDictationPrompt(spokenLanguage: string, surface?: string): string 
         : surface === 'code'
           ? `- Code surface: preserve indentation and line breaks; keep identifiers, operators, and syntax literal.
 - Only format as a fenced code block if the speaker clearly dictated code structure.`
-          : `- Match the tone of the target app (email, chat, or document) without inventing structure the speaker did not imply.`
+          : `- Output a single flowing paragraph unless the speaker clearly dictated a list or multiple distinct points.
+- Match the tone of the target app without inventing structure the speaker did not imply.`
 
   return `You turn casual spoken dictation into clean text ready to insert into the user's active text field.
 
@@ -41,6 +42,7 @@ Rules:
 - Self-correction: if the speaker revises themselves ("no wait", "I mean"), output ONLY the final intended wording.
 ${surfaceRules}
 - Do not invent facts, names, or commitments the speaker did not say.
+- Do not add content the user did not say.
 - When unsure between two phrasings, prefer the more precise and grammatically correct reading.`
 }
 
@@ -66,17 +68,42 @@ function resolveDestinationForApp(
   return 'overlay'
 }
 
-function resolveSurfaceHint(targetApp?: string | null): string {
+function resolveSurfaceHint(
+  targetApp?: string | null,
+  snapshot?: DictationTargetSnapshot | null,
+): string {
   const surface = inferDictationSurface(targetApp)
-  return `Target surface: ${surface} (${dictationSurfaceLabel(surface)}). Active app: ${targetApp ?? 'unknown'}.`
+  const lines = [
+    `Target surface: ${surface} (${dictationSurfaceLabel(surface)}). Active app: ${targetApp ?? 'unknown'}.`,
+  ]
+  if (snapshot?.windowTitle) {
+    lines.push(`Window title: ${snapshot.windowTitle}.`)
+  }
+  if (snapshot?.fieldPreview) {
+    lines.push(`Existing field starts with: ${snapshot.fieldPreview.slice(0, 120)}`)
+  }
+  return lines.join(' ')
 }
 
-function shouldSkipPolish(raw: string, spokenLanguage: string): boolean {
-  if (spokenLanguage !== 'auto') return false
+function normalizeDictationOutput(text: string): string {
+  let out = text.trim()
+  if (
+    (out.startsWith('"') && out.endsWith('"')) ||
+    (out.startsWith("'") && out.endsWith("'"))
+  ) {
+    out = out.slice(1, -1).trim()
+  }
+  out = out.replace(/^```[\w]*\n?/, '').replace(/\n?```$/, '').trim()
+  out = out.replace(/^(output|result|dictation):\s*/i, '').trim()
+  return out
+}
+
+function shouldSkipPolish(raw: string): boolean {
   const trimmed = raw.trim()
-  if (trimmed.length < 8) return true
+  if (!trimmed) return true
   if (/^(um|uh|ehm|hmm)[\s,.!?-]*$/i.test(trimmed)) return true
-  return false
+  const words = trimmed.split(/\s+/).filter(Boolean)
+  return words.length < 3
 }
 
 export async function composeDictationFromAudio(
@@ -91,7 +118,7 @@ export async function composeDictationFromAudio(
   const whisperPrompt = dictationWhisperPrompt(spokenLanguage)
   const targetApp = options.targetSnapshot?.app ?? options.targetApp ?? null
   const surface = inferDictationSurface(targetApp)
-  const surfaceHint = resolveSurfaceHint(targetApp)
+  const surfaceHint = resolveSurfaceHint(targetApp, options.targetSnapshot)
   const outputInstruction = getDictationOutputLanguageInstruction(spokenLanguage)
   const destination = resolveDestinationForApp(options.target ?? 'auto', targetApp)
   const surfaceLabel = dictationSurfaceLabel(surface)
@@ -106,13 +133,15 @@ export async function composeDictationFromAudio(
   }
 
   let text = raw.trim()
-  if (!shouldSkipPolish(raw, spokenLanguage)) {
+  if (!shouldSkipPolish(raw)) {
     const polished = await completeProactiveText(
       buildDictationPrompt(spokenLanguage, surface) + outputInstruction,
       `${surfaceHint}\n\nSpoken dictation (verbatim transcript):\n${raw.trim()}`,
       1200,
     )
-    text = polished?.trim() || raw.trim()
+    text = normalizeDictationOutput(polished?.trim() || raw.trim())
+  } else {
+    text = normalizeDictationOutput(text)
   }
 
   if (destination === 'overlay') {
