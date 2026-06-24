@@ -210,6 +210,6 @@ export async function transcribeDictationAudio(
   return transcribeAudioBuffer(audioBase64, {
     ...options,
     language: options.language ?? getDictationLanguage(),
-    model: options.model ?? 'whisper-large-v3',
+    model: options.model ?? 'whisper-large-v3-turbo',
   })
 }

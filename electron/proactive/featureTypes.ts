@@ -2,6 +2,10 @@
 export const PROACTIVE_FEATURE_MODEL = 'claude-sonnet-4-6'
 export const PROACTIVE_FEATURE_MAX_OUTPUT_TOKENS = 2000
 
+/** Fast, faithful dictation polish — latency-sensitive. */
+export const DICTATION_POLISH_MODEL = 'claude-3-5-haiku-20241022'
+export const DICTATION_POLISH_MAX_OUTPUT_TOKENS = 400
+
 export const PROACTIVE_WRITING_MODES = [
   'rewrite',
   'shorten',

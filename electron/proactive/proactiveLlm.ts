@@ -2,6 +2,8 @@ import fetch from 'node-fetch'
 import { BrowserWindow } from 'electron'
 import { getAnthropicApiKey } from '../keys'
 import {
+  DICTATION_POLISH_MAX_OUTPUT_TOKENS,
+  DICTATION_POLISH_MODEL,
   PROACTIVE_FEATURE_MAX_OUTPUT_TOKENS,
   PROACTIVE_FEATURE_MODEL,
 } from './featureTypes'
@@ -164,6 +166,40 @@ export async function completeProactiveText(
       body: JSON.stringify({
         model: PROACTIVE_FEATURE_MODEL,
         max_tokens: maxTokens,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userContent }],
+      }),
+    })
+
+    if (!response.ok) return null
+    const data = (await response.json()) as { content?: Array<{ text?: string }> }
+    return data.content?.[0]?.text?.trim() ?? null
+  } catch {
+    return null
+  }
+}
+
+/** Low-latency dictation polish — Haiku, temperature 0 for transcript fidelity. */
+export async function completeDictationText(
+  systemPrompt: string,
+  userContent: string,
+  maxTokens = DICTATION_POLISH_MAX_OUTPUT_TOKENS,
+): Promise<string | null> {
+  const apiKey = await getAnthropicApiKey()
+  if (!apiKey) return null
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: DICTATION_POLISH_MODEL,
+        max_tokens: maxTokens,
+        temperature: 0,
         system: systemPrompt,
         messages: [{ role: 'user', content: userContent }],
       }),

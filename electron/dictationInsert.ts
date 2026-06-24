@@ -639,19 +639,26 @@ function mergeDictationText(
   return `${prior} ${trimmed}`
 }
 
-async function focusFieldAtCursor(app: string): Promise<{ x: number; y: number } | null> {
+async function focusFieldAtCursor(
+  app: string,
+  options: { skipActivate?: boolean } = {},
+): Promise<{ x: number; y: number } | null> {
   const cursor = screen.getCursorScreenPoint()
-  activateApplication(app)
-  await delay(120)
+  if (!options.skipActivate) {
+    activateApplication(app)
+    await delay(100)
+  } else {
+    await delay(50)
+  }
   clickAtScreenPoint(cursor.x, cursor.y)
-  await delay(100)
+  await delay(options.skipActivate ? 60 : 80)
   return cursor
 }
 
 async function pasteViaClipboard(text: string): Promise<boolean> {
   const previousClipboard = clipboard.readText()
   clipboard.writeText(text)
-  await delay(40)
+  await delay(30)
 
   const pasted = pasteAtFrontmost()
   if (!pasted) {
@@ -663,7 +670,7 @@ async function pasteViaClipboard(text: string): Promise<boolean> {
     return false
   }
 
-  await delay(180)
+  await delay(120)
   if (previousClipboard) {
     clipboard.writeText(previousClipboard)
   } else {
@@ -694,9 +701,25 @@ function resolveInsertTarget(
   return { app, snapshot: null }
 }
 
+/** Bring target app forward while polish runs — saves latency on insert. */
+export function preactivateDictationTarget(
+  target?: string | null | DictationTargetSnapshot,
+): string | null {
+  const { app } = resolveInsertTarget(target)
+  if (!app || isClarifiProcess(app)) return null
+  activateApplication(app)
+  return app
+}
+
+export type DictationInsertOptions = {
+  /** Target app was already activated during compose. */
+  skipActivate?: boolean
+}
+
 export async function insertTextIntoExternalField(
   text: string,
   target?: string | null | DictationTargetSnapshot,
+  options: DictationInsertOptions = {},
 ): Promise<DictationInsertResult> {
   const trimmed = text.trim()
   if (!trimmed) return { ok: false, error: 'insert_failed' }
@@ -712,7 +735,7 @@ export async function insertTextIntoExternalField(
     }
 
     const surface = inferDictationSurface(app)
-    await focusFieldAtCursor(app)
+    await focusFieldAtCursor(app, { skipActivate: options.skipActivate })
 
     if (await pasteViaClipboard(trimmed)) {
       return { ok: true, method: 'paste', targetApp: app }
@@ -729,7 +752,7 @@ export async function insertTextIntoExternalField(
   }
 
   if (process.platform === 'win32') {
-    await focusFieldAtCursor(app)
+    await focusFieldAtCursor(app, { skipActivate: options.skipActivate })
     if (await pasteViaClipboard(trimmed)) {
       return { ok: true, method: 'paste', targetApp: app }
     }

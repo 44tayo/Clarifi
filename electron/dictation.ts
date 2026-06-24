@@ -1,7 +1,8 @@
 import { getDictationLanguage, getDictationOutputLanguageInstruction } from './audioPreferences'
-import { dictationLanguageName, dictationWhisperPrompt } from './dictationLanguages'
+import { dictationLanguageName } from './dictationLanguages'
 import { transcribeDictationAudio } from './audio'
-import { completeProactiveText } from './proactive/proactiveLlm'
+import { completeDictationText } from './proactive/proactiveLlm'
+import { DICTATION_POLISH_MAX_OUTPUT_TOKENS } from './proactive/featureTypes'
 import {
   dictationSurfaceLabel,
   inferDictationSurface,
@@ -9,8 +10,10 @@ import {
 import {
   insertTextIntoExternalField,
   isClarifiProcess,
+  preactivateDictationTarget,
   type DictationTargetSnapshot,
 } from './dictationInsert'
+import { isLikelyHallucination, normalizeForCompare } from './transcriptUtils'
 
 function buildDictationPrompt(spokenLanguage: string, surface?: string): string {
   const languageLine =
@@ -20,7 +23,8 @@ function buildDictationPrompt(spokenLanguage: string, surface?: string): string 
 
   const surfaceRules =
     surface === 'email'
-      ? `- Email surface: structure as a proper email when content warrants it — clear paragraphs, professional tone, greeting and sign-off only if the speaker included them or clearly implied a full message.
+      ? `- Email surface: use clear paragraphs and professional tone when the speaker dictated a full message.
+- Greeting and sign-off only if the speaker said them — never invent either.
 - Fix run-on sentences; keep names, dates, and numbers exactly as spoken.`
       : surface === 'chat'
         ? `- Chat surface: keep lines short and conversational; one thought per line when the speaker pauses.
@@ -37,13 +41,14 @@ Return ONLY the final text — no quotes, markdown fences, labels, or explanatio
 
 Rules:
 - ${languageLine}
+- Fidelity: every content word in your output must come from the verbatim transcript. Do not continue, complete, or merge with any existing field text — only the newly spoken words.
 - Remove filler words (um, uh, like, you know), false starts, and repeated fragments; preserve intent and every substantive detail.
 - Apply proper punctuation, capitalization, and sentence boundaries for the target language.
 - Self-correction: if the speaker revises themselves ("no wait", "I mean"), output ONLY the final intended wording.
+- When unsure between two phrasings, prefer the transcript wording over guessing.
 ${surfaceRules}
 - Do not invent facts, names, or commitments the speaker did not say.
-- Do not add content the user did not say.
-- When unsure between two phrasings, prefer the more precise and grammatically correct reading.`
+- Do not add content the user did not say.`
 }
 
 export type DictationTarget = 'auto' | 'overlay' | 'focused_field'
@@ -75,14 +80,21 @@ function resolveSurfaceHint(
   const surface = inferDictationSurface(targetApp)
   const lines = [
     `Target surface: ${surface} (${dictationSurfaceLabel(surface)}). Active app: ${targetApp ?? 'unknown'}.`,
+    'Do not continue or reply to any existing text in the field — output only what was spoken in this clip.',
   ]
   if (snapshot?.windowTitle) {
     lines.push(`Window title: ${snapshot.windowTitle}.`)
   }
-  if (snapshot?.fieldPreview) {
-    lines.push(`Existing field starts with: ${snapshot.fieldPreview.slice(0, 120)}`)
-  }
   return lines.join(' ')
+}
+
+function stripSpokenFillers(text: string): string {
+  let out = text
+  out = out.replace(/\b(u+h+h*|u+m+m*h*|e+h+m+|e+r+m+|h+m+)\b/gi, '')
+  out = out.replace(/\b(the\s+){2,}/gi, 'the ')
+  out = out.replace(/\s+/g, ' ').trim()
+  out = out.replace(/\s+([,.!?;:])/g, '$1')
+  return out
 }
 
 function normalizeDictationOutput(text: string): string {
@@ -95,13 +107,48 @@ function normalizeDictationOutput(text: string): string {
   }
   out = out.replace(/^```[\w]*\n?/, '').replace(/\n?```$/, '').trim()
   out = out.replace(/^(output|result|dictation):\s*/i, '').trim()
+  out = stripSpokenFillers(out)
   return out
+}
+
+function contentWords(text: string): Set<string> {
+  return new Set(
+    normalizeForCompare(text)
+      .split(' ')
+      .filter((word) => word.length >= 3),
+  )
+}
+
+function polishDriftedTooFar(raw: string, polished: string): boolean {
+  const rawWords = contentWords(raw)
+  const polishedWords = contentWords(polished)
+  if (polishedWords.size === 0) return true
+  if (rawWords.size === 0) return false
+
+  let newWords = 0
+  polishedWords.forEach((word) => {
+    if (!rawWords.has(word)) newWords += 1
+  })
+
+  const newRatio = newWords / polishedWords.size
+  const lengthRatio = polished.length / Math.max(raw.length, 1)
+  return newRatio > 0.35 || lengthRatio > 2.5
+}
+
+function looksAlreadyClean(trimmed: string): boolean {
+  const words = trimmed.split(/\s+/).filter(Boolean)
+  if (words.length > 8 || words.length < 3) return false
+  const hasEndPunct = /[.!?]$/.test(trimmed)
+  const startsCapital = /^[A-ZÀ-ÖØ-Þ]/.test(trimmed)
+  const lowFiller = !/\b(u+m+h*|u+h+h*|ehm|hmm)\b/i.test(trimmed)
+  return hasEndPunct && startsCapital && lowFiller
 }
 
 function shouldSkipPolish(raw: string): boolean {
   const trimmed = raw.trim()
   if (!trimmed) return true
   if (/^(um|uh|ehm|hmm)[\s,.!?-]*$/i.test(trimmed)) return true
+  if (looksAlreadyClean(trimmed)) return true
   const words = trimmed.split(/\s+/).filter(Boolean)
   return words.length < 3
 }
@@ -115,43 +162,56 @@ export async function composeDictationFromAudio(
   } = {},
 ): Promise<DictationComposeResult> {
   const spokenLanguage = getDictationLanguage()
-  const whisperPrompt = dictationWhisperPrompt(spokenLanguage)
   const targetApp = options.targetSnapshot?.app ?? options.targetApp ?? null
   const surface = inferDictationSurface(targetApp)
   const surfaceHint = resolveSurfaceHint(targetApp, options.targetSnapshot)
   const outputInstruction = getDictationOutputLanguageInstruction(spokenLanguage)
   const destination = resolveDestinationForApp(options.target ?? 'auto', targetApp)
   const surfaceLabel = dictationSurfaceLabel(surface)
+  const insertTarget = options.targetSnapshot ?? targetApp
+  const willInsert = destination === 'focused_field'
+  let preactivated = false
 
   const raw = await transcribeDictationAudio(audioBase64, {
     source: 'mic',
     language: spokenLanguage,
-    prompt: whisperPrompt,
   })
-  if (!raw?.trim()) {
+  const trimmedRaw = raw?.trim() ?? ''
+  if (!trimmedRaw || isLikelyHallucination(trimmedRaw, 'mic')) {
     return { error: 'no_speech' }
   }
 
-  let text = raw.trim()
-  if (!shouldSkipPolish(raw)) {
-    const polished = await completeProactiveText(
-      buildDictationPrompt(spokenLanguage, surface) + outputInstruction,
-      `${surfaceHint}\n\nSpoken dictation (verbatim transcript):\n${raw.trim()}`,
-      1200,
-    )
-    text = normalizeDictationOutput(polished?.trim() || raw.trim())
+  const preactivatePromise = willInsert
+    ? Promise.resolve().then(() => {
+        preactivated = preactivateDictationTarget(insertTarget) !== null
+      })
+    : Promise.resolve()
+
+  const polishPromise = !shouldSkipPolish(trimmedRaw)
+    ? completeDictationText(
+        buildDictationPrompt(spokenLanguage, surface) + outputInstruction,
+        `${surfaceHint}\n\nSpoken dictation (verbatim transcript):\n${trimmedRaw}`,
+        DICTATION_POLISH_MAX_OUTPUT_TOKENS,
+      )
+    : Promise.resolve(null)
+
+  const [, polished] = await Promise.all([preactivatePromise, polishPromise])
+
+  let text = trimmedRaw
+  if (polished?.trim()) {
+    const candidate = normalizeDictationOutput(polished.trim())
+    text = polishDriftedTooFar(trimmedRaw, candidate) ? normalizeDictationOutput(trimmedRaw) : candidate
   } else {
-    text = normalizeDictationOutput(text)
+    text = normalizeDictationOutput(trimmedRaw)
   }
 
   if (destination === 'overlay') {
     return { text, destination: 'overlay', surfaceLabel }
   }
 
-  const insert = await insertTextIntoExternalField(
-    text,
-    options.targetSnapshot ?? targetApp,
-  )
+  const insert = await insertTextIntoExternalField(text, insertTarget, {
+    skipActivate: preactivated,
+  })
   if (insert.ok) {
     return {
       text,
