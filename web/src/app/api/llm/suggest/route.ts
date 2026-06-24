@@ -1,25 +1,9 @@
-import {
-  getUserIdFromRequest,
-  planLimitResponse,
-  unauthorizedResponse,
-} from '@/lib/request-auth'
+import { authorizeLlmRequest } from '@/lib/llm-route-auth'
 import { generateSuggestions } from '@/lib/llm-server'
-import { enforceLlmRateLimit, getRateLimitMessage } from '@/lib/rate-limit'
-import { getUserPlan } from '@/lib/usage'
 
 export async function POST(req: Request) {
-  const userId = await getUserIdFromRequest(req)
-  if (!userId) return unauthorizedResponse()
-
-  const plan = await getUserPlan(userId)
-  const rate = await enforceLlmRateLimit(userId, plan, 'llm_suggest')
-  if (!rate.allowed) {
-    return planLimitResponse(
-      getRateLimitMessage(rate.window),
-      rate.window,
-      rate.retryAfterSeconds,
-    )
-  }
+  const auth = await authorizeLlmRequest(req)
+  if (auth instanceof Response) return auth
 
   let body: unknown
   try {

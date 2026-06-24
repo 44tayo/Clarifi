@@ -108,6 +108,7 @@ export async function GET(request: Request) {
     await admin.from('profiles').upsert(
       {
         user_id: user.id,
+        email: user.email,
         plan: isCreatorUser(user.id) ? 'pro_plus' : 'free',
         updated_at: new Date().toISOString(),
       },

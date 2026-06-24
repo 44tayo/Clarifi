@@ -1,13 +1,11 @@
 import { deleteHubSpotConnection } from '@/lib/hubspot'
-import { resolveIntegrationUserId } from '@/lib/integration-auth'
+import { requireIntegrationAccess } from '@/lib/integration-guard'
 
 export async function POST(req: Request) {
-  const userId = await resolveIntegrationUserId(req)
-  if (!userId) {
-    return Response.json({ error: 'unauthorized' }, { status: 401 })
-  }
+  const access = await requireIntegrationAccess(req, 'hubspot')
+  if (access instanceof Response) return access
 
-  const ok = await deleteHubSpotConnection(userId)
+  const ok = await deleteHubSpotConnection(access.userId)
   if (!ok) {
     return Response.json({ error: 'disconnect_failed' }, { status: 500 })
   }

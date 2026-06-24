@@ -326,6 +326,8 @@ export class DictationSession {
 
       if (result.error === 'no_speech') {
         showStatus(this.callbacks, 'No speech detected — try again')
+      } else if (result.error === 'plan_required') {
+        showStatus(this.callbacks, 'Start a 7-day free trial to use voice dictation', 4000)
       } else if (result.destination === 'focused_field' && result.text) {
         const appLabel = result.targetApp?.split(' ')[0] ?? result.surfaceLabel ?? 'your app'
         showStatus(this.callbacks, `Dictation inserted into ${appLabel}`, 2500)

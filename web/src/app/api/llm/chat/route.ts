@@ -1,31 +1,19 @@
+import { authorizeLlmRequest } from '@/lib/llm-route-auth'
 import {
   buildGmailContextText,
   extractGmailSearchQuery,
   messageRequestsGmailContext,
   searchGmailMessages,
 } from '@/lib/gmail'
-import {
-  getUserIdFromRequest,
-  planLimitResponse,
-  unauthorizedResponse,
-} from '@/lib/request-auth'
+import { hasFeature } from '@/lib/entitlements'
+import { isPlanGuardResponse, planRequiredResponse, requireFeature } from '@/lib/plan-guard'
 import { chatWithMeetingContext } from '@/lib/llm-server'
-import { enforceLlmRateLimit, getRateLimitMessage } from '@/lib/rate-limit'
-import { getUserPlan } from '@/lib/usage'
 
 export async function POST(req: Request) {
-  const userId = await getUserIdFromRequest(req)
-  if (!userId) return unauthorizedResponse()
+  const auth = await authorizeLlmRequest(req)
+  if (auth instanceof Response) return auth
 
-  const plan = await getUserPlan(userId)
-  const rate = await enforceLlmRateLimit(userId, plan, 'llm_chat')
-  if (!rate.allowed) {
-    return planLimitResponse(
-      getRateLimitMessage(rate.window),
-      rate.window,
-      rate.retryAfterSeconds,
-    )
-  }
+  const { userId, plan } = auth
 
   let body: unknown
   try {
@@ -46,6 +34,12 @@ export async function POST(req: Request) {
     return Response.json({ error: 'message_required' }, { status: 400 })
   }
 
+  if (payload.useScreenContext || payload.screenImage) {
+    if (!hasFeature(plan, 'screen_context')) {
+      return planRequiredResponse('pro', 'screen_context')
+    }
+  }
+
   const transcriptLines = Array.isArray(payload.transcriptLines)
     ? payload.transcriptLines.filter((line): line is string => typeof line === 'string')
     : []
@@ -53,6 +47,9 @@ export async function POST(req: Request) {
   let emailContext =
     typeof payload.emailContext === 'string' ? payload.emailContext.trim() : ''
   if (!emailContext && messageRequestsGmailContext(payload.message)) {
+    const gmailOrBlock = await requireFeature(userId, 'gmail')
+    if (isPlanGuardResponse(gmailOrBlock)) return gmailOrBlock
+
     const query = extractGmailSearchQuery(payload.message)
     if (query) {
       const messages = await searchGmailMessages(userId, query, 5)

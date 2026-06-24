@@ -23,3 +23,7 @@ export function planLimitResponse(
     { status: 429 },
   )
 }
+
+export function serviceUnavailableResponse(message = 'Service temporarily unavailable'): Response {
+  return Response.json({ error: 'service_unavailable', message }, { status: 503 })
+}

@@ -17,9 +17,8 @@ import {
   getOverlayWindow,
   showOverlayWindow,
 } from './overlay'
-import { createDictationPillWindow, showDictationPillWindow } from './dictationPill'
-import { isDictationEnabled } from './dictationControl'
-import { startDictationPttMonitor } from './dictationPtt'
+import { createDictationPillWindow } from './dictationPill'
+import { syncDictationEntitlement } from './planAccess'
 import { registerKeybinds } from './keybindManager'
 import { sendOverlayTourStep } from './overlayTour'
 
@@ -38,10 +37,7 @@ export function notifyOnboardingAuthConnected(): void {
 
 export function ensureDictationPillAtLaunch(): void {
   createDictationPillWindow()
-  if (isDictationEnabled()) {
-    startDictationPttMonitor()
-    showDictationPillWindow()
-  }
+  void syncDictationEntitlement()
 }
 
 export function createOnboardingWindow(): BrowserWindow {

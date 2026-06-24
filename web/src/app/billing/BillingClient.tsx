@@ -4,45 +4,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 import { checkoutHref } from '@/lib/checkout'
-import type { BillingInterval } from '@/lib/pricing'
-import { annualSavings, maxAnnualSavingsPercent } from '@/lib/pricing'
-
-const plans = [
-  {
-    id: 'pro' as const,
-    name: 'Pro',
-    audience: 'Individual',
-    monthlyPrice: '$19',
-    annualPrice: '$15',
-    period: '/ month',
-    annualNote: 'Billed $180 annually',
-    features: [
-      '7-day free trial',
-      'Unlimited AI responses',
-      'Unlimited meeting notetaking',
-      'Unlimited custom prompting',
-      'Custom keybinds',
-      'Priority support',
-    ],
-  },
-  {
-    id: 'pro_plus' as const,
-    name: 'Pro+',
-    audience: 'Team',
-    monthlyPrice: '$39',
-    annualPrice: '$29',
-    period: '/ seat / month',
-    annualNote: 'Billed $348 per seat annually',
-    features: [
-      '7-day free trial',
-      'Everything in Pro',
-      'Undetectability to screen share',
-      'Invisible on Zoom, Meet, and Teams',
-      'Team-ready seats',
-      'Priority support',
-    ],
-  },
-]
+import { getPricingPlans, maxAnnualSavingsPercent, type BillingInterval } from '@/lib/pricing'
 
 export default function BillingClient() {
   const searchParams = useSearchParams()
@@ -50,6 +12,7 @@ export default function BillingClient() {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const checkoutStatus = searchParams.get('checkout')
+  const plans = getPricingPlans(interval)
 
   useEffect(() => {
     const fromQuery = searchParams.get('interval')
@@ -151,9 +114,7 @@ export default function BillingClient() {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {plans.map((plan) => {
-            const price = interval === 'annual' ? plan.annualPrice : plan.monthlyPrice
-            return (
+          {plans.map((plan) => (
               <div
                 key={plan.id}
                 className={`p-6 rounded-2xl border ${
@@ -162,15 +123,15 @@ export default function BillingClient() {
               >
                 <p className="text-xs uppercase tracking-wide text-white/40 mb-2">{plan.audience}</p>
                 <div className="text-2xl font-bold mb-1">
-                  {price}
+                  {plan.price}
                   <span className="text-base font-normal text-white/50">{plan.period}</span>
                 </div>
                 {interval === 'annual' ? (
                   <>
-                    <div className="text-sm text-white/40 mb-1">{plan.annualNote}</div>
-                    <div className="text-sm font-medium text-emerald-400 mb-4">
-                      {annualSavings(plan.id).label}
-                    </div>
+                    <div className="text-sm text-white/40 mb-1">{plan.billedNote}</div>
+                    {plan.savingsNote ? (
+                      <div className="text-sm font-medium text-emerald-400 mb-4">{plan.savingsNote}</div>
+                    ) : null}
                   </>
                 ) : (
                   <div className="text-sm text-white/40 mb-4">7-day free trial included</div>
@@ -189,11 +150,10 @@ export default function BillingClient() {
                   disabled={loadingPlan === plan.id}
                   className="w-full py-3 rounded-xl text-sm font-medium bg-white text-black hover:bg-white/90 disabled:opacity-50"
                 >
-                  {loadingPlan === plan.id ? 'Redirecting…' : 'Start 7-day free trial'}
+                  {loadingPlan === plan.id ? 'Redirecting…' : plan.cta}
                 </button>
               </div>
-            )
-          })}
+            ))}
         </div>
       </div>
     </main>

@@ -1412,6 +1412,8 @@ export default function Overlay() {
 
       if (result.error === 'rate_limit' || result.error === 'rate_limit_exceeded') {
         setSessionReply('Usage limit reached — try again later')
+      } else if (result.error === 'plan_required') {
+        setSessionReply('Start a 7-day free trial on the website to use Clarifi.')
       } else if (result.error === 'auth_expired' || result.error === 'not_authenticated') {
         setConnectionState('needs_connect')
         setSessionReply('Account not connected. Connect on the website while signed in.')
@@ -1498,6 +1500,12 @@ export default function Overlay() {
       if (result.error === 'rate_limit' || result.error === 'rate_limit_exceeded') {
         setChatStatus('Usage limit reached — try again later')
         assistantMessage = { role: 'assistant', content: 'Usage limit reached — try again later' }
+      } else if (result.error === 'plan_required') {
+        setChatStatus('Start a 7-day free trial on the website')
+        assistantMessage = {
+          role: 'assistant',
+          content: 'Start a 7-day free trial on the website to use Clarifi.',
+        }
       } else if (result.error === 'auth_expired' || result.error === 'not_authenticated') {
         setChatStatus('Account not connected — connect again on the website')
         setConnectionState('needs_connect')

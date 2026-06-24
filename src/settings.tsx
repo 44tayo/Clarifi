@@ -5,6 +5,21 @@ import {
 } from './lib/anthropic-models'
 import { acceleratorToKeyLabels, keyboardEventToAccelerator } from './lib/keybindDisplay'
 import { ProactiveSettingsPanel } from './components/ProactiveSettingsPanel'
+import { SettingsShell } from './settings/SettingsShell'
+import { ShareSessionModal } from './settings/ShareSessionModal'
+import { resizeImageForAvatar } from './settings/ProfileAvatar'
+import { ProfileTab } from './settings/tabs/ProfileTab'
+import { AudioSessionsTab } from './settings/tabs/AudioSessionsTab'
+import { HistoryTab } from './settings/tabs/HistoryTab'
+import { CommunityTab } from './settings/tabs/CommunityTab'
+import {
+  type SettingsTab,
+  type DeviceProfile,
+  type StoredAudioSession,
+  type ChatSession,
+  type HistoryFilter,
+} from './settings/types'
+import { normalizeSettingsTab, hasCommunitiesAccess } from './settings/utils'
 import './settings.css'
 
 type ModelProvider = 'anthropic' | 'openai' | 'gemini' | 'groq' | 'custom'
@@ -37,195 +52,10 @@ type PublicPreferences = {
   generalKnowledge: string
 }
 
-type SettingsTab =
-  | 'profile'
-  | 'models'
-  | 'modes'
-  | 'integrations'
-  | 'keybinds'
-  | 'audio'
-  | 'audio_sessions'
-  | 'history'
-  | 'productivity'
-
-type StoredAudioSession = {
-  id: string
-  title: string
-  createdAt: number
-  endedAt: number
-  transcript: Array<{ id: string; text: string; source: string; speaker?: string; at: number }>
-  recap: {
-    summary: string
-    highlights: string[]
-    actionItems: string[]
-    openQuestions: string[]
-    recapEmailDraft: string
-  } | null
-  chatMessages: Array<{ role: string; content: string }>
-}
-
-type ChatSession = {
-  id: string
-  title: string
-  createdAt: number
-  messages: { role: string; content: string }[]
-  archived?: boolean
-}
-
-type HistoryFilter = 'all' | 'active' | 'archived'
-
-type ConnectedAccount = {
-  provider: string
-  label: string
-  email?: string
-}
-
-type DeviceProfile = {
-  paired: boolean
-  userId?: string
-  email?: string
-  firstName?: string
-  lastName?: string
-  fullName?: string
-  avatarUrl?: string
-  localAvatarUrl?: string
-  connectedAccounts?: ConnectedAccount[]
-  plan?: string
-  planLabel?: string
-  sessionsToday?: number
-  sessionsLimit?: number | null
-}
-
-const AVATAR_COLORS = ['#3b82f6', '#6366f1', '#8b5cf6', '#ec4899', '#14b8a6', '#0ea5e9', '#f59e0b']
-
-function profileInitials(profile: DeviceProfile): string {
-  const first = profile.firstName?.trim()?.[0] ?? ''
-  const last = profile.lastName?.trim()?.[0] ?? ''
-  if (first || last) return `${first}${last}`.toUpperCase()
-  const full = profile.fullName?.trim() || profile.email?.split('@')[0] || 'U'
-  return full.slice(0, 1).toUpperCase()
-}
-
-function avatarColorSeed(profile: DeviceProfile): string {
-  return profile.email ?? profile.fullName ?? profile.userId ?? 'user'
-}
-
-function avatarPlaceholderColor(profile: DeviceProfile): string {
-  const seed = avatarColorSeed(profile)
-  let hash = 0
-  for (let i = 0; i < seed.length; i += 1) {
-    hash = (hash + seed.charCodeAt(i)) % AVATAR_COLORS.length
-  }
-  return AVATAR_COLORS[hash]
-}
-
-function hasUploadedAvatar(profile: DeviceProfile): boolean {
-  return Boolean(profile.localAvatarUrl?.startsWith('data:image/'))
-}
-
-async function resizeImageForAvatar(
-  file: File,
-  maxSize = 256,
-): Promise<{ base64: string; mimeType: string }> {
-  const bitmap = await createImageBitmap(file)
-  const scale = Math.min(1, maxSize / Math.max(bitmap.width, bitmap.height))
-  const width = Math.max(1, Math.round(bitmap.width * scale))
-  const height = Math.max(1, Math.round(bitmap.height * scale))
-
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
-  const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('canvas_unavailable')
-
-  ctx.drawImage(bitmap, 0, 0, width, height)
-  bitmap.close()
-
-  const mimeType = file.type.includes('png') ? 'image/png' : 'image/jpeg'
-  const dataUrl = canvas.toDataURL(mimeType, mimeType === 'image/jpeg' ? 0.88 : undefined)
-  const comma = dataUrl.indexOf(',')
-  const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl
-  return { base64, mimeType }
-}
-
-function ProfileAvatar({
-  profile,
-  large = false,
-  draftFirstName,
-  draftLastName,
-}: {
-  profile: DeviceProfile
-  large?: boolean
-  draftFirstName?: string
-  draftLastName?: string
-}) {
-  const [imageFailed, setImageFailed] = useState(false)
-  const displayProfile: DeviceProfile =
-    draftFirstName !== undefined || draftLastName !== undefined
-      ? { ...profile, firstName: draftFirstName, lastName: draftLastName }
-      : profile
-  const showImage = hasUploadedAvatar(profile) && !imageFailed
-  const sizeClass = large
-    ? 'settings-profile-photo settings-profile-photo-lg'
-    : 'settings-profile-photo'
-
-  if (showImage && profile.localAvatarUrl) {
-    return (
-      <img
-        src={profile.localAvatarUrl}
-        alt=""
-        className={sizeClass}
-        onError={() => setImageFailed(true)}
-      />
-    )
-  }
-
-  return (
-    <span
-      className={`${sizeClass} settings-profile-photo-fallback`}
-      style={{ backgroundColor: avatarPlaceholderColor(displayProfile) }}
-    >
-      {profileInitials(displayProfile)}
-    </span>
-  )
-}
-
 type PermissionState = {
   microphone: boolean
   screen: boolean
   accessibility: boolean
-}
-
-const SETTINGS_TABS: SettingsTab[] = [
-  'profile',
-  'models',
-  'modes',
-  'integrations',
-  'keybinds',
-  'audio',
-  'audio_sessions',
-  'history',
-  'productivity',
-]
-
-const NAV_ITEMS: { id: SettingsTab; label: string; profile?: boolean }[] = [
-  { id: 'profile', label: 'Profile', profile: true },
-  { id: 'models', label: 'Models' },
-  { id: 'modes', label: 'Modes' },
-  { id: 'integrations', label: 'Integrations' },
-  { id: 'keybinds', label: 'Keybinds' },
-  { id: 'audio', label: 'Audio' },
-  { id: 'audio_sessions', label: 'Audio Sessions' },
-  { id: 'history', label: 'History' },
-  { id: 'productivity', label: 'Productivity' },
-]
-
-function formatHistoryTime(ts: number): string {
-  const diff = Date.now() - ts
-  if (diff < 60_000) return 'just now'
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
-  return `${Math.floor(diff / 86_400_000)}d ago`
 }
 
 type KeybindActionId =
@@ -318,14 +148,6 @@ const OUTPUT_LANGUAGES = [
   { code: 'sv', label: 'Swedish' },
 ]
 
-function normalizeSettingsTab(value: unknown): SettingsTab | null {
-  if (value === 'general') return 'models'
-  if (typeof value === 'string' && SETTINGS_TABS.includes(value as SettingsTab)) {
-    return value as SettingsTab
-  }
-  return null
-}
-
 function groupModesByCategory(modes: ModeConfig[]): Map<string, ModeConfig[]> {
   const map = new Map<string, ModeConfig[]>()
   for (const mode of modes) {
@@ -401,6 +223,7 @@ export default function SettingsApp() {
   const [audioSessions, setAudioSessions] = useState<StoredAudioSession[]>([])
   const [audioRenamingId, setAudioRenamingId] = useState<string | null>(null)
   const [audioRenameDraft, setAudioRenameDraft] = useState('')
+  const [shareSession, setShareSession] = useState<StoredAudioSession | null>(null)
   const [keybindDefinitions, setKeybindDefinitions] = useState<KeybindDefinition[]>([])
   const [keybindAccelerators, setKeybindAccelerators] = useState<KeybindPreferences | null>(null)
   const [recordingKeybindId, setRecordingKeybindId] = useState<KeybindActionId | null>(null)
@@ -998,215 +821,65 @@ export default function SettingsApp() {
 
   const renderPrefsLoading = () => <p className="settings-empty">Loading…</p>
 
+  const settingsFooter = (
+    <footer className="settings-footer">
+      <span className="settings-footer-label">Account and app</span>
+      <div className="settings-footer-actions">
+        <button type="button" className="settings-footer-action" onClick={resetOnboarding}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 12a9 9 0 1 0 3-6.7" />
+            <path d="M3 4v5h5" />
+          </svg>
+          Replay product tour
+        </button>
+        <button type="button" className="settings-footer-action" onClick={logoutAccount}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <path d="M16 17l5-5-5-5M21 12H9" />
+          </svg>
+          Log out
+        </button>
+        <button type="button" className="settings-footer-action danger" onClick={eraseAccountData}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
+          </svg>
+          Erase local data
+        </button>
+        <button type="button" className="settings-footer-action" onClick={quitApp}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 2v10" />
+            <path d="M18.4 6.6a9 9 0 1 1-12.8 0" />
+          </svg>
+          Quit
+        </button>
+      </div>
+    </footer>
+  )
+
   return (
-    <div className="settings-root">
-      <div className="settings-drag-region" aria-hidden />
-      <aside className="settings-sidebar">
-        <div className="settings-brand">
-          <span className="settings-brand-dot" />
-          Clarifi
-        </div>
-
-        <nav className="settings-nav">
-          {NAV_ITEMS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`settings-nav-btn ${tab === item.id ? 'active' : ''} ${item.profile ? 'settings-nav-profile' : ''}`}
-              onClick={() => setTab(item.id)}
-            >
-              {item.profile && (
-                <span className="settings-profile-avatar" aria-hidden>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="8" r="4" />
-                    <path d="M4 20c0-4 4-6 8-6s8 2 8 6" />
-                  </svg>
-                </span>
-              )}
-              {item.label}
-            </button>
-          ))}
-        </nav>
-      </aside>
-
-      <div className="settings-shell">
-      <main className="settings-main">
+    <>
+    <SettingsShell tab={tab} profile={profile} onTabChange={setTab} footer={settingsFooter}>
         {tab === 'profile' && (
-          <>
-            <h1 className="settings-section-title">Profile details</h1>
-
-            {!profile ? (
-              <p className="settings-empty">Loading profile…</p>
-            ) : !profile.paired ? (
-              <div className="settings-card">
-                <div className="settings-card-title">Not connected</div>
-                <p className="settings-card-desc">
-                  Sign in on the website and open Clarifi to link this desktop app to your account.
-                </p>
-                <button type="button" className="settings-btn primary" onClick={openConnect}>
-                  Connect account
-                </button>
-              </div>
-            ) : (
-              <div className="settings-profile-details">
-                <div className="settings-profile-section">
-                  <div className="settings-profile-section-label">Profile</div>
-
-                  {!editingProfile ? (
-                    <div className="settings-profile-summary-row">
-                      <div className="settings-profile-summary-left">
-                        <ProfileAvatar profile={profile} />
-                        <span className="settings-profile-display-name">
-                          {profile.fullName ||
-                            `${profile.firstName ?? ''} ${profile.lastName ?? ''}`.trim() ||
-                            profile.email}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        className="settings-link-btn"
-                        onClick={startEditProfile}
-                      >
-                        Update profile
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="settings-profile-edit">
-                      <div className="settings-profile-upload-row">
-                        <ProfileAvatar
-                          profile={profile}
-                          large
-                          draftFirstName={draftFirstName}
-                          draftLastName={draftLastName}
-                        />
-                        <div className="settings-profile-upload-actions">
-                          <button type="button" className="settings-btn" onClick={uploadAvatar}>
-                            Upload
-                          </button>
-                          <button
-                            type="button"
-                            className="settings-link-btn settings-link-btn-danger"
-                            onClick={removeAvatar}
-                          >
-                            Remove
-                          </button>
-                          <p className="settings-profile-upload-hint">
-                            Recommended size 1:1, up to 10MB.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="settings-form-grid">
-                        <div className="settings-field">
-                          <label>First name</label>
-                          <input
-                            className="settings-input"
-                            value={draftFirstName}
-                            onChange={(e) => setDraftFirstName(e.target.value)}
-                          />
-                        </div>
-                        <div className="settings-field">
-                          <label>Last name</label>
-                          <input
-                            className="settings-input"
-                            value={draftLastName}
-                            onChange={(e) => setDraftLastName(e.target.value)}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="settings-form-actions settings-form-actions-end">
-                        <button
-                          type="button"
-                          className="settings-link-btn"
-                          onClick={cancelEditProfile}
-                          disabled={profileSaving}
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          className="settings-btn primary"
-                          onClick={() => void saveProfile()}
-                          disabled={profileSaving}
-                        >
-                          {profileSaving ? 'Saving…' : 'Save'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="settings-profile-divider" />
-
-                <div className="settings-profile-section">
-                  <div className="settings-profile-section-label">Email addresses</div>
-                  {profile.email && (
-                    <div className="settings-profile-list-row">
-                      <div className="settings-profile-list-main">
-                        <span>{profile.email}</span>
-                        <span className="settings-pill">Primary</span>
-                      </div>
-                    </div>
-                  )}
-                  <button type="button" className="settings-link-btn" onClick={openDashboard}>
-                    + Add email address
-                  </button>
-                </div>
-
-                <div className="settings-profile-divider" />
-
-                <div className="settings-profile-section">
-                  <div className="settings-profile-section-label">Connected accounts</div>
-                  {(profile.connectedAccounts ?? []).map((account) => (
-                    <div key={account.provider} className="settings-profile-list-row">
-                      <div className="settings-profile-list-main">
-                        {account.provider === 'google' && (
-                          <span className="settings-provider-icon" aria-hidden>
-                            G
-                          </span>
-                        )}
-                        <span>
-                          {account.label}
-                          {account.email ? ` · ${account.email}` : ''}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                  <button type="button" className="settings-link-btn" onClick={openConnect}>
-                    + Connect account
-                  </button>
-                </div>
-
-                <div className="settings-profile-divider" />
-
-                <div className="settings-profile-section settings-profile-plan-row">
-                  <div>
-                    <div className="settings-profile-section-label">Plan</div>
-                    <div className="settings-profile-plan-value">
-                      {profile.planLabel ?? profile.plan ?? '—'}
-                      {typeof profile.sessionsToday === 'number' && (
-                        <span className="settings-profile-plan-meta">
-                          {' '}
-                          · {profile.sessionsToday}
-                          {typeof profile.sessionsLimit === 'number'
-                            ? ` / ${profile.sessionsLimit}`
-                            : profile.sessionsLimit === null
-                              ? ' / Unlimited'
-                              : ''}{' '}
-                          sessions today
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <button type="button" className="settings-btn small" onClick={openBilling}>
-                    Manage plan
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
+          <ProfileTab
+            profile={profile}
+            editingProfile={editingProfile}
+            draftFirstName={draftFirstName}
+            draftLastName={draftLastName}
+            profileSaving={profileSaving}
+            onDraftFirstName={setDraftFirstName}
+            onDraftLastName={setDraftLastName}
+            onStartEdit={startEditProfile}
+            onCancelEdit={cancelEditProfile}
+            onSave={saveProfile}
+            onUploadAvatar={uploadAvatar}
+            onRemoveAvatar={removeAvatar}
+            onConnect={openConnect}
+            onBilling={openBilling}
+            onDashboard={openDashboard}
+          />
         )}
+
+        {tab === 'community' && <CommunityTab profile={profile} onBilling={openBilling} />}
 
         {tab === 'models' && (
           <>
@@ -1891,232 +1564,41 @@ export default function SettingsApp() {
         )}
 
         {tab === 'audio_sessions' && (
-          <>
-            <h1 className="settings-section-title">Audio sessions</h1>
-            <p className="settings-section-desc">
-              Past meeting recordings with transcripts, recaps, and session-scoped AI chat. Open a session
-              in the overlay to review notes or ask questions about that recording only.
-            </p>
-
-            {audioSessions.length === 0 ? (
-              <p className="settings-empty">No audio sessions yet. Start and stop a session from the overlay.</p>
-            ) : (
-              <div className="settings-history-list">
-                {audioSessions.map((session) => (
-                  <div key={session.id} className="settings-history-row">
-                    <div className="settings-history-row-main">
-                      {audioRenamingId === session.id ? (
-                        <input
-                          className="settings-history-rename-input"
-                          value={audioRenameDraft}
-                          onChange={(e) => setAudioRenameDraft(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') void saveAudioRename(session.id)
-                            if (e.key === 'Escape') cancelAudioRename()
-                          }}
-                          autoFocus
-                        />
-                      ) : (
-                        <div className="settings-history-row-title">{session.title}</div>
-                      )}
-                      <div className="settings-history-row-meta">
-                        {formatHistoryTime(session.createdAt)}
-                        {' · '}
-                        {session.transcript.length} transcript line
-                        {session.transcript.length === 1 ? '' : 's'}
-                        {session.chatMessages.length > 0
-                          ? ` · ${session.chatMessages.length} chat message${session.chatMessages.length === 1 ? '' : 's'}`
-                          : ''}
-                      </div>
-                    </div>
-                    <div className="settings-history-row-actions">
-                      {audioRenamingId === session.id ? (
-                        <>
-                          <button
-                            type="button"
-                            className="settings-btn small primary"
-                            onClick={() => void saveAudioRename(session.id)}
-                          >
-                            Save
-                          </button>
-                          <button type="button" className="settings-btn small" onClick={cancelAudioRename}>
-                            Cancel
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            className="settings-btn small"
-                            onClick={() => openAudioSessionInOverlay(session.id)}
-                          >
-                            Open
-                          </button>
-                          <button
-                            type="button"
-                            className="settings-btn small"
-                            onClick={() => startAudioRename(session)}
-                          >
-                            Rename
-                          </button>
-                          <button
-                            type="button"
-                            className="settings-btn small danger"
-                            onClick={() => void deleteAudioSession(session.id)}
-                          >
-                            Delete
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
+          <AudioSessionsTab
+            sessions={audioSessions}
+            renamingId={audioRenamingId}
+            renameDraft={audioRenameDraft}
+            onRenameDraft={setAudioRenameDraft}
+            onStartRename={startAudioRename}
+            onCancelRename={cancelAudioRename}
+            onSaveRename={saveAudioRename}
+            onOpen={openAudioSessionInOverlay}
+            onShare={setShareSession}
+            onDelete={deleteAudioSession}
+            canShare={hasCommunitiesAccess(profile)}
+          />
         )}
 
         {tab === 'history' && (
-          <>
-            <h1 className="settings-section-title">Chat history</h1>
-            <p className="settings-section-desc">
-              All your overlay conversations. Open a chat in the overlay, rename it, archive it, or delete it.
-            </p>
-
-            <div className="settings-history-filters">
-              {(['all', 'active', 'archived'] as HistoryFilter[]).map((filter) => (
-                <button
-                  key={filter}
-                  type="button"
-                  className={`settings-history-filter ${historyFilter === filter ? 'active' : ''}`}
-                  onClick={() => setHistoryFilter(filter)}
-                >
-                  {filter === 'all' ? 'All' : filter === 'active' ? 'Active' : 'Archived'}
-                </button>
-              ))}
-            </div>
-
-            {filteredChatSessions.length === 0 ? (
-              <p className="settings-empty">No chats in this view yet.</p>
-            ) : (
-              <div className="settings-history-list">
-                {filteredChatSessions.map((session) => (
-                  <div
-                    key={session.id}
-                    className={`settings-history-row ${session.archived ? 'settings-history-row--archived' : ''}`}
-                  >
-                    <div className="settings-history-row-main">
-                      {renamingId === session.id ? (
-                        <input
-                          className="settings-history-rename-input"
-                          value={renameDraft}
-                          onChange={(e) => setRenameDraft(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') void saveRename(session.id)
-                            if (e.key === 'Escape') cancelRename()
-                          }}
-                          autoFocus
-                        />
-                      ) : (
-                        <div className="settings-history-row-title">{session.title}</div>
-                      )}
-                      <div className="settings-history-row-meta">
-                        {formatHistoryTime(session.createdAt)}
-                        {' · '}
-                        {session.messages.length} message{session.messages.length === 1 ? '' : 's'}
-                        {session.archived ? ' · Archived' : ''}
-                      </div>
-                    </div>
-                    <div className="settings-history-row-actions">
-                      {renamingId === session.id ? (
-                        <>
-                          <button
-                            type="button"
-                            className="settings-btn small primary"
-                            onClick={() => void saveRename(session.id)}
-                          >
-                            Save
-                          </button>
-                          <button type="button" className="settings-btn small" onClick={cancelRename}>
-                            Cancel
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            className="settings-btn small"
-                            onClick={() => openSessionInOverlay(session.id)}
-                          >
-                            Open
-                          </button>
-                          <button
-                            type="button"
-                            className="settings-btn small"
-                            onClick={() => startRename(session)}
-                          >
-                            Rename
-                          </button>
-                          <button
-                            type="button"
-                            className="settings-btn small"
-                            onClick={() => void toggleArchive(session)}
-                          >
-                            {session.archived ? 'Restore' : 'Archive'}
-                          </button>
-                          <button
-                            type="button"
-                            className="settings-btn small danger"
-                            onClick={() => void deleteSession(session.id)}
-                          >
-                            Delete
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
+          <HistoryTab
+            historyFilter={historyFilter}
+            sessions={filteredChatSessions}
+            renamingId={renamingId}
+            renameDraft={renameDraft}
+            onFilterChange={setHistoryFilter}
+            onRenameDraft={setRenameDraft}
+            onStartRename={startRename}
+            onCancelRename={cancelRename}
+            onSaveRename={saveRename}
+            onOpen={openSessionInOverlay}
+            onToggleArchive={toggleArchive}
+            onDelete={deleteSession}
+          />
         )}
 
         {tab === 'productivity' && <ProactiveSettingsPanel />}
-      </main>
-
-      <footer className="settings-footer">
-        <span className="settings-footer-label">Account and app</span>
-        <div className="settings-footer-actions">
-          <button type="button" className="settings-footer-action" onClick={resetOnboarding}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 12a9 9 0 1 0 3-6.7" />
-              <path d="M3 4v5h5" />
-            </svg>
-            Replay product tour
-          </button>
-          <button type="button" className="settings-footer-action" onClick={logoutAccount}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <path d="M16 17l5-5-5-5M21 12H9" />
-            </svg>
-            Log out
-          </button>
-          <button type="button" className="settings-footer-action danger" onClick={eraseAccountData}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
-            </svg>
-            Erase local data
-          </button>
-          <button type="button" className="settings-footer-action" onClick={quitApp}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 2v10" />
-              <path d="M18.4 6.6a9 9 0 1 1-12.8 0" />
-            </svg>
-            Quit
-          </button>
-        </div>
-      </footer>
-      </div>
-    </div>
+    </SettingsShell>
+    <ShareSessionModal session={shareSession} onClose={() => setShareSession(null)} />
+    </>
   )
 }

@@ -3,13 +3,11 @@ import {
   extractGmailSearchQuery,
   searchGmailMessages,
 } from '@/lib/gmail'
-import { resolveIntegrationUserId } from '@/lib/integration-auth'
+import { requireIntegrationAccess } from '@/lib/integration-guard'
 
 export async function POST(req: Request) {
-  const userId = await resolveIntegrationUserId(req)
-  if (!userId) {
-    return Response.json({ error: 'unauthorized' }, { status: 401 })
-  }
+  const access = await requireIntegrationAccess(req, 'gmail')
+  if (access instanceof Response) return access
 
   let body: { query?: string; message?: string; maxResults?: number } = {}
   try {
@@ -27,7 +25,7 @@ export async function POST(req: Request) {
   }
 
   const messages = await searchGmailMessages(
-    userId,
+    access.userId,
     query,
     Math.min(Math.max(body.maxResults ?? 3, 1), 5),
   )

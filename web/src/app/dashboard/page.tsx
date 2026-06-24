@@ -8,7 +8,7 @@ import { DashboardPricingSection } from '@/components/dashboard/DashboardPricing
 import { DesktopConnect } from '@/components/DesktopConnect'
 import { getServerUser } from '@/lib/auth-server'
 import { getGmailConnection, isGmailConfigured, toPublicGmailStatus } from '@/lib/gmail'
-import { PLAN_LIMITS } from '@/lib/plans'
+import { PLAN_LIMITS, isPaidPlan } from '@/lib/plans'
 import { getServerLaunchPreviewState } from '@/lib/launch-preview-server'
 import { shouldBlockPrelaunchAccess } from '@/lib/prelaunch'
 import { getUsageStats } from '@/lib/usage'
@@ -44,9 +44,11 @@ export default async function DashboardPage({
     user.email,
   )
   const { hasEmailAuth, hasGoogleAuth } = getAccountAuthProviders(user.identities, user.email)
-  const limitLabel = Number.isFinite(stats.limit)
-    ? `${stats.used} / ${stats.limit}`
-    : `${stats.used} (unlimited)`
+  const limitLabel = !isPaidPlan(stats.plan)
+    ? 'Start a trial to use Clarifi'
+    : Number.isFinite(stats.limit)
+      ? `${stats.used} / ${stats.limit}`
+      : `${stats.used} (unlimited)`
   const gmailConnection = await getGmailConnection(user.id)
   const gmailStatus = toPublicGmailStatus(gmailConnection)
   const gmailConfigured = isGmailConfigured()

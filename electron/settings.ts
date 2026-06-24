@@ -7,6 +7,7 @@ const isDev = !app.isPackaged
 
 export type SettingsTab =
   | 'profile'
+  | 'community'
   | 'models'
   | 'modes'
   | 'integrations'
@@ -14,9 +15,11 @@ export type SettingsTab =
   | 'audio'
   | 'audio_sessions'
   | 'history'
+  | 'productivity'
 
 export const SETTINGS_TABS: readonly SettingsTab[] = [
   'profile',
+  'community',
   'models',
   'modes',
   'integrations',
@@ -24,6 +27,7 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
   'audio',
   'audio_sessions',
   'history',
+  'productivity',
 ] as const
 
 export function isSettingsTab(value: unknown): value is SettingsTab {
@@ -49,8 +53,8 @@ export function openSettingsWindow(tab: SettingsTab = 'profile'): BrowserWindow 
   }
 
   settingsWindow = new BrowserWindow({
-    width: 980,
-    height: 640,
+    width: 1040,
+    height: 680,
     minWidth: 820,
     minHeight: 560,
     center: true,

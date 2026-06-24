@@ -27,7 +27,7 @@ export function DashboardAccountSection({
   hasGoogleAuth,
 }: DashboardAccountSectionProps) {
   const planLabel = PLAN_LIMITS[plan].label
-  const billingStatus = plan === 'free' ? 'Free tier' : 'Active subscription'
+  const billingStatus = isPaidPlan(plan) ? 'Active subscription' : 'No active subscription'
 
   return (
     <Card className="mb-6">

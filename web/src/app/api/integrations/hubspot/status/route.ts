@@ -1,12 +1,10 @@
 import { getHubSpotConnection, isHubSpotConfigured, toPublicHubSpotStatus } from '@/lib/hubspot'
-import { resolveIntegrationUserId } from '@/lib/integration-auth'
+import { requireIntegrationAccess } from '@/lib/integration-guard'
 
 export async function GET(req: Request) {
-  const userId = await resolveIntegrationUserId(req)
-  if (!userId) {
-    return Response.json({ error: 'unauthorized' }, { status: 401 })
-  }
+  const access = await requireIntegrationAccess(req, 'hubspot')
+  if (access instanceof Response) return access
 
-  const connection = await getHubSpotConnection(userId)
+  const connection = await getHubSpotConnection(access.userId)
   return Response.json(toPublicHubSpotStatus(connection))
 }

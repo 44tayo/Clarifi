@@ -51,6 +51,7 @@ export async function proxyChat(request: ChatRequest): Promise<ChatResult> {
   const { ok, status, data } = await proxyFetch('/api/llm/chat', request)
 
   if (status === 401) return { error: 'auth_expired' }
+  if (status === 403) return { error: 'plan_required' }
   if (status === 429) return { error: 'rate_limit' }
   if (!ok) {
     const err = (data as { error?: string } | null)?.error
@@ -71,7 +72,7 @@ export async function proxySuggest(
     playbook,
   })
 
-  if (status === 401 || status === 429 || !ok) return []
+  if (status === 401 || status === 403 || status === 429 || !ok) return []
 
   const result = data as { suggestions?: Suggestion[] }
   return Array.isArray(result.suggestions) ? result.suggestions : []
@@ -92,7 +93,7 @@ export async function proxyTranscribe(
     ...(model ? { model } : {}),
   })
 
-  if (status === 401 || status === 429 || !ok) return null
+  if (status === 401 || status === 403 || status === 429 || !ok) return null
 
   const result = data as { text?: string }
   return result.text?.trim() || null

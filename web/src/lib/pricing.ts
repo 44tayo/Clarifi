@@ -40,7 +40,12 @@ export function maxAnnualSavingsPercent() {
 
 export const PRICING_FEATURES = [
   {
-    label: 'AI messages per day',
+    label: '7-day free trial',
+    pro: true,
+    proPlus: true,
+  },
+  {
+    label: 'AI messages',
     pro: 'Unlimited',
     proPlus: 'Unlimited',
   },
@@ -48,6 +53,11 @@ export const PRICING_FEATURES = [
     label: 'Meeting notetaking',
     pro: 'Unlimited',
     proPlus: 'Unlimited',
+  },
+  {
+    label: 'Voice dictation',
+    pro: true,
+    proPlus: true,
   },
   {
     label: 'Custom prompting',
@@ -60,7 +70,27 @@ export const PRICING_FEATURES = [
     proPlus: true,
   },
   {
+    label: 'Screen context',
+    pro: true,
+    proPlus: true,
+  },
+  {
     label: 'Undetectability to screen share',
+    pro: false,
+    proPlus: true,
+  },
+  {
+    label: 'Shared team communities',
+    pro: false,
+    proPlus: true,
+  },
+  {
+    label: 'Share meetings, notes, and summaries',
+    pro: false,
+    proPlus: true,
+  },
+  {
+    label: 'Folder organization',
     pro: false,
     proPlus: true,
   },
@@ -89,6 +119,7 @@ export function getPricingPlans(interval: BillingInterval = 'monthly'): PricingP
         '7-day free trial',
         'Unlimited AI responses',
         'Unlimited meeting notetaking',
+        'Voice dictation into any app',
         'Unlimited custom prompting',
         'Custom keybinds',
         'Priority support',
@@ -110,6 +141,9 @@ export function getPricingPlans(interval: BillingInterval = 'monthly'): PricingP
         'Everything in Pro',
         'Undetectability to screen share',
         'Invisible on Zoom, Meet, and Teams',
+        'Shared team communities',
+        'Share meetings, notes, and summaries',
+        'Folder organization',
         'Team-ready seats',
         'Priority support',
       ],

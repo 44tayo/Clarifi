@@ -1,12 +1,10 @@
 import { disconnectGmail } from '@/lib/gmail'
-import { resolveIntegrationUserId } from '@/lib/integration-auth'
+import { requireIntegrationAccess } from '@/lib/integration-guard'
 
 export async function POST(req: Request) {
-  const userId = await resolveIntegrationUserId(req)
-  if (!userId) {
-    return Response.json({ error: 'unauthorized' }, { status: 401 })
-  }
+  const access = await requireIntegrationAccess(req, 'gmail')
+  if (access instanceof Response) return access
 
-  const ok = await disconnectGmail(userId)
+  const ok = await disconnectGmail(access.userId)
   return Response.json({ ok })
 }

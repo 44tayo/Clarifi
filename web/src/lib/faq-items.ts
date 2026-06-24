@@ -12,6 +12,10 @@ export const FAQ_ITEMS = [
     a: 'Yes. Both Pro and Pro+ include a 7-day free trial on monthly and annual billing. Cancel anytime before the trial ends.',
   },
   {
+    q: 'Is voice dictation included?',
+    a: 'Yes. Voice dictation is included on both Pro and Pro+ — hold Fn or use the dictation pill to speak into any app. Start with a 7-day free trial on either plan.',
+  },
+  {
     q: 'How is it undetectable in meetings?',
     a: 'Clarifi never joins as a bot, stays invisible on screen share, and runs as a lightweight desktop overlay you control.',
   },

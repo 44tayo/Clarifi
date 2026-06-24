@@ -70,6 +70,10 @@ async function handleAuthDeepLink(url: string): Promise<void> {
   const result = await exchangeAuthToken(url)
   if (result.ok) {
     console.log('Desktop connected via web auth')
+    const { invalidateDeviceProfileCache } = await import('./deviceAuth')
+    const { syncPlanEntitlements } = await import('./planAccess')
+    invalidateDeviceProfileCache()
+    await syncPlanEntitlements(true)
     notifyOnboardingAuthConnected()
   } else {
     console.error('Desktop auth exchange failed:', result.error)

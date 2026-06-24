@@ -1,13 +1,11 @@
 import { getHubSpotConnection, toPublicHubSpotStatus, updateHubSpotSettings } from '@/lib/hubspot'
-import { resolveIntegrationUserId } from '@/lib/integration-auth'
+import { requireIntegrationAccess } from '@/lib/integration-guard'
 
 export async function PATCH(req: Request) {
-  const userId = await resolveIntegrationUserId(req)
-  if (!userId) {
-    return Response.json({ error: 'unauthorized' }, { status: 401 })
-  }
+  const access = await requireIntegrationAccess(req, 'hubspot')
+  if (access instanceof Response) return access
 
-  const connection = await getHubSpotConnection(userId)
+  const connection = await getHubSpotConnection(access.userId)
   if (!connection) {
     return Response.json({ error: 'not_connected' }, { status: 404 })
   }
@@ -25,7 +23,7 @@ export async function PATCH(req: Request) {
     defaultDealId?: string | null
   }
 
-  const updated = await updateHubSpotSettings(userId, {
+  const updated = await updateHubSpotSettings(access.userId, {
     autoSyncEnabled: payload.autoSyncEnabled,
     defaultContactEmail: payload.defaultContactEmail,
     defaultDealId: payload.defaultDealId,

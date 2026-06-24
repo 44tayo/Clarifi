@@ -13,6 +13,7 @@ import { MeetingParticipantsMock } from './MeetingParticipantsMock'
 import { ScreenShareCompare } from './ScreenShareCompare'
 import { MarketingNav } from '@/components/marketing/MarketingNav'
 import { PricingCheckoutButton } from '@/components/pricing/PricingCheckoutButton'
+import { getPricingPlans } from '@/lib/pricing'
 import {
   getDownloadManifest,
   getMacDownloadUrl,
@@ -54,38 +55,7 @@ const TESTIMONIALS = [
   },
 ]
 
-const PRICING_TIERS = [
-  {
-    id: 'pro' as const,
-    name: 'Pro',
-    audience: 'Individual',
-    price: '$19',
-    period: '/mo',
-    tagline: 'Unlimited AI for solo operators',
-    features: [
-      '7-day free trial',
-      'Unlimited AI responses',
-      'Unlimited meeting notetaking',
-      'Custom keybinds',
-    ],
-    featured: false,
-  },
-  {
-    id: 'pro_plus' as const,
-    name: 'Pro+',
-    audience: 'Team',
-    price: '$39',
-    period: '/seat/mo',
-    tagline: 'Undetectable during screen share',
-    features: [
-      '7-day free trial',
-      'Everything in Pro',
-      'Undetectable on screen share',
-      'Team-ready seats',
-    ],
-    featured: true,
-  },
-]
+const PRICING_TIERS = getPricingPlans('monthly')
 
 function AppleIcon() {
   return (
@@ -336,8 +306,13 @@ export function LandingPage() {
         </div>
         <div className="landing-pricing-grid">
           {PRICING_TIERS.map((tier) => (
-            <div key={tier.name} className={`landing-pricing-card ${tier.featured ? 'featured' : ''}`}>
-              {tier.featured && <span className="landing-pricing-badge">For teams</span>}
+            <div
+              key={tier.name}
+              className={`landing-pricing-card ${tier.id === 'pro_plus' ? 'featured' : ''}`}
+            >
+              {tier.id === 'pro_plus' && (
+                <span className="landing-pricing-badge">For teams</span>
+              )}
               <p className="landing-pricing-audience">{tier.audience}</p>
               <h3>{tier.name}</h3>
               <p className="landing-pricing-price">
@@ -355,7 +330,7 @@ export function LandingPage() {
                 interval="monthly"
                 className="landing-cta landing-pricing-cta"
               >
-                Start free trial
+                {tier.cta}
               </PricingCheckoutButton>
             </div>
           ))}

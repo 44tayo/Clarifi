@@ -3,8 +3,23 @@ import {
   getDesktopUserProfile,
   updateDesktopUserProfile,
 } from '@/lib/desktop-profile'
+import { getEntitlements } from '@/lib/entitlements'
 import { PLAN_LIMITS } from '@/lib/plans'
 import { getUsageStats } from '@/lib/usage'
+
+function profilePayload(
+  profile: Awaited<ReturnType<typeof getDesktopUserProfile>>,
+  stats: Awaited<ReturnType<typeof getUsageStats>>,
+) {
+  return {
+    ...profile,
+    plan: stats.plan,
+    planLabel: PLAN_LIMITS[stats.plan].label,
+    entitlements: getEntitlements(stats.plan),
+    sessionsToday: stats.used,
+    sessionsLimit: Number.isFinite(stats.limit) ? stats.limit : null,
+  }
+}
 
 export async function GET(req: Request) {
   const userId = await getUserIdFromDeviceRequest(req)
@@ -20,11 +35,7 @@ export async function GET(req: Request) {
   const stats = await getUsageStats(userId)
 
   return Response.json({
-    ...profile,
-    plan: stats.plan,
-    planLabel: PLAN_LIMITS[stats.plan].label,
-    sessionsToday: stats.used,
-    sessionsLimit: Number.isFinite(stats.limit) ? stats.limit : null,
+    ...profilePayload(profile, stats),
   })
 }
 
@@ -59,10 +70,6 @@ export async function PATCH(req: Request) {
   const stats = await getUsageStats(userId)
 
   return Response.json({
-    ...profile,
-    plan: stats.plan,
-    planLabel: PLAN_LIMITS[stats.plan].label,
-    sessionsToday: stats.used,
-    sessionsLimit: Number.isFinite(stats.limit) ? stats.limit : null,
+    ...profilePayload(profile, stats),
   })
 }

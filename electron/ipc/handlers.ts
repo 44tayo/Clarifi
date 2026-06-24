@@ -158,6 +158,12 @@ import {
 import { applyDictationEnabled, applyDictationEnabledSideEffects, isDictationEnabled } from '../dictationControl'
 import { startDictationPttMonitor } from '../dictationPtt'
 import {
+  requireDeviceFeature,
+  syncDictationEntitlement,
+  syncPlanEntitlements,
+  syncStealthEntitlement,
+} from '../planAccess'
+import {
   dismissMeetingPrompt,
   startMeetingPromptMonitor,
   startRecordingFromMeetingPrompt,
@@ -895,6 +901,99 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
     },
   )
 
+  ipcMain.handle('community:list', async () => {
+    const { listCommunities } = await import('../communityClient')
+    const { ok, status, data } = await listCommunities()
+    if (status === 403) return { error: 'plan_required' }
+    if (!ok) return { error: (data as { error?: string } | null)?.error ?? 'failed' }
+    return data
+  })
+
+  ipcMain.handle('community:create', async (_event, data) => {
+    const payload = data as { name?: string }
+    if (!payload.name || typeof payload.name !== 'string') {
+      return { error: 'name_required' }
+    }
+    const { createCommunity } = await import('../communityClient')
+    const { ok, status, data: result } = await createCommunity(payload.name)
+    if (status === 403) return { error: 'plan_required' }
+    if (!ok) return { error: (result as { error?: string } | null)?.error ?? 'failed' }
+    return result
+  })
+
+  ipcMain.handle('community:folders', async (_event, data) => {
+    const payload = data as { communityId?: string }
+    if (!payload.communityId) return { error: 'community_id_required' }
+    const { listCommunityFolders } = await import('../communityClient')
+    const { ok, data: result } = await listCommunityFolders(payload.communityId)
+    if (!ok) return { error: (result as { error?: string } | null)?.error ?? 'failed' }
+    return result
+  })
+
+  ipcMain.handle('community:create-folder', async (_event, data) => {
+    const payload = data as { communityId?: string; name?: string; parentId?: string | null }
+    if (!payload.communityId || !payload.name) return { error: 'invalid_payload' }
+    const { createCommunityFolder } = await import('../communityClient')
+    const { ok, data: result } = await createCommunityFolder(
+      payload.communityId,
+      payload.name,
+      payload.parentId,
+    )
+    if (!ok) return { error: (result as { error?: string } | null)?.error ?? 'failed' }
+    return result
+  })
+
+  ipcMain.handle('community:items', async (_event, data) => {
+    const payload = data as { communityId?: string; folderId?: string | null }
+    if (!payload.communityId) return { error: 'community_id_required' }
+    const { listCommunityItems } = await import('../communityClient')
+    const { ok, data: result } = await listCommunityItems(
+      payload.communityId,
+      payload.folderId ?? null,
+    )
+    if (!ok) return { error: (result as { error?: string } | null)?.error ?? 'failed' }
+    return result
+  })
+
+  ipcMain.handle('community:invite', async (_event, data) => {
+    const payload = data as { communityId?: string; email?: string }
+    if (!payload.communityId || !payload.email) return { error: 'invalid_payload' }
+    const { inviteToCommunity } = await import('../communityClient')
+    const { ok, data: result } = await inviteToCommunity(payload.communityId, payload.email)
+    if (!ok) return { error: (result as { error?: string } | null)?.error ?? 'failed' }
+    return result
+  })
+
+  ipcMain.handle('community:accept-invite', async (_event, data) => {
+    const payload = data as { communityId?: string; token?: string }
+    if (!payload.communityId || !payload.token) return { error: 'invalid_payload' }
+    const { acceptCommunityInvite } = await import('../communityClient')
+    const { ok, data: result } = await acceptCommunityInvite(payload.communityId, payload.token)
+    if (!ok) return { error: (result as { error?: string } | null)?.error ?? 'failed' }
+    return result
+  })
+
+  ipcMain.handle('community:share-session', async (_event, data) => {
+    const payload = data as {
+      communityId?: string
+      folderId?: string | null
+      sessionId?: string
+      includeRecap?: boolean
+      includeTranscript?: boolean
+      includeNotes?: boolean
+    }
+    if (!payload.communityId || !payload.sessionId) return { ok: false, error: 'invalid_payload' }
+    const { shareSessionToCommunity } = await import('../communityClient')
+    return shareSessionToCommunity({
+      communityId: payload.communityId,
+      folderId: payload.folderId ?? null,
+      sessionId: payload.sessionId,
+      includeRecap: payload.includeRecap !== false,
+      includeTranscript: payload.includeTranscript !== false,
+      includeNotes: payload.includeNotes !== false,
+    })
+  })
+
   registerValidatedHandler(
     'llm:infer-speaker-labels',
     { rateLimitKey: 'llm:infer-speaker-labels', rateLimit: LLM_RATE_LIMIT },
@@ -915,12 +1014,25 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
     markOverlayReady()
     startProactiveEngineOnOverlayReady()
     startDictationTargetTracking()
+    void syncStealthEntitlement()
+    void syncDictationEntitlement()
     return { ok: true }
   })
 
   ipcMain.handle(
     'overlay:toggle-protection',
-    (_event, payload?: boolean | { enabled?: boolean }) => {
+    async (_event, payload?: boolean | { enabled?: boolean }) => {
+      const gate = await requireDeviceFeature('stealth')
+      if (!gate.ok) {
+        setContentProtectionEnabled(false)
+        return {
+          enabled: false,
+          error: gate.error,
+          upgrade: gate.upgrade,
+          billingUrl: gate.billingUrl,
+        }
+      }
+
       let enabled: boolean | undefined
       if (typeof payload === 'boolean') {
         enabled = payload
@@ -1099,6 +1211,15 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
       throw new Error('Connect your account on the website first')
     }
 
+    const dictationGate = await requireDeviceFeature('voice_dictation')
+    if (!dictationGate.ok) {
+      return {
+        error: dictationGate.error,
+        upgrade: dictationGate.upgrade,
+        billingUrl: dictationGate.billingUrl,
+      }
+    }
+
     const payload = data as {
       audioBase64?: string
       target?: 'auto' | 'overlay' | 'focused_field'
@@ -1177,6 +1298,8 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
       await fetchDeviceProfileCached(true)
     }
 
+    await syncPlanEntitlements(payload.refreshPairing === true)
+
     const prefs = loadAudioPreferences()
     trackExternalFrontmostApp()
 
@@ -1216,7 +1339,16 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
     return { ok: true }
   })
 
-  registerValidatedHandler('dictation-pill:show', {}, () => {
+  registerValidatedHandler('dictation-pill:show', {}, async () => {
+    const gate = await requireDeviceFeature('voice_dictation')
+    if (!gate.ok) {
+      return {
+        ok: false,
+        error: gate.error,
+        upgrade: gate.upgrade,
+        billingUrl: gate.billingUrl,
+      }
+    }
     showDictationPillWindow()
     return { ok: true }
   })
@@ -1224,9 +1356,20 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
   registerValidatedHandler(
     'dictation:set-enabled',
     { requiresInput: true },
-    (data) => {
+    async (data) => {
       const payload = data as { enabled?: boolean }
       const enabled = Boolean(payload.enabled)
+      if (enabled) {
+        const gate = await requireDeviceFeature('voice_dictation')
+        if (!gate.ok) {
+          return {
+            enabled: false,
+            error: gate.error,
+            upgrade: gate.upgrade,
+            billingUrl: gate.billingUrl,
+          }
+        }
+      }
       applyDictationEnabled(enabled)
       return { enabled }
     },
@@ -1326,6 +1469,15 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
       rateLimit: LLM_RATE_LIMIT,
     },
     async (data) => {
+      const chatGate = await requireDeviceFeature('ai_chat')
+      if (!chatGate.ok) {
+        return {
+          error: chatGate.error,
+          upgrade: chatGate.upgrade,
+          billingUrl: chatGate.billingUrl,
+        }
+      }
+
       const payload = data as {
         message?: string
         transcriptLines?: string[]
@@ -1341,6 +1493,17 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
         : []
 
       const useScreenContext = Boolean(payload.useScreenContext)
+      if (useScreenContext) {
+        const screenGate = await requireDeviceFeature('screen_context')
+        if (!screenGate.ok) {
+          return {
+            error: screenGate.error,
+            upgrade: screenGate.upgrade,
+            billingUrl: screenGate.billingUrl,
+          }
+        }
+      }
+
       let screenImage:
         | { imageBase64: string; mimeType: 'image/png' }
         | undefined
@@ -1579,7 +1742,10 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
   registerValidatedHandler(
     'prefs:set-product-knowledge',
     { requiresInput: true },
-    (data) => {
+    async (data) => {
+      const gate = await requireDeviceFeature('custom_modes')
+      if (!gate.ok) throw new Error('plan_required')
+
       const payload = data as { knowledge?: string }
       if (typeof payload.knowledge !== 'string') {
         throw new Error('knowledge is required')
@@ -1591,7 +1757,10 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
   registerValidatedHandler(
     'prefs:set-work-knowledge',
     { requiresInput: true },
-    (data) => {
+    async (data) => {
+      const gate = await requireDeviceFeature('custom_modes')
+      if (!gate.ok) throw new Error('plan_required')
+
       const payload = data as { knowledge?: string }
       if (typeof payload.knowledge !== 'string') {
         throw new Error('knowledge is required')
@@ -1603,7 +1772,10 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
   registerValidatedHandler(
     'prefs:set-general-knowledge',
     { requiresInput: true },
-    (data) => {
+    async (data) => {
+      const gate = await requireDeviceFeature('custom_modes')
+      if (!gate.ok) throw new Error('plan_required')
+
       const payload = data as { knowledge?: string }
       if (typeof payload.knowledge !== 'string') {
         throw new Error('knowledge is required')
@@ -1615,7 +1787,12 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
   registerValidatedHandler(
     'prefs:add-mode',
     { requiresInput: true },
-    (data) => {
+    async (data) => {
+      const gate = await requireDeviceFeature('custom_modes')
+      if (!gate.ok) {
+        throw new Error('plan_required')
+      }
+
       const payload = data as { label?: string; category?: string; description?: string }
       if (!payload.label || typeof payload.label !== 'string' || !payload.label.trim()) {
         throw new Error('label is required')
@@ -1838,9 +2015,17 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
   registerValidatedHandler(
     'audio:prefs-save',
     { requiresInput: true },
-    (data) => {
+    async (data) => {
       const payload = data as Partial<AudioPreferences>
       const current = loadAudioPreferences()
+
+      if (payload.dictationEnabled === true && !current.dictationEnabled) {
+        const gate = await requireDeviceFeature('voice_dictation')
+        if (!gate.ok) {
+          throw new Error('plan_required')
+        }
+      }
+
       const next: AudioPreferences = {
         transcriptionLanguage:
           typeof payload.transcriptionLanguage === 'string'
@@ -1924,7 +2109,12 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
   registerValidatedHandler(
     'keybinds:prefs-save',
     { requiresInput: true },
-    (data) => {
+    async (data) => {
+      const gate = await requireDeviceFeature('custom_keybinds')
+      if (!gate.ok) {
+        throw new Error('plan_required')
+      }
+
       const payload = data as { action?: KeybindActionId; accelerator?: string }
       if (!payload.action || typeof payload.action !== 'string') {
         throw new Error('action is required')

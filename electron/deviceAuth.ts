@@ -34,6 +34,7 @@ export type DeviceProfile = {
   connectedAccounts?: ConnectedAccount[]
   plan?: string
   planLabel?: string
+  entitlements?: string[]
   sessionsToday?: number
   sessionsLimit?: number | null
 }
@@ -106,7 +107,7 @@ export async function hasLocalDeviceCredentials(): Promise<boolean> {
 }
 
 let profileCache: { profile: DeviceProfile; fetchedAt: number } | null = null
-const PROFILE_CACHE_TTL_MS = 5 * 60 * 1000
+const PROFILE_CACHE_TTL_MS = 60 * 1000
 
 export function invalidateDeviceProfileCache(): void {
   profileCache = null

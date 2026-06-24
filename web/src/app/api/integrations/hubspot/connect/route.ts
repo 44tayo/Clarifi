@@ -1,5 +1,6 @@
 import { getServerUserId } from '@/lib/auth-server'
 import { buildHubSpotAuthorizeUrl, isHubSpotConfigured } from '@/lib/hubspot'
+import { isPlanGuardResponse, requireFeature } from '@/lib/plan-guard'
 import { getSiteOrigin } from '@/lib/site-url'
 
 export async function GET(req: Request) {
@@ -15,6 +16,11 @@ export async function GET(req: Request) {
       `${getSiteOrigin(url.origin)}/sign-in?next=${encodeURIComponent(next)}`,
       302,
     )
+  }
+
+  const planOrBlock = await requireFeature(userId, 'hubspot')
+  if (isPlanGuardResponse(planOrBlock)) {
+    return Response.redirect(`${getSiteOrigin(new URL(req.url).origin)}/billing`, 302)
   }
 
   const authorizeUrl = buildHubSpotAuthorizeUrl(userId, new URL(req.url).origin)

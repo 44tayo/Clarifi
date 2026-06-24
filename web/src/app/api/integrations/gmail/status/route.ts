@@ -1,12 +1,10 @@
-import { getGmailConnection, isGmailConfigured, toPublicGmailStatus } from '@/lib/gmail'
-import { resolveIntegrationUserId } from '@/lib/integration-auth'
+import { getGmailConnection, toPublicGmailStatus } from '@/lib/gmail'
+import { requireIntegrationAccess } from '@/lib/integration-guard'
 
 export async function GET(req: Request) {
-  const userId = await resolveIntegrationUserId(req)
-  if (!userId) {
-    return Response.json({ error: 'unauthorized' }, { status: 401 })
-  }
+  const access = await requireIntegrationAccess(req, 'gmail')
+  if (access instanceof Response) return access
 
-  const connection = await getGmailConnection(userId)
+  const connection = await getGmailConnection(access.userId)
   return Response.json(toPublicGmailStatus(connection))
 }

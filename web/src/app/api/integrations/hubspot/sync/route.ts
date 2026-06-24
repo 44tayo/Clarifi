@@ -1,12 +1,10 @@
 import type { HubSpotRecapPayload } from '@/lib/hubspot'
 import { syncRecapToHubSpot } from '@/lib/hubspot'
-import { resolveIntegrationUserId } from '@/lib/integration-auth'
+import { requireIntegrationAccess } from '@/lib/integration-guard'
 
 export async function POST(req: Request) {
-  const userId = await resolveIntegrationUserId(req)
-  if (!userId) {
-    return Response.json({ error: 'unauthorized' }, { status: 401 })
-  }
+  const access = await requireIntegrationAccess(req, 'hubspot')
+  if (access instanceof Response) return access
 
   let body: unknown
   try {
@@ -20,7 +18,7 @@ export async function POST(req: Request) {
     return Response.json({ error: 'session_id_required' }, { status: 400 })
   }
 
-  const result = await syncRecapToHubSpot(userId, payload)
+  const result = await syncRecapToHubSpot(access.userId, payload)
   if (!result.ok) {
     const status =
       result.error === 'not_connected' || result.error === 'contact_email_required'
