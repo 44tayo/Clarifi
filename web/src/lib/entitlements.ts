@@ -6,4 +6,4 @@ export {
   isPaidPlan,
   normalizePlan,
   upgradePlanForFeature,
-} from '../../../shared/entitlements'
+} from '../../shared/entitlements'
