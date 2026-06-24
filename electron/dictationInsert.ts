@@ -165,20 +165,12 @@ export function getFrontmostAppDisplayId(): number {
   return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id
 }
 
+/**
+ * Display for dictation pill positioning — follows the cursor display (same signal
+ * as overlay "Follow screen"), but independent of that toggle.
+ */
 export function getFollowDisplayId(): number {
-  const front = getFrontmostAppNameCached(false)
-  if (front && !isClarifiProcess(front)) {
-    return getFrontmostAppDisplayId()
-  }
-
-  const cursor = screen.getCursorScreenPoint()
-  const underCursor = getAppAtScreenPoint(cursor.x, cursor.y)
-  if (underCursor && !isClarifiProcess(underCursor)) {
-    const center = getWindowCenterForAppSync(underCursor)
-    if (center) return displayIdFromCenter(center)
-  }
-
-  return screen.getDisplayNearestPoint(cursor).id
+  return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id
 }
 
 async function refreshFollowDisplayAsync(): Promise<void> {
