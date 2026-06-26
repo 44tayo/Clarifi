@@ -1,5 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from 'crypto'
-import { isCreatorUser } from './creator'
+import { isCreator } from './creator'
 import { getSupabaseAdmin } from './supabase-admin'
 
 const AUTH_TOKEN_TTL_MS = 5 * 60 * 1000
@@ -67,9 +67,14 @@ export async function exchangeDesktopAuthToken(
     .eq('user_id', data.clerk_user_id)
 
   if (!profileCount) {
+    const { data: authUser } = await supabase.auth.admin.getUserById(
+      data.clerk_user_id,
+    )
+    const email = authUser?.user?.email ?? null
     await supabase.from('profiles').insert({
       user_id: data.clerk_user_id,
-      plan: isCreatorUser(data.clerk_user_id) ? 'pro_plus' : 'free',
+      email,
+      plan: isCreator(data.clerk_user_id, email) ? 'pro_plus' : 'free',
       updated_at: new Date().toISOString(),
     })
   }

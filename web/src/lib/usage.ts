@@ -1,4 +1,4 @@
-import { isCreatorUser } from './creator'
+import { isCreatorEmail, isCreatorUser } from './creator'
 import { getDailyLimit, normalizePlan, type Plan } from './plans'
 import { getSupabaseAdmin } from './supabase-admin'
 
@@ -45,10 +45,11 @@ export async function getUserPlan(userId: string): Promise<Plan> {
   if (supabase) {
     const { data } = await supabase
       .from('profiles')
-      .select('plan')
+      .select('plan, email')
       .eq('user_id', userId)
       .maybeSingle()
 
+    if (isCreatorEmail(data?.email)) return 'pro_plus'
     if (data?.plan) return normalizePlan(data.plan)
   }
 
@@ -63,18 +64,20 @@ export async function getUserBillingProfile(userId: string): Promise<{
   let plan: Plan = 'free'
   let stripeCustomerId: string | null = null
 
+  let creatorEmail = false
   if (supabase) {
     const { data } = await supabase
       .from('profiles')
-      .select('plan, stripe_customer_id')
+      .select('plan, stripe_customer_id, email')
       .eq('user_id', userId)
       .maybeSingle()
 
     plan = normalizePlan(data?.plan)
     stripeCustomerId = data?.stripe_customer_id ?? null
+    creatorEmail = isCreatorEmail(data?.email)
   }
 
-  if (isCreatorUser(userId)) {
+  if (isCreatorUser(userId) || creatorEmail) {
     plan = 'pro_plus'
   }
 

@@ -108,6 +108,7 @@ export default async function proxy(request: NextRequest) {
         user?.id,
         launchPreview.previewLive,
         launchPreview.forceWaitlist,
+        user?.email,
       )
     ) {
       const home = new URL('/', request.url)

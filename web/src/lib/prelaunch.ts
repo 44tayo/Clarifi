@@ -1,4 +1,4 @@
-import { isCreatorUser } from '@/lib/creator'
+import { isCreator } from '@/lib/creator'
 import { isLaunchLive } from '@/lib/waitlist-config'
 
 /** App surfaces that stay closed until the public launch countdown ends. */
@@ -87,6 +87,7 @@ export function shouldBlockPrelaunchAccess(
   userId?: string | null,
   previewLive = false,
   forceWaitlist = false,
+  email?: string | null,
 ): boolean {
   if (isLaunchLive(undefined, previewLive, forceWaitlist)) return false
   if (
@@ -96,6 +97,6 @@ export function shouldBlockPrelaunchAccess(
     return false
   }
   if (!isPrelaunchBlockedPath(pathname)) return false
-  if (userId && isCreatorUser(userId)) return false
+  if (isCreator(userId, email)) return false
   return true
 }

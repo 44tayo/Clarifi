@@ -33,6 +33,7 @@ export default async function DashboardPage({
       user.id,
       launchPreview.previewLive,
       launchPreview.forceWaitlist,
+      user.email,
     )
   ) {
     redirect('/?joined=1')

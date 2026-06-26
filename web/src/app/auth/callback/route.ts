@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { AUTH_NEXT_COOKIE, resolveAuthNext } from '@/lib/auth-next'
-import { isCreatorUser } from '@/lib/creator'
+import { isCreator } from '@/lib/creator'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getSupabaseEnv } from '@/lib/supabase/env'
 import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
@@ -109,7 +109,7 @@ export async function GET(request: Request) {
       {
         user_id: user.id,
         email: user.email,
-        plan: isCreatorUser(user.id) ? 'pro_plus' : 'free',
+        plan: isCreator(user.id, user.email) ? 'pro_plus' : 'free',
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'user_id' },
