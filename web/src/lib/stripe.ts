@@ -62,6 +62,7 @@ export async function createStripeCheckoutSession(
   const checkout = await stripe.checkout.sessions.create({
     mode: 'subscription',
     line_items: [{ price: priceId, quantity: 1 }],
+    allow_promotion_codes: true,
     success_url: `${origin}/billing?checkout=success`,
     cancel_url: `${origin}/billing?checkout=cancelled`,
     client_reference_id: input.userId,
