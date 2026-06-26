@@ -8,13 +8,18 @@ const SUBJECT = 'Pilot kickoff — Friday'
 const BODY =
   "Hi Alex,\n\nFriday works on our end — I'll send over the updated timeline and pilot scope by EOD today.\n\nLet me know if 2pm PT still works for the kickoff call.\n\nThanks,\nTayo"
 
-const INBOX_ROWS = [
+const INBOX_ROWS: Array<{
+  from: string
+  subject: string
+  date: string
+  unread?: boolean
+}> = [
   { from: 'Procurement', subject: 'Security review checklist', date: '22 Jun', unread: true },
   { from: 'Alex Chen', subject: 'Re: Pilot kickoff', date: '15 Jun', unread: true },
   { from: 'Notion', subject: 'Your weekly digest', date: '8 Jun' },
   { from: 'Figma', subject: 'Comments on Q2 deck', date: '27 Apr' },
   { from: 'Stripe', subject: 'Your receipt', date: '24 Mar' },
-] as const
+]
 
 type Phase =
   | 'idle'
