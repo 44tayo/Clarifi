@@ -1,173 +1,307 @@
 .ssa-root {
   position: relative;
-  width: 100%;
+  width: calc(100% + 5rem);
+  margin: 0 -2.5rem -2rem;
   min-height: 280px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-family: 'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   user-select: none;
   -webkit-user-select: none;
 }
 
 .ssa-app {
-  border-radius: 14px;
+  border-radius: 12px 12px 0 0;
+  max-height: 440px;
   overflow: hidden;
   background: #fff;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.1);
+  border-bottom: none;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.14);
 }
 
-.ssa-app-chrome {
+/* ---------- Title bar ---------- */
+.ssa-sheet-titlebar {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 12px;
-  background: linear-gradient(180deg, #f4f6f9 0%, #eef1f6 100%);
-  border-bottom: 1px solid #dde3eb;
+  padding: 8px 12px 4px;
+  background: #fff;
 }
 
-.ssa-traffic {
-  display: flex;
-  gap: 4px;
+.ssa-sheet-logo {
+  display: inline-flex;
   flex-shrink: 0;
 }
 
-.ssa-traffic span {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-}
-
-.ssa-traffic .r {
-  background: #ff5f57;
-}
-.ssa-traffic .y {
-  background: #febc2e;
-}
-.ssa-traffic .g {
-  background: #28c840;
-}
-
-.ssa-app-title {
+.ssa-sheet-titlewrap {
   flex: 1;
   min-width: 0;
-  font-size: 11px;
-  font-weight: 600;
-  color: #1e293b;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ssa-app-badge {
-  font-size: 9px;
-  font-weight: 600;
-  color: #0369a1;
-  background: #e0f2fe;
-  padding: 3px 8px;
-  border-radius: 999px;
-  flex-shrink: 0;
-}
-
-.ssa-deal-meta {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  padding: 10px 12px;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.ssa-meta-item {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.ssa-meta-label {
-  font-size: 9px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #64748b;
+.ssa-sheet-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: #202124;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.ssa-meta-value {
+.ssa-sheet-menubar {
+  display: flex;
+  gap: 11px;
+  font-size: 10.5px;
+  color: #444746;
+}
+
+.ssa-sheet-share {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: #062e6f;
+  background: #c2e7ff;
+  padding: 6px 14px;
+  border-radius: 999px;
+}
+
+.ssa-sheet-avatar {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #5b8def;
+  color: #fff;
   font-size: 11px;
   font-weight: 600;
-  color: #0f172a;
-}
-
-.ssa-table {
-  padding: 0 12px 14px;
-}
-
-.ssa-table-head,
-.ssa-table-row {
-  display: grid;
-  grid-template-columns: 1.4fr 0.8fr 0.8fr 0.7fr;
-  gap: 8px;
+  display: flex;
   align-items: center;
+  justify-content: center;
 }
 
-.ssa-table-head {
-  padding: 8px 0 6px;
-  border-bottom: 1px solid #e2e8f0;
+/* ---------- Toolbar ---------- */
+.ssa-sheet-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  margin: 0 10px 6px;
+  border-radius: 999px;
+  background: #edf2fa;
+  color: #444746;
+}
+
+.ssa-tb-zoom {
+  font-size: 10.5px;
+}
+
+.ssa-tb-glyph {
+  font-size: 11.5px;
+  line-height: 1;
+}
+
+.ssa-tb-money {
+  font-weight: 600;
+}
+
+.ssa-tb-bold {
+  font-weight: 800;
+}
+
+.ssa-tb-italic {
+  font-style: italic;
+  font-family: Georgia, serif;
+}
+
+.ssa-tb-sep {
+  width: 1px;
+  height: 13px;
+  background: #c7ccd1;
+}
+
+.ssa-tb-viewonly {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: #444746;
+}
+
+/* ---------- Formula bar ---------- */
+.ssa-formula-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 12px;
+  border-top: 1px solid #e1e3e6;
+  border-bottom: 1px solid #e1e3e6;
+}
+
+.ssa-cell-ref {
+  width: 42px;
+  flex-shrink: 0;
+  font-size: 10.5px;
+  color: #3c4043;
+}
+
+.ssa-fx {
+  font-size: 10.5px;
+  font-style: italic;
+  color: #80868b;
+}
+
+.ssa-formula-val {
+  font-size: 10.5px;
+  color: #3c4043;
+}
+
+/* ---------- Grid ---------- */
+.ssa-grid {
+  font-size: 10px;
+  color: #202124;
+}
+
+.ssa-col-headers,
+.ssa-grid-row {
+  display: grid;
+  grid-template-columns: 26px 1.7fr 1.7fr 0.9fr 0.9fr 0.5fr 0.5fr 0.5fr;
+}
+
+.ssa-col-headers {
+  background: #f8f9fa;
+  border-bottom: 1px solid #e1e3e6;
+}
+
+.ssa-corner {
+  border-right: 1px solid #e1e3e6;
+}
+
+.ssa-col-letter {
+  padding: 3px 0;
+  text-align: center;
+  font-size: 9.5px;
+  color: #5f6368;
+  border-right: 1px solid #e1e3e6;
+}
+
+.ssa-col-letter.sel {
+  background: #d3e3fd;
+  color: #1a73e8;
+  font-weight: 600;
+}
+
+.ssa-grid-row {
+  border-bottom: 1px solid #e8eaed;
+}
+
+.ssa-row-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9.5px;
+  color: #5f6368;
+  background: #f8f9fa;
+  border-right: 1px solid #e1e3e6;
+}
+
+.ssa-gc {
+  padding: 4px 6px;
+  border-right: 1px solid #e8eaed;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.ssa-gc.head {
+  font-weight: 600;
+  background: #fff;
+}
+
+.ssa-gc-amount.head.sel {
+  outline: 1.5px solid #1a73e8;
+  outline-offset: -1.5px;
+}
+
+.ssa-gc-name {
+  text-align: center;
+}
+
+.ssa-gc-amount {
+  text-align: center;
+  color: #fff;
+}
+
+.ssa-gc-amount.tone-green {
+  background: #11823b;
+}
+
+.ssa-gc-amount.tone-amber {
+  background: #f9a825;
+  color: #3c4043;
+}
+
+.ssa-gc-amount.tone-red {
+  background: #c5221f;
+}
+
+.ssa-gc-amount.head {
+  background: #fff;
+  color: #202124;
+}
+
+.ssa-gc.strike {
+  text-decoration: line-through;
+}
+
+.ssa-gc-cost {
+  text-align: center;
+  background: #fdeecf;
+  color: #3c4043;
+}
+
+.ssa-gc-cost.head {
+  background: #fff;
+}
+
+.ssa-gc-app {
+  text-align: center;
+}
+
+.ssa-bool {
+  display: inline-block;
+  min-width: 38px;
+  padding: 1px 8px;
+  border-radius: 999px;
   font-size: 9px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #64748b;
+  color: #fff;
 }
 
-.ssa-table-row {
-  padding: 8px 0;
-  border-bottom: 1px solid #f1f5f9;
-  font-size: 10.5px;
-  color: #334155;
+.ssa-bool.true {
+  background: #1e8e3e;
 }
 
-.ssa-table-row.highlight {
-  background: rgba(59, 130, 246, 0.06);
-  margin: 0 -12px;
-  padding: 8px 12px;
-  border-bottom-color: rgba(59, 130, 246, 0.12);
+.ssa-bool.false {
+  background: #d93025;
 }
 
-.ssa-table-row.highlight .ssa-cell-main {
-  color: #1d4ed8;
-  font-weight: 600;
+.ssa-gc-blank {
+  background: #fff;
 }
 
-.ssa-cell-main {
-  font-weight: 500;
-}
-
-.ssa-pill {
-  display: inline-block;
-  font-size: 9px;
-  font-weight: 600;
-  padding: 2px 7px;
-  border-radius: 999px;
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.ssa-pill.green {
-  background: #dcfce7;
-  color: #166534;
-}
-
+/* ---------- Clarifi overlay ---------- */
 .ssa-overlay {
   position: absolute;
-  right: 8px;
-  bottom: 8px;
-  width: min(92%, 290px);
-  border-radius: 16px;
+  right: 4px;
+  bottom: 4px;
+  width: min(92%, 366px);
+  border-radius: 18px;
   overflow: hidden;
-  background: rgba(20, 20, 20, 0.88);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(20, 20, 20, 0.82);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
   color: rgba(255, 255, 255, 0.92);
 }
 
@@ -220,63 +354,122 @@
   justify-content: space-between;
   gap: 6px;
   padding: 7px 10px;
+  min-height: 44px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(4, 4, 6, 0.55);
 }
 
 .ssa-toolbar-left,
 .ssa-toolbar-right {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
 }
 
 .ssa-status-dot {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: #22c55e;
+  flex-shrink: 0;
+  margin-right: 2px;
 }
 
 .ssa-brand {
-  font-size: 10px;
-  font-weight: 700;
-  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.85);
+  flex-shrink: 0;
 }
 
 .ssa-mode-pill {
-  font-size: 8px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.82);
-  padding: 3px 7px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.75);
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
 }
 
-.ssa-icon {
+.ssa-tool-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
-  color: rgba(255, 255, 255, 0.45);
-  font-size: 11px;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.55);
+  flex-shrink: 0;
 }
 
-.ssa-icon.active {
+.ssa-tool-icon.active {
   color: #fff;
-  background: rgba(59, 130, 246, 0.25);
+  background: rgba(59, 130, 246, 0.2);
 }
 
-.ssa-icon.muted {
-  opacity: 0.35;
+.ssa-tool-icon.stealth {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.18);
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.22);
 }
 
-.ssa-sep {
+.ssa-tool-icon.dictation {
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.15);
+}
+
+.ssa-tool-divider {
   width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.ssa-wave {
+  display: flex;
+  align-items: center;
+  gap: 2px;
   height: 16px;
-  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.ssa-wave span {
+  width: 2px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.ssa-wave span:nth-child(1) {
+  height: 6px;
+}
+.ssa-wave span:nth-child(2) {
+  height: 12px;
+}
+.ssa-wave span:nth-child(3) {
+  height: 9px;
+}
+.ssa-wave span:nth-child(4) {
+  height: 5px;
+}
+
+.ssa-tool-history {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ssa-tool-chev {
+  font-size: 8px;
+  opacity: 0.7;
 }
