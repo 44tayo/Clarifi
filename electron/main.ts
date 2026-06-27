@@ -27,6 +27,7 @@ import {
 } from './dictationPill'
 import { stopDictationTargetTracking, startDictationTargetTracking } from './dictationInsert'
 import { startDictationPttMonitor, stopDictationPttMonitor } from './dictationPtt'
+import { restoreFnEmojiPicker } from './macFnKey'
 import { isDictationEnabled } from './dictationControl'
 import { attachPermissionFocusListeners } from './permissions'
 import { startMeetingPromptMonitor, stopMeetingPromptMonitor } from './meetingPrompt'
@@ -240,6 +241,10 @@ app.whenReady().then(async () => {
     } catch (err) {
       console.error('Updater configuration failed:', err)
     }
+
+    // Crash recovery: if a previous run was killed while the Fn/Globe override
+    // was active, restore the user's original setting before we re-apply it.
+    restoreFnEmojiPicker()
 
     await initializeStorage()
     registerHandlers()

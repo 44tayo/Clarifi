@@ -3,6 +3,12 @@ import * as path from 'path'
 
 import { getDictationEnabled } from './audioPreferences'
 import { captureDictationTarget } from './dictationInsert'
+import { warmGroqConnection } from './groqHttp'
+import {
+  maybeShowFnGuidanceOnce,
+  restoreFnEmojiPicker,
+  suppressFnEmojiPicker,
+} from './macFnKey'
 import { resolvePttKeyFromPrefs } from './pttKeybind'
 import {
   refreshDictationBlockedFromAudioSession,
@@ -14,11 +20,13 @@ import {
 type PttModule = {
   startMonitor: (callback: (event: string) => void, vkCode?: number) => boolean
   stopMonitor: () => boolean
+  typeText?: (text: string) => boolean
 }
 
 let monitorActive = false
 let pttDown = false
 let pttModule: PttModule | null = null
+let activeKey: number | null = null
 
 function loadPttModule(): PttModule | null {
   if (pttModule) return pttModule
@@ -50,6 +58,8 @@ function handlePttEvent(event: string): void {
   if (event === 'down') {
     if (pttDown) return
     pttDown = true
+    // Open the Groq TLS connection now so it's warm by the time audio is ready.
+    warmGroqConnection()
     const snapshot = captureDictationTarget()
     sendDictationSessionStart(snapshot)
     return
@@ -62,37 +72,76 @@ function handlePttEvent(event: string): void {
   }
 }
 
-export function stopDictationPttMonitor(): void {
+export function stopDictationPttMonitor(restoreFn = true): void {
   monitorActive = false
   pttDown = false
+  activeKey = null
   try {
     pttModule?.stopMonitor()
   } catch (err) {
     console.warn('[dictation-ptt] stopMonitor failed:', err)
   }
+  // Only restore the Globe key when we're fully tearing down (quit / disable).
+  // Internal restarts keep the suppression in place to avoid thrashing the
+  // system preference on every periodic monitor restart.
+  if (restoreFn) {
+    restoreFnEmojiPicker()
+  }
 }
 
 export function startDictationPttMonitor(): boolean {
-  stopDictationPttMonitor()
-
   if (!getDictationEnabled()) {
+    stopDictationPttMonitor()
     return false
   }
+
+  // Idempotent: if we're already monitoring the same key, don't tear down and
+  // restart (periodic permission re-broadcasts call this often). Avoids churn.
+  const { vkOrKeyCode: requestedKey } = resolvePttKeyFromPrefs()
+  if (monitorActive && activeKey === requestedKey) {
+    return true
+  }
+
+  stopDictationPttMonitor(false)
 
   const mod = loadPttModule()
   if (!mod) {
     console.warn('[dictation-ptt] Native module unavailable — Fn hold disabled; use bottom pill.')
+    // Without the native tap we can't swallow the Globe key, so guide the user.
+    if (requestedKey === 0) {
+      maybeShowFnGuidanceOnce()
+    }
     return false
   }
 
   try {
-    const { vkOrKeyCode } = resolvePttKeyFromPrefs()
-    mod.startMonitor(handlePttEvent, vkOrKeyCode)
+    mod.startMonitor(handlePttEvent, requestedKey)
     monitorActive = true
-    console.log('[dictation-ptt] Push-to-talk monitor started (key:', vkOrKeyCode, ')')
+    activeKey = requestedKey
+    // Fn mode (keycode 0): stop macOS from opening the emoji picker on Globe press.
+    if (requestedKey === 0) {
+      suppressFnEmojiPicker()
+    }
+    console.log('[dictation-ptt] Push-to-talk monitor started (key:', requestedKey, ')')
     return true
   } catch (err) {
     console.warn('[dictation-ptt] Failed to start monitor:', err)
+    return false
+  }
+}
+
+/**
+ * Type text at the user's caret via synthesized Unicode keyboard events (native
+ * CGEventKeyboardSetUnicodeString). Inserts exactly where the cursor is and never
+ * touches the clipboard. Returns false if the native module / typeText is missing.
+ */
+export function typeTextAtCursor(text: string): boolean {
+  const mod = loadPttModule()
+  if (!mod || typeof mod.typeText !== 'function') return false
+  try {
+    return mod.typeText(text)
+  } catch (err) {
+    console.warn('[dictation-ptt] typeText failed:', err)
     return false
   }
 }

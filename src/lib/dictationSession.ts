@@ -29,6 +29,29 @@ export type DictationSessionCallbacks = {
 
 const MIN_DICTATION_BLOB_BYTES = 1_200
 
+/** Voice-activity thresholds used to detect "nothing was said" before any upload. */
+const VAD_RMS_THRESHOLD = 0.012
+const VAD_PEAK_MIN = 0.025
+const VAD_MIN_VOICED_MS = 280
+/**
+ * If the measured peak is below this, the analyser never actually received audio
+ * (e.g. a suspended AudioContext) — we treat the reading as unmeasured and fall
+ * back to the server-side speech check instead of falsely rejecting the clip.
+ */
+const VAD_DEAD_PEAK_EPSILON = 1e-4
+/** Auto-gain: boost clips whose peak is below this toward the target peak. */
+const AUTO_GAIN_LOW_PEAK = 0.08
+const AUTO_GAIN_TARGET_PEAK = 0.5
+const AUTO_GAIN_MAX = 8
+
+type VadStats = {
+  peak: number
+  voicedMs: number
+  durationMs: number
+  /** False when the Web Audio meter never started (so callers must not gate on it). */
+  valid: boolean
+}
+
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer)
   let binary = ''
@@ -38,6 +61,111 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
     binary += String.fromCharCode.apply(null, chunk as unknown as number[])
   }
   return btoa(binary)
+}
+
+const WAV_TARGET_RATE = 16_000
+
+function resampleMono(samples: Float32Array, fromRate: number, toRate: number): Float32Array {
+  if (fromRate === toRate || samples.length === 0) return samples
+  const ratio = toRate / fromRate
+  const outLength = Math.max(1, Math.round(samples.length * ratio))
+  const out = new Float32Array(outLength)
+  for (let i = 0; i < outLength; i += 1) {
+    const srcPos = i / ratio
+    const idx = Math.floor(srcPos)
+    const frac = srcPos - idx
+    const a = samples[idx] ?? 0
+    const b = samples[idx + 1] ?? a
+    out[i] = a + (b - a) * frac
+  }
+  return out
+}
+
+function encodeWavMono16(samples: Float32Array, sampleRate: number): ArrayBuffer {
+  const bytesPerSample = 2
+  const dataSize = samples.length * bytesPerSample
+  const buffer = new ArrayBuffer(44 + dataSize)
+  const view = new DataView(buffer)
+
+  const writeString = (offset: number, value: string) => {
+    for (let i = 0; i < value.length; i += 1) view.setUint8(offset + i, value.charCodeAt(i))
+  }
+
+  writeString(0, 'RIFF')
+  view.setUint32(4, 36 + dataSize, true)
+  writeString(8, 'WAVE')
+  writeString(12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true) // PCM
+  view.setUint16(22, 1, true) // mono
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * bytesPerSample, true)
+  view.setUint16(32, bytesPerSample, true)
+  view.setUint16(34, 16, true)
+  writeString(36, 'data')
+  view.setUint32(40, dataSize, true)
+
+  let offset = 44
+  for (let i = 0; i < samples.length; i += 1) {
+    const clamped = Math.max(-1, Math.min(1, samples[i]))
+    view.setInt16(offset, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true)
+    offset += bytesPerSample
+  }
+  return buffer
+}
+
+/**
+ * When a clip is quiet, decode it, apply makeup gain, and re-encode as 16 kHz WAV.
+ * Returns null when no boost is needed or decoding fails (caller keeps the webm).
+ */
+async function maybeAutoGainToWav(
+  blob: Blob,
+  measuredPeak: number,
+): Promise<{ base64: string; format: 'wav' } | null> {
+  if (measuredPeak <= 0 || measuredPeak >= AUTO_GAIN_LOW_PEAK) return null
+
+  const AudioCtor =
+    window.AudioContext ||
+    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+  if (!AudioCtor) return null
+
+  let context: AudioContext | null = null
+  try {
+    context = new AudioCtor()
+    const decoded = await context.decodeAudioData(await blob.arrayBuffer())
+
+    const channelCount = decoded.numberOfChannels
+    const length = decoded.length
+    const mono = new Float32Array(length)
+    for (let ch = 0; ch < channelCount; ch += 1) {
+      const data = decoded.getChannelData(ch)
+      for (let i = 0; i < length; i += 1) mono[i] += data[i] / channelCount
+    }
+
+    let peak = 0
+    for (let i = 0; i < mono.length; i += 1) {
+      const abs = Math.abs(mono[i])
+      if (abs > peak) peak = abs
+    }
+    if (peak <= 0) return null
+
+    const gain = Math.min(AUTO_GAIN_MAX, Math.max(1, AUTO_GAIN_TARGET_PEAK / peak))
+    if (gain > 1) {
+      for (let i = 0; i < mono.length; i += 1) mono[i] *= gain
+    }
+
+    const resampled = resampleMono(mono, decoded.sampleRate, WAV_TARGET_RATE)
+    const wav = encodeWavMono16(resampled, WAV_TARGET_RATE)
+    return { base64: arrayBufferToBase64(wav), format: 'wav' }
+  } catch {
+    return null
+  } finally {
+    try {
+      await context?.close()
+    } catch {
+      // ignore
+    }
+  }
 }
 
 async function getDictationMicStream(preferredDeviceId?: string): Promise<MediaStream> {
@@ -84,6 +212,15 @@ export class DictationSession {
   private warmPromise: Promise<void> | null = null
   private chunks: Blob[] = []
   private mimeType = 'audio/webm;codecs=opus'
+  private audioContext: AudioContext | null = null
+  private analyser: AnalyserNode | null = null
+  private analyserSource: MediaStreamAudioSourceNode | null = null
+  private vadTimer: number | null = null
+  private vadPeak = 0
+  private vadVoicedMs = 0
+  private vadStarted = false
+  private vadSampleBuffer: Float32Array<ArrayBuffer> | null = null
+  private recordStartedAt = 0
   private targetApp: string | null = null
   private targetSnapshot: DictationTargetSnapshot | null = null
   private connected = false
@@ -115,6 +252,9 @@ export class DictationSession {
   }
 
   private stopCapture(): void {
+    if (this.vadTimer !== null || this.audioContext) {
+      this.teardownVadMonitor()
+    }
     this.recorder = null
     this.stream?.getTracks().forEach((track) => track.stop())
     this.stream = null
@@ -189,8 +329,94 @@ export class DictationSession {
     }
     recorder.start(250)
     this.recorder = recorder
+    this.startVadMonitor(stream)
     this.setState('recording')
     playDictationStartSound()
+  }
+
+  /** Lightweight live voice-activity tracking so silent clips never reach the network. */
+  private startVadMonitor(stream: MediaStream): void {
+    this.vadPeak = 0
+    this.vadVoicedMs = 0
+    this.vadStarted = false
+    this.recordStartedAt = performance.now()
+    try {
+      const AudioCtor =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      if (!AudioCtor) return
+      const context = new AudioCtor()
+      // A fresh AudioContext often starts "suspended" (autoplay policy); without
+      // resuming it the analyser reads pure silence and the VAD falsely reports
+      // "no speech" even while the user is talking.
+      if (context.state === 'suspended') {
+        void context.resume().catch(() => {})
+      }
+      const source = context.createMediaStreamSource(stream)
+      const analyser = context.createAnalyser()
+      analyser.fftSize = 1024
+      source.connect(analyser)
+      const buffer = new Float32Array(analyser.fftSize)
+      this.audioContext = context
+      this.analyser = analyser
+      this.analyserSource = source
+      this.vadSampleBuffer = buffer
+
+      const intervalMs = 50
+      this.vadTimer = window.setInterval(() => {
+        if (!this.analyser || !this.vadSampleBuffer) return
+        this.analyser.getFloatTimeDomainData(this.vadSampleBuffer)
+        let sumSquares = 0
+        let peak = 0
+        for (let i = 0; i < this.vadSampleBuffer.length; i += 1) {
+          const sample = this.vadSampleBuffer[i]
+          sumSquares += sample * sample
+          const abs = Math.abs(sample)
+          if (abs > peak) peak = abs
+        }
+        const rms = Math.sqrt(sumSquares / this.vadSampleBuffer.length)
+        if (peak > this.vadPeak) this.vadPeak = peak
+        if (rms >= VAD_RMS_THRESHOLD) this.vadVoicedMs += intervalMs
+      }, intervalMs)
+      this.vadStarted = true
+    } catch {
+      this.teardownVadMonitor()
+    }
+  }
+
+  private teardownVadMonitor(): VadStats {
+    const durationMs = this.recordStartedAt > 0 ? performance.now() - this.recordStartedAt : 0
+    if (this.vadTimer !== null) {
+      window.clearInterval(this.vadTimer)
+      this.vadTimer = null
+    }
+    try {
+      this.analyserSource?.disconnect()
+      this.analyser?.disconnect()
+      void this.audioContext?.close()
+    } catch {
+      // Best-effort teardown.
+    }
+    const stats: VadStats = {
+      peak: this.vadPeak,
+      voicedMs: this.vadVoicedMs,
+      durationMs,
+      // Only trust the meter if it actually received signal; a dead-zero peak
+      // means it never ran, so callers must fall back to server-side checks.
+      valid: this.vadStarted && this.vadPeak > VAD_DEAD_PEAK_EPSILON,
+    }
+    this.analyserSource = null
+    this.analyser = null
+    this.audioContext = null
+    this.vadSampleBuffer = null
+    this.vadStarted = false
+    return stats
+  }
+
+  private hasSpeech(stats: VadStats): boolean {
+    // Never gate on stats we couldn't measure — fall back to server-side checks.
+    if (!stats.valid) return true
+    return stats.peak >= VAD_PEAK_MIN && stats.voicedMs >= VAD_MIN_VOICED_MS
   }
 
   private applySnapshot(snapshot: DictationTargetSnapshot | null | undefined): void {
@@ -302,6 +528,7 @@ export class DictationSession {
       }
     })
 
+    const vadStats = this.teardownVadMonitor()
     this.stopCapture()
 
     if (!blob || blob.size < MIN_DICTATION_BLOB_BYTES) {
@@ -313,10 +540,23 @@ export class DictationSession {
       return
     }
 
+    // Local no-speech short-circuit: skip the network round-trip when silent.
+    if (!this.hasSpeech(vadStats)) {
+      this.targetSnapshot = null
+      this.setState('idle')
+      showStatus(this.callbacks, 'No speech detected — try again')
+      void window.electronAPI.invoke('dictation:session-idle')
+      this.scheduleRewarm()
+      return
+    }
+
     try {
-      const base64 = arrayBufferToBase64(await blob.arrayBuffer())
+      const gained = await maybeAutoGainToWav(blob, vadStats.peak)
+      const base64 = gained?.base64 ?? arrayBufferToBase64(await blob.arrayBuffer())
       const result = (await window.electronAPI.invoke('dictation:compose', {
         audioBase64: base64,
+        durationMs: Math.round(vadStats.durationMs),
+        hasSpeech: vadStats.valid ? true : undefined,
         target: 'auto',
         targetApp: this.targetApp,
         targetSnapshot: this.targetSnapshot,

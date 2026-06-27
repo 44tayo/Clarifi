@@ -1,6 +1,7 @@
 import FormData from 'form-data'
 import fetch from 'node-fetch'
 import { getTranscriptionLanguage, getDictationLanguage } from './audioPreferences'
+import { groqKeepAliveAgent } from './groqHttp'
 import { getGroqApiKey } from './keys'
 import { isProxyConfigured, proxyTranscribe } from './proxyClient'
 import { isTranscriptionDrainMode } from './transcriptionQueue'
@@ -137,20 +138,22 @@ async function transcribeAudioBuffer(
     const language = options.language ?? getTranscriptionLanguage()
     const prompt = options.prompt?.trim().slice(-220)
 
-    if (await getCachedProxyConfigured()) {
-      const transcript = await proxyTranscribe(
-        audioBase64,
-        format,
-        language,
-        prompt,
-        options.model,
-      )
-      if (transcript) console.log('Transcript:', transcript)
-      return transcript
-    }
-
+    // Prefer a direct Groq call when a local key is available — it skips the
+    // device → proxy → Groq hop and is noticeably lower latency. Fall back to the
+    // proxy only when there's no local key (e.g. packaged users on the cloud key).
     const groqKey = await getCachedGroqKey()
     if (!groqKey) {
+      if (await getCachedProxyConfigured()) {
+        const transcript = await proxyTranscribe(
+          audioBase64,
+          format,
+          language,
+          prompt,
+          options.model,
+        )
+        if (transcript) console.log('Transcript:', transcript)
+        return transcript
+      }
       console.error('Groq API key is not configured')
       return null
     }
@@ -176,6 +179,7 @@ async function transcribeAudioBuffer(
         ...formData.getHeaders(),
       },
       body: formData,
+      agent: groqKeepAliveAgent,
     })
 
     if (!response.ok) {

@@ -1221,6 +1221,8 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
 
     const payload = data as {
       audioBase64?: string
+      durationMs?: number
+      hasSpeech?: boolean
       target?: 'auto' | 'overlay' | 'focused_field'
       targetApp?: string | null
       targetSnapshot?: {
@@ -1277,10 +1279,18 @@ export function registerHandlers(mainWindow?: BrowserWindow | null): void {
           }
         : undefined
 
+    const durationMs =
+      typeof payload.durationMs === 'number' && Number.isFinite(payload.durationMs)
+        ? Math.max(0, payload.durationMs)
+        : undefined
+    const hasSpeech = typeof payload.hasSpeech === 'boolean' ? payload.hasSpeech : undefined
+
     return composeDictationFromAudio(payload.audioBase64, {
       target,
       targetApp,
       targetSnapshot,
+      durationMs,
+      hasSpeech,
     })
   })
 

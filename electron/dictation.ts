@@ -1,7 +1,7 @@
 import { getDictationLanguage, getDictationOutputLanguageInstruction } from './audioPreferences'
 import { dictationLanguageName } from './dictationLanguages'
 import { transcribeDictationAudio } from './audio'
-import { completeDictationText } from './proactive/proactiveLlm'
+import { completeDictationTextFast } from './proactive/proactiveLlm'
 import { DICTATION_POLISH_MAX_OUTPUT_TOKENS } from './proactive/featureTypes'
 import {
   dictationSurfaceLabel,
@@ -15,25 +15,43 @@ import {
 } from './dictationInsert'
 import { isLikelyHallucination, normalizeForCompare } from './transcriptUtils'
 
+/** Per-app tone, casing, and formatting guidance (adapted from WsprFlow's context map). */
+function surfaceRulesFor(surface?: string): string {
+  switch (surface) {
+    case 'email':
+      return `- Email surface: professional tone with clear paragraphs when the speaker dictated a full message.
+- Proper grammar and capitalization. Greeting and sign-off only if the speaker said them — never invent either.
+- Fix run-on sentences; keep names, dates, and numbers exactly as spoken.`
+    case 'chat':
+      return `- Chat/messaging surface (Slack, Discord, Teams, Messages): casual, conversational tone with relaxed capitalization.
+- Keep lines short; one thought per line when the speaker pauses. Do not over-formalize.`
+    case 'code':
+      return `- Code editor surface (Cursor, VS Code, IDEs): technical, concise, code-friendly.
+- Prefix a "@" before any file mention so it is clickable in the IDE (e.g. "index.ts" -> "@index.ts", "main.py" -> "@main.py"). Covers common extensions like .ts, .tsx, .js, .py, .go, .rs, .java, .cpp, .css, .html, .json, .md.
+- Preserve indentation and line breaks; keep identifiers, operators, and syntax literal.
+- Only format as a fenced code block if the speaker clearly dictated code structure.`
+    case 'terminal':
+      return `- Terminal/command-line surface: technical and terse.
+- Prefer lowercase for commands, flags, and paths; keep them literal and do not add trailing punctuation to a command.`
+    case 'browser':
+      return `- Browser surface: adapt to the content — casual for social/chat sites, professional for work or formal sites.
+- Output a single flowing message unless the speaker clearly dictated structure.`
+    case 'document':
+      return `- Document surface (Notes, Notion, Docs, Word): well-structured, properly punctuated paragraphs.
+- Use lists or headings only when the speaker clearly dictated them.`
+    default:
+      return `- Output a single flowing paragraph unless the speaker clearly dictated a list or multiple distinct points.
+- Match the tone of the target app without inventing structure the speaker did not imply.`
+  }
+}
+
 function buildDictationPrompt(spokenLanguage: string, surface?: string): string {
   const languageLine =
     spokenLanguage === 'auto'
       ? 'Preserve the speaker\'s language exactly as spoken (auto-detect). Do not translate unless explicitly requested.'
       : `Preserve ${dictationLanguageName(spokenLanguage)}. Do not translate into English unless explicitly requested.`
 
-  const surfaceRules =
-    surface === 'email'
-      ? `- Email surface: use clear paragraphs and professional tone when the speaker dictated a full message.
-- Greeting and sign-off only if the speaker said them — never invent either.
-- Fix run-on sentences; keep names, dates, and numbers exactly as spoken.`
-      : surface === 'chat'
-        ? `- Chat surface: keep lines short and conversational; one thought per line when the speaker pauses.
-- Preserve casual tone; do not over-formalize.`
-        : surface === 'code'
-          ? `- Code surface: preserve indentation and line breaks; keep identifiers, operators, and syntax literal.
-- Only format as a fenced code block if the speaker clearly dictated code structure.`
-          : `- Output a single flowing paragraph unless the speaker clearly dictated a list or multiple distinct points.
-- Match the tone of the target app without inventing structure the speaker did not imply.`
+  const surfaceRules = surfaceRulesFor(surface)
 
   return `You turn casual spoken dictation into clean text ready to insert into the user's active text field.
 
@@ -153,14 +171,31 @@ function shouldSkipPolish(raw: string): boolean {
   return words.length < 3
 }
 
+/** Hard floor — clips shorter than this almost never contain real speech. */
+const MIN_DICTATION_DURATION_MS = 400
+
 export async function composeDictationFromAudio(
   audioBase64: string,
   options: {
     target?: DictationTarget
     targetApp?: string | null
     targetSnapshot?: DictationTargetSnapshot | null
+    durationMs?: number
+    hasSpeech?: boolean
   } = {},
 ): Promise<DictationComposeResult> {
+  // Renderer-side voice-activity gates: reject silence before any transcription.
+  if (options.hasSpeech === false) {
+    return { error: 'no_speech' }
+  }
+  if (
+    typeof options.durationMs === 'number' &&
+    options.durationMs > 0 &&
+    options.durationMs < MIN_DICTATION_DURATION_MS
+  ) {
+    return { error: 'no_speech' }
+  }
+
   const spokenLanguage = getDictationLanguage()
   const targetApp = options.targetSnapshot?.app ?? options.targetApp ?? null
   const surface = inferDictationSurface(targetApp)
@@ -188,7 +223,7 @@ export async function composeDictationFromAudio(
     : Promise.resolve()
 
   const polishPromise = !shouldSkipPolish(trimmedRaw)
-    ? completeDictationText(
+    ? completeDictationTextFast(
         buildDictationPrompt(spokenLanguage, surface) + outputInstruction,
         `${surfaceHint}\n\nSpoken dictation (verbatim transcript):\n${trimmedRaw}`,
         DICTATION_POLISH_MAX_OUTPUT_TOKENS,

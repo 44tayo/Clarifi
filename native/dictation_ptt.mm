@@ -1,6 +1,8 @@
 #include <node_api.h>
 #include <atomic>
 #include <thread>
+#include <vector>
+#include <unistd.h>
 
 #import <ApplicationServices/ApplicationServices.h>
 
@@ -91,13 +93,31 @@ static CGEventRef tapCallback(CGEventTapProxy proxy, CGEventType type, CGEventRe
 }
 
 static void runTapLoop() {
+  const CGEventMask mask =
+    CGEventMaskBit(kCGEventFlagsChanged) |
+    CGEventMaskBit(kCGEventKeyDown) |
+    CGEventMaskBit(kCGEventKeyUp);
+
+  // Prefer the HID-level tap: it sees the Globe/Fn key before macOS acts on it,
+  // which is required to actually suppress the emoji/character picker. Fall back
+  // to the session tap if the HID tap can't be created (e.g. missing permission).
   g_eventTap = CGEventTapCreate(
-    kCGSessionEventTap,
+    kCGHIDEventTap,
     kCGHeadInsertEventTap,
     kCGEventTapOptionDefault,
-    CGEventMaskBit(kCGEventFlagsChanged) | CGEventMaskBit(kCGEventKeyDown) | CGEventMaskBit(kCGEventKeyUp),
+    mask,
     tapCallback,
     nullptr);
+
+  if (g_eventTap == nullptr) {
+    g_eventTap = CGEventTapCreate(
+      kCGSessionEventTap,
+      kCGHeadInsertEventTap,
+      kCGEventTapOptionDefault,
+      mask,
+      tapCallback,
+      nullptr);
+  }
 
   if (g_eventTap == nullptr) {
     return;
@@ -199,6 +219,82 @@ static napi_value StopMonitor(napi_env env, napi_callback_info info) {
   return result;
 }
 
+// --- Caret typing (clipboard-free text insertion) ---------------------------
+// Posts the transformed dictation text as synthesized Unicode keyboard events so
+// it lands exactly where the user's cursor is, without ever touching the
+// pasteboard. Newlines are sent as Return key presses.
+
+static void postUnicodeChunk(CGEventSourceRef src, const UniChar* buf, UniCharCount len) {
+  if (len == 0) return;
+  CGEventRef down = CGEventCreateKeyboardEvent(src, 0, true);
+  CGEventKeyboardSetUnicodeString(down, len, buf);
+  CGEventPost(kCGHIDEventTap, down);
+  CFRelease(down);
+  CGEventRef up = CGEventCreateKeyboardEvent(src, 0, false);
+  CGEventKeyboardSetUnicodeString(up, len, buf);
+  CGEventPost(kCGHIDEventTap, up);
+  CFRelease(up);
+}
+
+static void postReturnKey(CGEventSourceRef src) {
+  CGEventRef down = CGEventCreateKeyboardEvent(src, (CGKeyCode)36, true);
+  CGEventPost(kCGHIDEventTap, down);
+  CFRelease(down);
+  CGEventRef up = CGEventCreateKeyboardEvent(src, (CGKeyCode)36, false);
+  CGEventPost(kCGHIDEventTap, up);
+  CFRelease(up);
+}
+
+static napi_value TypeText(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value args[1];
+  if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok || argc < 1) {
+    napi_throw_type_error(env, nullptr, "Expected text string");
+    return nullptr;
+  }
+
+  size_t len16 = 0;
+  if (napi_get_value_string_utf16(env, args[0], nullptr, 0, &len16) != napi_ok) {
+    napi_value result;
+    napi_get_boolean(env, false, &result);
+    return result;
+  }
+
+  std::vector<char16_t> buf16(len16 + 1, 0);
+  napi_get_value_string_utf16(env, args[0], buf16.data(), len16 + 1, &len16);
+
+  CGEventSourceRef src = CGEventSourceCreate(kCGEventSourceStateCombinedSessionState);
+
+  const size_t CHUNK = 16;
+  size_t i = 0;
+  while (i < len16) {
+    const char16_t c = buf16[i];
+    if (c == u'\n' || c == u'\r') {
+      postReturnKey(src);
+      i++;
+      // Collapse CRLF into a single Return.
+      if (c == u'\r' && i < len16 && buf16[i] == u'\n') i++;
+      usleep(1500);
+      continue;
+    }
+
+    const size_t start = i;
+    size_t count = 0;
+    while (i < len16 && count < CHUNK && buf16[i] != u'\n' && buf16[i] != u'\r') {
+      i++;
+      count++;
+    }
+    postUnicodeChunk(src, reinterpret_cast<const UniChar*>(buf16.data() + start), (UniCharCount)count);
+    usleep(1200);
+  }
+
+  if (src) CFRelease(src);
+
+  napi_value result;
+  napi_get_boolean(env, true, &result);
+  return result;
+}
+
 static napi_value Init(napi_env env, napi_value exports) {
   napi_value startFn;
   napi_create_function(env, nullptr, 0, StartMonitor, nullptr, &startFn);
@@ -207,6 +303,10 @@ static napi_value Init(napi_env env, napi_value exports) {
   napi_value stopFn;
   napi_create_function(env, nullptr, 0, StopMonitor, nullptr, &stopFn);
   napi_set_named_property(env, exports, "stopMonitor", stopFn);
+
+  napi_value typeFn;
+  napi_create_function(env, nullptr, 0, TypeText, nullptr, &typeFn);
+  napi_set_named_property(env, exports, "typeText", typeFn);
 
   return exports;
 }

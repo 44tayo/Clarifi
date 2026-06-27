@@ -159,11 +159,20 @@ if ($pid -eq 0) { exit 1 }
   return null
 }
 
-export type DictationSurface = 'email' | 'chat' | 'code' | 'document' | 'general'
+export type DictationSurface =
+  | 'email'
+  | 'chat'
+  | 'code'
+  | 'terminal'
+  | 'browser'
+  | 'document'
+  | 'general'
 
 const EMAIL_APPS = ['mail', 'gmail', 'outlook', 'spark', 'superhuman']
 const CHAT_APPS = ['slack', 'teams', 'discord', 'messages', 'telegram', 'whatsapp', 'imessage']
 const CODE_APPS = ['code', 'cursor', 'xcode', 'sublime', 'webstorm', 'intellij', 'vim', 'nova']
+const TERMINAL_APPS = ['terminal', 'iterm', 'warp', 'alacritty', 'kitty', 'hyper', 'wezterm']
+const BROWSER_APPS = ['chrome', 'safari', 'firefox', 'edge', 'arc', 'brave', 'opera', 'vivaldi']
 const DOCUMENT_APPS = ['notes', 'notion', 'obsidian', 'bear', 'pages', 'word', 'docs', 'evernote']
 
 export function inferDictationSurface(appName: string | null | undefined): DictationSurface {
@@ -171,7 +180,9 @@ export function inferDictationSurface(appName: string | null | undefined): Dicta
   const lower = appName.toLowerCase()
   if (EMAIL_APPS.some((name) => lower.includes(name))) return 'email'
   if (CHAT_APPS.some((name) => lower.includes(name))) return 'chat'
+  if (TERMINAL_APPS.some((name) => lower.includes(name))) return 'terminal'
   if (CODE_APPS.some((name) => lower.includes(name))) return 'code'
+  if (BROWSER_APPS.some((name) => lower.includes(name))) return 'browser'
   if (DOCUMENT_APPS.some((name) => lower.includes(name))) return 'document'
   return 'general'
 }
@@ -184,6 +195,10 @@ export function dictationSurfaceLabel(surface: DictationSurface): string {
       return 'Slack or chat'
     case 'code':
       return 'code editor'
+    case 'terminal':
+      return 'terminal'
+    case 'browser':
+      return 'browser'
     case 'document':
       return 'document'
     default:

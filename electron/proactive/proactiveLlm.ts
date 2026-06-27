@@ -1,7 +1,9 @@
 import fetch from 'node-fetch'
 import { BrowserWindow } from 'electron'
-import { getAnthropicApiKey } from '../keys'
+import { groqKeepAliveAgent } from '../groqHttp'
+import { getAnthropicApiKey, getGroqApiKey } from '../keys'
 import {
+  DICTATION_POLISH_GROQ_MODEL,
   DICTATION_POLISH_MAX_OUTPUT_TOKENS,
   DICTATION_POLISH_MODEL,
   PROACTIVE_FEATURE_MAX_OUTPUT_TOKENS,
@@ -177,6 +179,52 @@ export async function completeProactiveText(
   } catch {
     return null
   }
+}
+
+/**
+ * Fastest dictation polish: Groq llama on the same connection as transcription
+ * (no extra provider hop, no proxy round-trip). Falls back to Anthropic Haiku
+ * when no Groq key is available locally.
+ */
+export async function completeDictationTextFast(
+  systemPrompt: string,
+  userContent: string,
+  maxTokens = DICTATION_POLISH_MAX_OUTPUT_TOKENS,
+): Promise<string | null> {
+  const groqKey = await getGroqApiKey()
+  if (groqKey) {
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${groqKey}`,
+        },
+        body: JSON.stringify({
+          model: DICTATION_POLISH_GROQ_MODEL,
+          max_tokens: maxTokens,
+          temperature: 0,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userContent },
+          ],
+        }),
+        agent: groqKeepAliveAgent,
+      })
+
+      if (response.ok) {
+        const data = (await response.json()) as {
+          choices?: Array<{ message?: { content?: string } }>
+        }
+        const text = data.choices?.[0]?.message?.content?.trim()
+        if (text) return text
+      }
+    } catch {
+      // Fall through to the Anthropic path below.
+    }
+  }
+
+  return completeDictationText(systemPrompt, userContent, maxTokens)
 }
 
 /** Low-latency dictation polish — Haiku, temperature 0 for transcript fidelity. */

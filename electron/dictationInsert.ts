@@ -1,6 +1,7 @@
 import { execSync } from 'child_process'
 import { clipboard, screen, systemPreferences, BrowserWindow } from 'electron'
 import { runOsascript, runOsascriptAsync } from './osascript'
+import { typeTextAtCursor } from './dictationPtt'
 import {
   getFrontmostAppNameCached,
   inferDictationSurface,
@@ -646,21 +647,56 @@ async function focusFieldAtCursor(
   const cursor = screen.getCursorScreenPoint()
   if (!options.skipActivate) {
     activateApplication(app)
-    await delay(100)
+    await delay(60)
   } else {
-    await delay(50)
+    await delay(25)
   }
   clickAtScreenPoint(cursor.x, cursor.y)
-  await delay(options.skipActivate ? 60 : 80)
+  await delay(options.skipActivate ? 35 : 50)
   return cursor
+}
+
+/** Debounce window to prevent the same dictation pasting twice. */
+const PASTE_DEBOUNCE_MS = 400
+/**
+ * Wait this long before restoring the user's prior clipboard. The previous 120ms
+ * window let a slow Cmd+V land *after* the restore, pasting the old clipboard
+ * alongside the dictation. A longer, verified restore eliminates that race.
+ */
+const CLIPBOARD_RESTORE_DELAY_MS = 1000
+
+let lastPasteAt = 0
+
+function scheduleClipboardRestore(pastedText: string, previousClipboard: string): void {
+  setTimeout(() => {
+    try {
+      // Only restore if our dictation text is still on the clipboard — i.e. the
+      // paste has consumed it and the user hasn't copied something new since.
+      if (clipboard.readText() !== pastedText) return
+      if (previousClipboard) {
+        clipboard.writeText(previousClipboard)
+      } else {
+        clipboard.clear()
+      }
+    } catch {
+      // Best-effort restore.
+    }
+  }, CLIPBOARD_RESTORE_DELAY_MS)
 }
 
 async function pasteViaClipboard(text: string): Promise<boolean> {
   const previousClipboard = clipboard.readText()
   clipboard.writeText(text)
-  await delay(30)
+  await delay(40)
+
+  const sinceLast = Date.now() - lastPasteAt
+  if (sinceLast < PASTE_DEBOUNCE_MS) {
+    await delay(PASTE_DEBOUNCE_MS - sinceLast)
+  }
 
   const pasted = pasteAtFrontmost()
+  lastPasteAt = Date.now()
+
   if (!pasted) {
     if (previousClipboard) {
       clipboard.writeText(previousClipboard)
@@ -670,13 +706,47 @@ async function pasteViaClipboard(text: string): Promise<boolean> {
     return false
   }
 
-  await delay(120)
-  if (previousClipboard) {
-    clipboard.writeText(previousClipboard)
-  } else {
-    clipboard.clear()
-  }
+  scheduleClipboardRestore(text, previousClipboard)
   return true
+}
+
+/** Matches "@file.ext" mentions (incl. relative paths) the way IDE autocomplete expects. */
+const FILE_MENTION_SPLIT = /(@[\w\-./]+\.\w+)/g
+const FILE_MENTION_EXACT = /^@[\w\-./]+\.\w+$/
+
+function textHasFileMention(text: string): boolean {
+  return /@[\w\-./]+\.\w+/.test(text)
+}
+
+function pressReturnKey(): boolean {
+  if (process.platform !== 'darwin') return false
+  return runOsascript(`tell application "System Events" to key code 36`, 2000) !== null
+}
+
+/**
+ * IDE smart insert: type each "@file.ext" mention then press Enter so the editor's
+ * file autocomplete fires and the mention becomes clickable (Cursor / VS Code),
+ * typing the surrounding text normally. The clipboard is never used.
+ */
+async function typeWithFileMentions(text: string): Promise<boolean> {
+  const parts = text.split(FILE_MENTION_SPLIT).filter((part) => part.length > 0)
+  let didAnything = false
+
+  for (const part of parts) {
+    if (FILE_MENTION_EXACT.test(part)) {
+      if (typeTextAtCursor(part)) {
+        didAnything = true
+        await delay(120)
+        pressReturnKey()
+        await delay(160)
+      }
+    } else if (typeTextAtCursor(part)) {
+      didAnything = true
+      await delay(40)
+    }
+  }
+
+  return didAnything
 }
 
 function delay(ms: number): Promise<void> {
@@ -685,7 +755,7 @@ function delay(ms: number): Promise<void> {
 
 export type DictationInsertResult = {
   ok: boolean
-  method?: 'accessibility' | 'paste'
+  method?: 'accessibility' | 'paste' | 'type'
   error?: 'accessibility_required' | 'no_target_app' | 'insert_failed'
   targetApp?: string | null
   clipboardFallback?: boolean
@@ -737,15 +807,17 @@ export async function insertTextIntoExternalField(
     const surface = inferDictationSurface(app)
     await focusFieldAtCursor(app, { skipActivate: options.skipActivate })
 
-    if (await pasteViaClipboard(trimmed)) {
-      return { ok: true, method: 'paste', targetApp: app }
+    // IDE @file-mention typing: type mentions to trigger editor autocomplete.
+    if (surface === 'code' && textHasFileMention(trimmed)) {
+      if (await typeWithFileMentions(trimmed)) {
+        return { ok: true, method: 'type', targetApp: app }
+      }
     }
 
-    const existing = readFocusedFieldInProcess(app) ?? snapshot?.fieldPreview ?? null
-    const merged = mergeDictationText(existing, trimmed, surface)
-
-    if (setFocusedFieldInProcess(app, merged)) {
-      return { ok: true, method: 'accessibility', targetApp: app }
+    // Only method: synthesize keystrokes so the transformed text lands exactly at
+    // the user's caret. No clipboard is read or written at any point.
+    if (typeTextAtCursor(trimmed)) {
+      return { ok: true, method: 'type', targetApp: app }
     }
 
     return { ok: false, error: 'insert_failed', targetApp: app }

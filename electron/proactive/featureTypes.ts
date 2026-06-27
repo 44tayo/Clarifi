@@ -5,6 +5,11 @@ export const PROACTIVE_FEATURE_MAX_OUTPUT_TOKENS = 2000
 /** Fast, faithful dictation polish — latency-sensitive. */
 export const DICTATION_POLISH_MODEL = 'claude-3-5-haiku-20241022'
 export const DICTATION_POLISH_MAX_OUTPUT_TOKENS = 400
+/**
+ * Lowest-latency dictation polish model on Groq (same connection as transcription,
+ * so no extra provider hop). Used in preference to the Anthropic model above.
+ */
+export const DICTATION_POLISH_GROQ_MODEL = 'llama-3.1-8b-instant'
 
 export const PROACTIVE_WRITING_MODES = [
   'rewrite',
