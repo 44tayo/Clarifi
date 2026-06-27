@@ -175,14 +175,67 @@ const TERMINAL_APPS = ['terminal', 'iterm', 'warp', 'alacritty', 'kitty', 'hyper
 const BROWSER_APPS = ['chrome', 'safari', 'firefox', 'edge', 'arc', 'brave', 'opera', 'vivaldi']
 const DOCUMENT_APPS = ['notes', 'notion', 'obsidian', 'bear', 'pages', 'word', 'docs', 'evernote']
 
-export function inferDictationSurface(appName: string | null | undefined): DictationSurface {
+// Web apps run inside a browser, so the process name is just "Google Chrome",
+// "Safari", "Arc", etc. — never "Gmail". To pick the right surface for a web app
+// (e.g. Gmail should be `email`, not `browser`), we refine using the window/tab
+// title, which already contains the product name (e.g. "Inbox - … - Gmail").
+const WEB_EMAIL_TITLE = [
+  'gmail',
+  'outlook',
+  'proton mail',
+  'protonmail',
+  'yahoo mail',
+  'fastmail',
+  'zoho mail',
+  'icloud mail',
+  'hey.com',
+]
+const WEB_CHAT_TITLE = [
+  'slack',
+  'discord',
+  'whatsapp',
+  'messenger',
+  'telegram',
+  'google chat',
+  'microsoft teams',
+  ' teams',
+  'intercom',
+]
+const WEB_DOCUMENT_TITLE = [
+  'google docs',
+  'google sheets',
+  'google slides',
+  'notion',
+  'confluence',
+  'coda.io',
+  'quip',
+  'dropbox paper',
+  'office',
+  'onenote',
+]
+
+function refineBrowserSurface(windowTitle: string | null | undefined): DictationSurface {
+  if (!windowTitle) return 'browser'
+  const title = windowTitle.toLowerCase()
+  if (WEB_EMAIL_TITLE.some((name) => title.includes(name))) return 'email'
+  if (WEB_CHAT_TITLE.some((name) => title.includes(name))) return 'chat'
+  if (WEB_DOCUMENT_TITLE.some((name) => title.includes(name))) return 'document'
+  return 'browser'
+}
+
+export function inferDictationSurface(
+  appName: string | null | undefined,
+  windowTitle?: string | null,
+): DictationSurface {
   if (!appName) return 'general'
   const lower = appName.toLowerCase()
   if (EMAIL_APPS.some((name) => lower.includes(name))) return 'email'
   if (CHAT_APPS.some((name) => lower.includes(name))) return 'chat'
   if (TERMINAL_APPS.some((name) => lower.includes(name))) return 'terminal'
   if (CODE_APPS.some((name) => lower.includes(name))) return 'code'
-  if (BROWSER_APPS.some((name) => lower.includes(name))) return 'browser'
+  // For a browser, the product lives in the tab title — reclassify Gmail/Docs/
+  // Slack-in-browser into their proper surface instead of a generic `browser`.
+  if (BROWSER_APPS.some((name) => lower.includes(name))) return refineBrowserSurface(windowTitle)
   if (DOCUMENT_APPS.some((name) => lower.includes(name))) return 'document'
   return 'general'
 }

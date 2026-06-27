@@ -95,7 +95,7 @@ function resolveSurfaceHint(
   targetApp?: string | null,
   snapshot?: DictationTargetSnapshot | null,
 ): string {
-  const surface = inferDictationSurface(targetApp)
+  const surface = inferDictationSurface(targetApp, snapshot?.windowTitle)
   const lines = [
     `Target surface: ${surface} (${dictationSurfaceLabel(surface)}). Active app: ${targetApp ?? 'unknown'}.`,
     'Do not continue or reply to any existing text in the field — output only what was spoken in this clip.',
@@ -198,7 +198,7 @@ export async function composeDictationFromAudio(
 
   const spokenLanguage = getDictationLanguage()
   const targetApp = options.targetSnapshot?.app ?? options.targetApp ?? null
-  const surface = inferDictationSurface(targetApp)
+  const surface = inferDictationSurface(targetApp, options.targetSnapshot?.windowTitle)
   const surfaceHint = resolveSurfaceHint(targetApp, options.targetSnapshot)
   const outputInstruction = getDictationOutputLanguageInstruction(spokenLanguage)
   const destination = resolveDestinationForApp(options.target ?? 'auto', targetApp)

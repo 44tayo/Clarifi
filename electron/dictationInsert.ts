@@ -171,15 +171,17 @@ export function getFrontmostAppDisplayId(): number {
 }
 
 /**
- * Display for dictation pill positioning — prefers the frontmost window's display
- * so Cmd+Tab / monitor switches move the pill without requiring cursor movement.
+ * Display for dictation pill positioning. Follows the display the cursor is on —
+ * this is instant and reliable (no AppleScript, no caching), so the pill is always
+ * present on whatever screen the user is actively working on. Matches the overlay's
+ * follow behavior and the cursor-based display used when a session snapshot is taken.
  */
 export function getFollowDisplayId(): number {
   return getActiveDisplayIdForPill()
 }
 
 export function getActiveDisplayIdForPill(): number {
-  return getFrontmostAppDisplayId()
+  return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id
 }
 
 async function refreshFollowDisplayAsync(): Promise<void> {
