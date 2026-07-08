@@ -22,6 +22,14 @@ const HERO_ROTATING_WORDS = [
   'task',
 ] as const
 
+const MEETING_APP_LOGOS = [
+  { id: 'zoom', description: 'Zoom', image: '/logos/zoom.svg', className: 'h-9 w-auto' },
+  { id: 'google-meet', description: 'Google Meet', image: '/logos/google-meet.svg', className: 'h-8 w-auto' },
+  { id: 'microsoft-teams', description: 'Microsoft Teams', image: '/logos/microsoft-teams.svg', className: 'h-9 w-auto' },
+  { id: 'slack', description: 'Slack', image: '/logos/slack.svg', className: 'h-8 w-auto' },
+  { id: 'discord', description: 'Discord', image: '/logos/discord.svg', className: 'h-9 w-auto' },
+]
+
 export function HeroScrollSection() {
   return (
     <>
@@ -49,6 +57,14 @@ export function HeroScrollSection() {
       </section>
 
       <StackedCards />
+
+      <Logos3
+        heading="Works with every meeting app"
+        logos={MEETING_APP_LOGOS}
+        grayscale={false}
+        strip
+        headingClassName="text-[12px] font-semibold uppercase tracking-[0.22em] text-[color:var(--ds-muted)]"
+      />
 
       <MeetingNotesSection />
 

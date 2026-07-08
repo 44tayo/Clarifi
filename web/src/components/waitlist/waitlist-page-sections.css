@@ -57,7 +57,7 @@
 
 .waitlist-page .logos3-heading {
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-  color: #94a3b8;
+  color: var(--ds-muted-hero);
 }
 
 .waitlist-page #demo,

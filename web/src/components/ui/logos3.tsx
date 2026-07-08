@@ -1,8 +1,14 @@
 'use client'
 
+import { useEffect, useMemo, useState } from 'react'
 import AutoScroll from 'embla-carousel-auto-scroll'
 
-import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel'
+import {
+  type CarouselApi,
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+} from '@/components/ui/carousel'
 import { cn } from '@/lib/utils'
 
 interface Logo {
@@ -16,6 +22,11 @@ interface Logos3Props {
   heading?: string
   logos?: Logo[]
   className?: string
+  headingClassName?: string
+  containerClassName?: string
+  grayscale?: boolean
+  speed?: number
+  strip?: boolean
 }
 
 const DEFAULT_LOGOS: Logo[] = [
@@ -73,40 +84,106 @@ export function Logos3({
   heading = 'Trusted by professionals at',
   logos = DEFAULT_LOGOS,
   className,
+  headingClassName,
+  grayscale = true,
+  speed = 0.75,
+  containerClassName,
+  strip = false,
 }: Logos3Props) {
+  const items = logos.length < 8 ? [...logos, ...logos, ...logos] : logos
+  const [api, setApi] = useState<CarouselApi>()
+  const autoScrollPlugin = useMemo(
+    () =>
+    AutoScroll({
+      playOnInit: true,
+      speed,
+      stopOnInteraction: false,
+      stopOnMouseEnter: false,
+    }),
+    [speed],
+  )
+  const carouselPlugins = useMemo(() => [autoScrollPlugin], [autoScrollPlugin])
+
+  useEffect(() => {
+    if (!api) return
+    const plugins = api.plugins() as Record<
+      string,
+      { isPlaying?: () => boolean; play?: () => void } | undefined
+    >
+    const autoScroll = plugins.autoScroll
+    if (!autoScroll) return
+    const play = () => {
+      if (
+        typeof autoScroll.isPlaying === 'function' &&
+        typeof autoScroll.play === 'function' &&
+        !autoScroll.isPlaying()
+      ) {
+        autoScroll.play()
+      }
+    }
+    api.on('reInit', play)
+    play()
+    return () => {
+      api.off('reInit', play)
+    }
+  }, [api])
+
   return (
     <section className={cn('py-10 md:py-12', className)}>
-      <div className="mx-auto w-full max-w-5xl px-4 text-center">
-        <p className="logos3-heading font-mono text-[13px] font-normal tracking-[0.01em] text-slate-400">
+      <div
+        className={cn(
+          'mx-auto w-full',
+          strip &&
+            'border-y border-[color:var(--ds-logo-strip-border)] bg-[color:var(--ds-logo-strip-bg)]',
+        )}
+      >
+        <div className="mx-auto w-full max-w-5xl px-4 pt-6 text-center md:pt-7">
+        <p
+          className={cn(
+            'logos3-heading text-[13px] font-medium uppercase tracking-[0.18em] text-[color:var(--ds-logo-heading)]',
+            headingClassName,
+          )}
+        >
           {heading}
         </p>
       </div>
-      <div className="pt-6 md:pt-8">
-        <div className="relative mx-auto flex items-center justify-center lg:max-w-5xl">
+      <div className="pb-6 pt-5 md:pb-7 md:pt-6">
+        <div
+          className={cn(
+            'relative mx-auto w-full',
+            containerClassName ?? 'lg:max-w-5xl',
+          )}
+        >
           <Carousel
+            className="w-full"
+            setApi={setApi}
             opts={{ loop: true }}
-            plugins={[AutoScroll({ playOnInit: true, speed: 0.75 })]}
+            plugins={carouselPlugins}
           >
             <CarouselContent className="ml-0">
-              {logos.map((logo) => (
+              {items.map((logo, i) => (
                 <CarouselItem
-                  key={logo.id}
-                  className="flex basis-1/3 justify-center pl-0 sm:basis-1/4 md:basis-1/5 lg:basis-1/6"
+                  key={`${logo.id}-${i}`}
+                  className="flex basis-1/4 justify-center pl-0 sm:basis-1/5"
                 >
-                  <div className="mx-8 flex shrink-0 items-center justify-center">
+                  <div className="flex shrink-0 items-center justify-center">
                     <img
                       src={logo.image}
                       alt={logo.description}
-                      className={cn('opacity-60 grayscale', logo.className)}
+                      className={cn(
+                        grayscale ? 'opacity-60 grayscale' : 'opacity-85',
+                        logo.className,
+                      )}
                     />
                   </div>
                 </CarouselItem>
               ))}
             </CarouselContent>
           </Carousel>
-          <div className="pointer-events-none absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-white to-transparent" />
-          <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-white to-transparent" />
+          <div className="pointer-events-none absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-[color:var(--ds-logo-strip-fade)] to-transparent" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-[color:var(--ds-logo-strip-fade)] to-transparent" />
         </div>
+      </div>
       </div>
     </section>
   )

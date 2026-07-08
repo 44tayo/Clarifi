@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Zoom">
+  <defs>
+    <linearGradient id="zoomg" x1="256" y1="16" x2="256" y2="496" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4A8CFF"/>
+      <stop offset="1" stop-color="#2D8CFF"/>
+    </linearGradient>
+  </defs>
+  <circle cx="256" cy="256" r="240" fill="url(#zoomg)"/>
+  <path d="M133 198c0-14.4 11.7-26 26-26h120c14.4 0 26 11.6 26 26v116c0 14.4-11.6 26-26 26H159c-14.3 0-26-11.6-26-26V198z" fill="#fff"/>
+  <path d="M331 218l54-34c8.6-5.4 19.8 1 19.8 11v122c0 10-11.2 16.4-19.8 11l-54-34v-76z" fill="#fff"/>
+</svg>
