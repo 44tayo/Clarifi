@@ -30,7 +30,11 @@ export async function transcribeAudio(
   formData.append('temperature', '0')
 
   try {
-    const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+    // Groq's EU endpoint (api.eu.groq.com, Helsinki) must be enabled per
+    // account by Groq sales before it can be used — set GROQ_API_BASE_URL
+    // once that's done. Defaults to the standard US-hosted endpoint.
+    const baseUrl = process.env.GROQ_API_BASE_URL?.trim() || 'https://api.groq.com'
+    const response = await fetch(`${baseUrl}/openai/v1/audio/transcriptions`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,

@@ -2,15 +2,12 @@ import { redirect } from 'next/navigation'
 import { AuthForm } from '@/components/auth/AuthForm'
 import { AuthRedirect } from '@/components/auth/AuthRedirect'
 import { getServerUser } from '@/lib/auth-server'
-import { getServerLaunchPreviewState } from '@/lib/launch-preview-server'
-import { canAccessAuthDuringPrelaunch, resolvePostAuthRedirect } from '@/lib/prelaunch'
-import { isLaunchLive } from '@/lib/waitlist-config'
 import '@/components/auth/auth.css'
 
 export const dynamic = 'force-dynamic'
 
 type PageProps = {
-  searchParams: Promise<{ next?: string; error?: string; preview?: string }>
+  searchParams: Promise<{ next?: string; error?: string }>
 }
 
 export const metadata = {
@@ -21,29 +18,11 @@ export const metadata = {
 export default async function SignInPage({ searchParams }: PageProps) {
   const params = await searchParams
   const { next, error } = params
-  const launchPreview = await getServerLaunchPreviewState(params.preview)
   const redirectNext = next?.startsWith('/') ? next : '/dashboard'
-  if (
-    !canAccessAuthDuringPrelaunch(
-      redirectNext,
-      launchPreview.previewLive,
-      launchPreview.forceWaitlist,
-    )
-  ) {
-    redirect('/')
-  }
 
   const user = await getServerUser()
   if (user) {
-    redirect(
-      isLaunchLive(undefined, launchPreview.previewLive, launchPreview.forceWaitlist)
-        ? redirectNext
-        : resolvePostAuthRedirect(
-            redirectNext,
-            launchPreview.previewLive,
-            launchPreview.forceWaitlist,
-          ),
-    )
+    redirect(redirectNext)
   }
 
   return (

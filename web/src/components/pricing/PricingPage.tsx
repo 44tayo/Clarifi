@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useState } from 'react'
 import { MarketingNav } from '@/components/marketing/MarketingNav'
@@ -57,9 +58,9 @@ export function PricingPage() {
         )}
 
         <section className="pricing-hero" data-reveal>
-          <h1 className="pricing-hero-title">Try Clarifi free for 7 days.</h1>
+          <h1 className="pricing-hero-title">Free to start. Upgrade when you need more.</h1>
           <p className="pricing-hero-sub">
-            Pro for individuals. Pro+ for teams. Unlimited AI on every meeting — cancel anytime.
+            Unlimited meetings on every plan. Upgrade for unlimited note history and team features.
           </p>
 
           <div className="pricing-toggles">
@@ -87,8 +88,8 @@ export function PricingPage() {
 
             <div className="pricing-billing-note">
               {billing === 'annual'
-                ? `Save up to ${maxSavingsPercent}% vs monthly · 7-day free trial · cancel anytime`
-                : 'Billed monthly · 7-day free trial · cancel anytime'}
+                ? `Save up to ${maxSavingsPercent}% vs monthly · cancel anytime`
+                : 'Billed monthly · cancel anytime'}
             </div>
           </div>
         </section>
@@ -120,13 +121,19 @@ export function PricingPage() {
                 ) : null}
               </div>
 
-              <PricingCheckoutButton
-                planId={plan.id}
-                interval={billing}
-                className="pricing-card-cta"
-              >
-                {plan.cta}
-              </PricingCheckoutButton>
+              {plan.id === 'free' ? (
+                <Link href="/sign-up" className="pricing-card-cta">
+                  {plan.cta}
+                </Link>
+              ) : (
+                <PricingCheckoutButton
+                  planId={plan.id}
+                  interval={billing}
+                  className="pricing-card-cta"
+                >
+                  {plan.cta}
+                </PricingCheckoutButton>
+              )}
 
               <p className="pricing-card-tagline">{plan.tagline}</p>
 

@@ -1,131 +1,110 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
-type ConnectionStatus = 'connecting' | 'connected' | 'error'
+import { MeetingWorkspace } from './components/MeetingWorkspace'
+import { Sidebar } from './components/Sidebar'
+import { SettingsPanel } from './components/SettingsPanel'
+import { useAuth } from './hooks/useAuth'
+import { useMeetings } from './hooks/useMeetings'
+import type { Meeting } from './types/meeting'
 
 function App() {
-  const [status, setStatus] = useState<ConnectionStatus>('connecting')
-  const [response, setResponse] = useState<string>('')
+  const { connection, openConnect, openDashboard } = useAuth()
+  const { meetings, createMeeting, updateMeeting, deleteMeeting, enhanceMeeting, getMeeting } =
+    useMeetings()
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [activeMeeting, setActiveMeeting] = useState<Meeting | null>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+
+  const selectedFromList = useMemo(
+    () => meetings.find((meeting) => meeting.id === selectedId) ?? null,
+    [meetings, selectedId],
+  )
 
   useEffect(() => {
-    window.electronAPI
-      .invoke('ping')
-      .then((result) => {
-        setResponse(String(result))
-        setStatus('connected')
-      })
-      .catch(() => {
-        setStatus('error')
-      })
-  }, [])
+    if (selectedFromList) {
+      setActiveMeeting(selectedFromList)
+    }
+  }, [selectedFromList])
 
-  const statusColor =
-    status === 'connected' ? '#22c55e' : status === 'error' ? '#ef4444' : '#eab308'
+  const handleNewMeeting = useCallback(async () => {
+    const meeting = await createMeeting()
+    setSelectedId(meeting.id)
+    setActiveMeeting(meeting)
+  }, [createMeeting])
 
-  const statusLabel =
-    status === 'connected'
-      ? 'Connected'
-      : status === 'error'
-        ? 'Disconnected'
-        : 'Connecting...'
+  const handleUpdate = useCallback(
+    async (patch: { title?: string; userNotes?: string }) => {
+      if (!activeMeeting) return
+      const updated = await updateMeeting(activeMeeting.id, patch)
+      if (updated) setActiveMeeting(updated)
+    },
+    [activeMeeting, updateMeeting],
+  )
+
+  const handleDelete = useCallback(async () => {
+    if (!activeMeeting) return
+    await deleteMeeting(activeMeeting.id)
+    setSelectedId(null)
+    setActiveMeeting(null)
+  }, [activeMeeting, deleteMeeting])
+
+  const handleEnhance = useCallback(async () => {
+    if (!activeMeeting) return
+    const updated = await enhanceMeeting(activeMeeting.id)
+    if (updated) setActiveMeeting(updated)
+  }, [activeMeeting, enhanceMeeting])
+
+  const handleSelect = useCallback(
+    async (id: string) => {
+      setSelectedId(id)
+      const meeting = await getMeeting(id)
+      if (meeting) setActiveMeeting(meeting)
+    },
+    [getMeeting],
+  )
 
   return (
-    <div style={styles.container}>
-      <header style={styles.header}>
-        <h1 style={styles.title}>MyApp</h1>
-        <p style={styles.subtitle}>Electron + React + TypeScript</p>
-      </header>
+    <div className="app-shell">
+      <Sidebar
+        meetings={meetings}
+        selectedId={selectedId}
+        connection={connection}
+        onSelect={(id) => void handleSelect(id)}
+        onNewMeeting={() => void handleNewMeeting()}
+        onConnect={() => void openConnect()}
+        onOpenDashboard={() => void openDashboard()}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
 
-      <main style={styles.card}>
-        <div style={styles.statusRow}>
-          <span
-            style={{
-              ...styles.statusDot,
-              backgroundColor: statusColor,
-              boxShadow: `0 0 8px ${statusColor}`,
-            }}
-            aria-hidden="true"
+      {settingsOpen ? <SettingsPanel onClose={() => setSettingsOpen(false)} /> : null}
+
+      <main className="workspace">
+        {!activeMeeting ? (
+          <div className="workspace-empty">
+            <div className="empty-card">
+              <h2>Your AI meeting notepad</h2>
+              <p>
+                Take light notes during calls. Clarifi captures audio, transcribes in the
+                background, and turns everything into polished notes when you&apos;re done.
+              </p>
+              <button type="button" className="btn btn-primary" onClick={() => void handleNewMeeting()}>
+                Start a meeting note
+              </button>
+            </div>
+          </div>
+        ) : (
+          <MeetingWorkspace
+            meeting={activeMeeting}
+            connected={connection.paired}
+            onUpdate={(patch) => void handleUpdate(patch)}
+            onDelete={() => void handleDelete()}
+            onEnhance={() => void handleEnhance()}
+            onConnect={() => void openConnect()}
           />
-          <span style={styles.statusText}>{statusLabel}</span>
-        </div>
-
-        {status === 'connected' && (
-          <p style={styles.response}>
-            IPC ping response: <strong>{response}</strong>
-          </p>
-        )}
-
-        {status === 'error' && (
-          <p style={styles.error}>
-            Failed to reach the main process. Ensure the app is running inside Electron.
-          </p>
         )}
       </main>
     </div>
   )
-}
-
-const styles: Record<string, CSSProperties> = {
-  container: {
-    minHeight: '100vh',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '2rem',
-    fontFamily:
-      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-    background: 'linear-gradient(160deg, #0f172a 0%, #1e293b 100%)',
-    color: '#f8fafc',
-  },
-  header: {
-    textAlign: 'center',
-    marginBottom: '2rem',
-  },
-  title: {
-    margin: 0,
-    fontSize: '2rem',
-    fontWeight: 700,
-    letterSpacing: '-0.02em',
-  },
-  subtitle: {
-    margin: '0.5rem 0 0',
-    fontSize: '0.95rem',
-    color: '#94a3b8',
-  },
-  card: {
-    width: '100%',
-    maxWidth: '420px',
-    padding: '1.75rem',
-    borderRadius: '12px',
-    backgroundColor: 'rgba(30, 41, 59, 0.8)',
-    border: '1px solid rgba(148, 163, 184, 0.2)',
-    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-  },
-  statusRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.75rem',
-  },
-  statusDot: {
-    width: '10px',
-    height: '10px',
-    borderRadius: '50%',
-    flexShrink: 0,
-  },
-  statusText: {
-    fontSize: '1rem',
-    fontWeight: 500,
-  },
-  response: {
-    margin: '1.25rem 0 0',
-    fontSize: '0.9rem',
-    color: '#cbd5e1',
-  },
-  error: {
-    margin: '1.25rem 0 0',
-    fontSize: '0.9rem',
-    color: '#fca5a5',
-  },
 }
 
 export default App

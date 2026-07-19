@@ -601,9 +601,9 @@ export const BLOG_POSTS: BlogPost[] = [
       },
       {
         type: 'cta',
-        text: 'Launching August 24, 2026.',
-        href: '/#faq',
-        label: 'Join the waitlist →',
+        text: 'Get started free — unlimited meetings with 30 days of note history.',
+        href: '/sign-up',
+        label: 'Sign up free →',
       },
       {
         type: 'p',
@@ -833,9 +833,9 @@ export const BLOG_POSTS: BlogPost[] = [
       },
       {
         type: 'cta',
-        text: 'Launching August 24, 2026.',
-        href: '/#faq',
-        label: 'Join the waitlist →',
+        text: 'Get started free — unlimited meetings with 30 days of note history.',
+        href: '/sign-up',
+        label: 'Sign up free →',
       },
       {
         type: 'p',

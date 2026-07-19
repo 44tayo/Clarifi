@@ -1,0 +1,45 @@
+.marketing-page.landing-root {
+  --cl-frost-veil: rgba(255, 255, 255, 0.12);
+  position: relative;
+  background: #ffffff;
+}
+
+.marketing-page .landing-nav-inner {
+  max-width: min(1400px, calc(100% - 4rem));
+  width: 100%;
+}
+
+.landing-hero .landing-hero-widget-wrap[data-reveal] {
+  transition-delay: 0.12s;
+}
+
+.marketing-hero-title {
+  font-size: clamp(2rem, 5.5vw, 3.75rem) !important;
+  line-height: 1.08 !important;
+  letter-spacing: -0.03em;
+}
+
+.download-mac-btn-large {
+  height: 2.75rem;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+.marketing-faq {
+  padding-top: 2.5rem;
+  padding-bottom: 3.5rem;
+  background: transparent;
+}
+
+.marketing-faq .landing-section-header {
+  margin-bottom: 0.5rem;
+}
+
+.marketing-faq .landing-section-header h2 {
+  font-size: clamp(1.75rem, 4vw, 2.25rem);
+  letter-spacing: -0.03em;
+}
+
+.marketing-faq .landing-faq-item:first-child {
+  border-top: 1px solid var(--cl-border);
+}

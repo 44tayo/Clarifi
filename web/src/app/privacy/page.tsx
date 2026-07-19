@@ -42,15 +42,17 @@ export default function PrivacyPolicyPage() {
             <p>
               <strong>Clarifi does not sell your data or use your data to train AI models.</strong>{' '}
               You can contact us at{' '}
-              <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> with any privacy request.
+              <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> with any privacy request. For a
+              plain-language walkthrough of where your data is stored, what happens to your audio, and
+              how it&apos;s encrypted, see <Link href="/trust">Trust &amp; Security</Link>.
             </p>
           </div>
 
           <p>
             Your privacy is important to us. This Privacy Policy (&quot;Policy&quot;) applies to
             services provided by Clarifi (&quot;we&quot;, &quot;us&quot;, or &quot;Clarifi&quot;) and
-            our website (the &quot;Site&quot;), product pages, desktop or mobile applications, waitlist
-            sign-up flows, or other digital products that link to or reference this Policy
+            our website (the &quot;Site&quot;), product pages, desktop or mobile applications, or
+            other digital products that link to or reference this Policy
             (collectively, the &quot;Services&quot;). It explains what information we collect from
             users of our Services (&quot;you&quot; or &quot;your&quot;), including information that
             may identify you (&quot;Personal Information&quot;), and how we use it.
@@ -65,7 +67,7 @@ export default function PrivacyPolicyPage() {
 
           <h2 id="scope">Scope and Applicability</h2>
           <p>
-            This Policy applies when you visit our website, join our waitlist, use our desktop app, or
+            This Policy applies when you visit our website, create an account, use our desktop app, or
             otherwise use the Services. Where we process Personal Information on behalf of business
             customers as a processor (or &quot;service provider&quot;), the customer&apos;s privacy
             notice governs that processing and you should contact them directly.
@@ -81,8 +83,8 @@ export default function PrivacyPolicyPage() {
           <h3>Information you provide</h3>
           <ul>
             <li>
-              <strong>Account and waitlist information:</strong> name, email address, profile picture
-              (if using Google sign-in), authentication credentials, and waitlist registration details.
+              <strong>Account information:</strong> name, email address, profile picture
+              (if using Google sign-in), and authentication credentials.
             </li>
             <li>
               <strong>Payment information:</strong> if you purchase a paid plan, billing details are
@@ -136,7 +138,7 @@ export default function PrivacyPolicyPage() {
           <p>We use Personal Information to:</p>
           <ul>
             <li>Provide, operate, maintain, and improve the Services</li>
-            <li>Create and manage your account or waitlist registration</li>
+            <li>Create and manage your account</li>
             <li>Process payments and manage subscriptions</li>
             <li>
               Deliver real-time AI assistance, transcription, speaker diarization for group calls, and
@@ -159,7 +161,7 @@ export default function PrivacyPolicyPage() {
           <ul>
             <li>
               <strong>Contract:</strong> to provide the Services you request or to take steps at your
-              request before entering a contract (e.g. waitlist registration, account creation).
+              request before entering a contract (e.g. account creation).
             </li>
             <li>
               <strong>Consent:</strong> where you have given clear consent, such as for optional

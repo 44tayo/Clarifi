@@ -34,7 +34,6 @@ export type OverlayDemoProps = {
   size?: DemoSize
   interactive?: boolean
   defaultRecording?: boolean
-  defaultStealth?: boolean
   defaultScreen?: boolean
   defaultFollow?: boolean
   draggable?: boolean
@@ -76,7 +75,7 @@ const PROMPT_CHIPS = [
 ]
 
 export const CLARIFI_INTRO_REPLY =
-  'Clarifi is an invisible AI co-pilot for meetings — real-time answers and perfect notes at your fingertips, without showing up on screen share. Join the waitlist for early access.'
+  'Clarifi is an AI notepad for meetings — it listens in the background while you jot quick notes, then turns everything into a clean summary, decisions, and action items the moment you\'re done. No bot joins your call. Sign up free to get started.'
 
 function isClarifiQuestion(message: string): boolean {
   const lower = message.toLowerCase()
@@ -115,25 +114,6 @@ function ScreenIcon() {
       <rect x="3" y="3" width="18" height="18" rx="2" />
       <circle cx="8.5" cy="8.5" r="1.5" />
       <path d="M21 15l-5-5L5 21" />
-    </svg>
-  )
-}
-
-function StealthHiddenIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-      <line x1="1" y1="1" x2="23" y2="23" />
-    </svg>
-  )
-}
-
-function StealthVisibleIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-      <circle cx="12" cy="12" r="3" />
     </svg>
   )
 }
@@ -187,7 +167,6 @@ export function OverlayDemo({
   size = 'md',
   interactive = true,
   defaultRecording = false,
-  defaultStealth = true,
   defaultScreen = false,
   defaultFollow = true,
   draggable = false,
@@ -209,7 +188,6 @@ export function OverlayDemo({
   const [thinking, setThinking] = useState(false)
   const [isRecording, setIsRecording] = useState(defaultRecording)
   const [screenOn, setScreenOn] = useState(defaultScreen)
-  const [stealthOn, setStealthOn] = useState(defaultStealth)
   const [followOn, setFollowOn] = useState(defaultFollow)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
@@ -346,18 +324,6 @@ export function OverlayDemo({
             aria-pressed={screenOn}
           >
             <ScreenIcon />
-          </button>
-        </ToolbarTip>
-
-        <ToolbarTip label={stealthOn ? 'Hidden from share' : 'Detectable'}>
-          <button
-            type="button"
-            className={`od-icon od-stealth ${stealthOn ? 'active' : ''}`}
-            onClick={() => canInteract && setStealthOn((v) => !v)}
-            disabled={!canInteract}
-            aria-pressed={stealthOn}
-          >
-            {stealthOn ? <StealthHiddenIcon /> : <StealthVisibleIcon />}
           </button>
         </ToolbarTip>
 

@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
+import { languageLabel } from './languages'
 
 export type SystemAudioCaptureMode = 'meeting' | 'display'
 
@@ -21,8 +22,12 @@ export type AudioPreferences = {
 
 const PREFS_FILE = 'audio-preferences.json'
 
+// transcriptionLanguage defaults to 'auto' so Whisper/Deepgram detect the
+// spoken language automatically — forcing 'en' would garble non-English
+// meetings out of the box. outputLanguage stays 'en' by default; notes are
+// only translated when a user explicitly picks a different output language.
 const DEFAULTS: AudioPreferences = {
-  transcriptionLanguage: 'en',
+  transcriptionLanguage: 'auto',
   outputLanguage: 'en',
   dictationLanguage: 'auto',
   dictationOutputLanguage: 'same',
@@ -32,25 +37,6 @@ const DEFAULTS: AudioPreferences = {
   preferredMicrophoneLabel: '',
   systemAudioCapture: 'meeting',
   transcriptionMode: 'dual',
-}
-
-const OUTPUT_LANGUAGE_LABELS: Record<string, string> = {
-  en: 'English',
-  es: 'Spanish',
-  fr: 'French',
-  de: 'German',
-  pt: 'Portuguese',
-  it: 'Italian',
-  nl: 'Dutch',
-  ja: 'Japanese',
-  ko: 'Korean',
-  zh: 'Chinese',
-  hi: 'Hindi',
-  ar: 'Arabic',
-  pl: 'Polish',
-  tr: 'Turkish',
-  ru: 'Russian',
-  sv: 'Swedish',
 }
 
 function prefsPath(): string {
@@ -157,20 +143,17 @@ export function getOutputLanguage(): string {
 
 export function getOutputLanguageInstruction(): string {
   const code = getOutputLanguage()
-  const label = OUTPUT_LANGUAGE_LABELS[code] ?? 'English'
   if (code === 'en') return ''
-  return `\n\nRespond in ${label}.`
+  return `\n\nRespond in ${languageLabel(code)}.`
 }
 
 export function getDictationOutputLanguageInstruction(spokenLanguage?: string): string {
   const pref = getDictationOutputLanguage()
   if (pref === 'same') {
     if (!spokenLanguage || spokenLanguage === 'auto') return ''
-    const label = OUTPUT_LANGUAGE_LABELS[spokenLanguage] ?? spokenLanguage
-    return `\n\nWrite the final text in ${label}. Preserve natural phrasing for that language.`
+    return `\n\nWrite the final text in ${languageLabel(spokenLanguage)}. Preserve natural phrasing for that language.`
   }
-  const label = OUTPUT_LANGUAGE_LABELS[pref] ?? pref
-  return `\n\nWrite the final text in ${label}.`
+  return `\n\nWrite the final text in ${languageLabel(pref)}.`
 }
 
 export function notifyAudioPrefsChanged(): void {

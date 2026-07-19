@@ -4,7 +4,7 @@ import { PricingPage } from '@/components/pricing/PricingPage'
 export const metadata = {
   title: 'Pricing — Clarifi',
   description:
-    'Pro for individuals at $19/mo, Pro+ for teams at $39/seat/mo. 7-day free trial on monthly and annual plans.',
+    'Free forever with unlimited meetings and 30 days of note history. Upgrade to Pro ($19/mo) or Pro+ ($39/seat/mo) for unlimited history and team features.',
   alternates: { canonical: '/pricing' },
 }
 

@@ -5,11 +5,16 @@ import { getSupabaseAdmin } from './supabase-admin'
 const AUTH_TOKEN_TTL_MS = 5 * 60 * 1000
 
 function pepper(): string {
-  return (
-    process.env.DEVICE_AUTH_PEPPER?.trim() ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
-    'clarifi-device-dev-pepper'
-  )
+  const configured = process.env.DEVICE_AUTH_PEPPER?.trim()
+  if (configured) return configured
+
+  const fallback = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+  if (fallback) {
+    console.warn('DEVICE_AUTH_PEPPER is not set; falling back to SUPABASE_SERVICE_ROLE_KEY. Set DEVICE_AUTH_PEPPER explicitly.')
+    return fallback
+  }
+
+  throw new Error('DEVICE_AUTH_PEPPER (or SUPABASE_SERVICE_ROLE_KEY) must be configured to hash device secrets')
 }
 
 export function hashDeviceSecret(deviceId: string, secret: string): string {
@@ -47,14 +52,18 @@ export async function exchangeDesktopAuthToken(
   const supabase = getSupabaseAdmin()
   if (!supabase) return { ok: false, error: 'storage_unavailable' }
 
+  // Atomically claim the token: the WHERE used_at IS NULL guard means only one
+  // concurrent request can ever win this update, closing the check-then-act
+  // race that a plain select-then-update would leave open.
   const { data, error } = await supabase
     .from('desktop_auth_tokens')
-    .select('clerk_user_id, expires_at, used_at')
+    .update({ used_at: new Date().toISOString() })
     .eq('token', token)
+    .is('used_at', null)
+    .select('clerk_user_id, expires_at')
     .maybeSingle()
 
   if (error || !data) return { ok: false, error: 'invalid_token' }
-  if (data.used_at) return { ok: false, error: 'token_used' }
 
   const expiresAt = data.expires_at ? new Date(data.expires_at).getTime() : 0
   if (!expiresAt || Date.now() > expiresAt) {
@@ -92,11 +101,6 @@ export async function exchangeDesktopAuthToken(
   )
 
   if (deviceError) return { ok: false, error: 'exchange_failed' }
-
-  await supabase
-    .from('desktop_auth_tokens')
-    .update({ used_at: new Date().toISOString() })
-    .eq('token', token)
 
   return { ok: true }
 }

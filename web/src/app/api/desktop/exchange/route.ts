@@ -1,6 +1,14 @@
 import { exchangeDesktopAuthToken } from '@/lib/device-auth'
+import { consumeRateLimit, getClientIp, rateLimitedResponse } from '@/lib/ip-rate-limit'
+
+const EXCHANGE_LIMIT = 10
+const EXCHANGE_WINDOW_SECONDS = 5 * 60
 
 export async function POST(req: Request) {
+  const ip = getClientIp(req)
+  const ipLimit = await consumeRateLimit(`desktop_exchange:ip:${ip}`, EXCHANGE_LIMIT, EXCHANGE_WINDOW_SECONDS)
+  if (!ipLimit.allowed) return rateLimitedResponse(ipLimit.retryAfterSeconds)
+
   let body: unknown
   try {
     body = await req.json()
@@ -21,6 +29,13 @@ export async function POST(req: Request) {
   if (!token || !deviceId || !deviceSecret) {
     return Response.json({ error: 'credentials_required' }, { status: 400 })
   }
+
+  const deviceLimit = await consumeRateLimit(
+    `desktop_exchange:device:${deviceId}`,
+    EXCHANGE_LIMIT,
+    EXCHANGE_WINDOW_SECONDS,
+  )
+  if (!deviceLimit.allowed) return rateLimitedResponse(deviceLimit.retryAfterSeconds)
 
   const result = await exchangeDesktopAuthToken(token, deviceId, deviceSecret)
   if (!result.ok) {

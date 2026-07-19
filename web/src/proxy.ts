@@ -3,15 +3,8 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { resolveAuthNext } from '@/lib/auth-next'
 import { authCallbackRedirectPath } from '@/lib/auth-callback-redirect'
-import {
-  LAUNCH_PREVIEW_COOKIE,
-  resolveLaunchPreviewState,
-} from '@/lib/launch-preview'
-import { applyLaunchPreviewCookies } from '@/lib/launch-preview-server'
-import { resolvePostAuthRedirect, shouldBlockPrelaunchAccess } from '@/lib/prelaunch'
 import { isPublicPath } from '@/lib/protected-routes'
 import { CANONICAL_SITE_HOST, shouldRedirectToCanonicalHost } from '@/lib/site-url'
-import { isLaunchLive } from '@/lib/waitlist-config'
 
 function getSupabaseEnv() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
@@ -34,23 +27,11 @@ export default async function proxy(request: NextRequest) {
     return NextResponse.redirect(canonical, 308)
   }
 
-  if (
-    pathname === '/live' ||
-    pathname === '/prelaunch'
-  ) {
+  if (pathname === '/live' || pathname === '/prelaunch' || pathname.startsWith('/preview')) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
-  if (pathname.startsWith('/preview')) {
-    return NextResponse.redirect(new URL('/?preview=live', request.url))
-  }
-
-  if (
-    searchParams.get('code') &&
-    pathname !== '/auth/callback' &&
-    !pathname.startsWith('/api/integrations/hubspot/callback') &&
-    !pathname.startsWith('/api/integrations/gmail/callback')
-  ) {
+  if (searchParams.get('code') && pathname !== '/auth/callback') {
     const authNext = request.cookies.get('clarifi_auth_next')?.value ?? null
     const target = authCallbackRedirectPath(searchParams, authNext)
     if (target) {
@@ -71,13 +52,6 @@ export default async function proxy(request: NextRequest) {
   }
 
   let response = NextResponse.next({ request })
-  const launchPreview = resolveLaunchPreviewState(
-    searchParams,
-    request.cookies.get(LAUNCH_PREVIEW_COOKIE)?.value ?? null,
-  )
-
-  applyLaunchPreviewCookies(response, searchParams.get('preview'))
-
   const env = getSupabaseEnv()
 
   if (env) {
@@ -102,39 +76,10 @@ export default async function proxy(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser()
 
-    if (
-      shouldBlockPrelaunchAccess(
-        pathname,
-        user?.id,
-        launchPreview.previewLive,
-        launchPreview.forceWaitlist,
-        user?.email,
-      )
-    ) {
-      const home = new URL('/', request.url)
-      if (user) home.searchParams.set('joined', '1')
-      const redirectResponse = NextResponse.redirect(home)
-      response.cookies.getAll().forEach((cookie) => {
-        redirectResponse.cookies.set(cookie)
-      })
-      return redirectResponse
-    }
-
     if (pathname === '/sign-in' || pathname === '/sign-up') {
       if (user) {
         const next = resolveAuthNext(searchParams.get('next'), '/dashboard')
-        const dest = isLaunchLive(
-          undefined,
-          launchPreview.previewLive,
-          launchPreview.forceWaitlist,
-        )
-          ? next
-          : resolvePostAuthRedirect(
-              next,
-              launchPreview.previewLive,
-              launchPreview.forceWaitlist,
-            )
-        const redirectResponse = NextResponse.redirect(new URL(dest, request.url))
+        const redirectResponse = NextResponse.redirect(new URL(next, request.url))
         response.cookies.getAll().forEach((cookie) => {
           redirectResponse.cookies.set(cookie)
         })
@@ -146,7 +91,6 @@ export default async function proxy(request: NextRequest) {
       if (!user) {
         const signIn = new URL('/sign-in', request.url)
         signIn.searchParams.set('next', `${pathname}${request.nextUrl.search}`)
-        if (launchPreview.previewLive) signIn.searchParams.set('preview', 'live')
         const redirectResponse = NextResponse.redirect(signIn)
         response.cookies.getAll().forEach((cookie) => {
           redirectResponse.cookies.set(cookie)

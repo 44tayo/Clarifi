@@ -1,19 +1,13 @@
 import { authorizeLlmRequest } from '@/lib/llm-route-auth'
-import {
-  buildGmailContextText,
-  extractGmailSearchQuery,
-  messageRequestsGmailContext,
-  searchGmailMessages,
-} from '@/lib/gmail'
 import { hasFeature } from '@/lib/entitlements'
-import { isPlanGuardResponse, planRequiredResponse, requireFeature } from '@/lib/plan-guard'
+import { planRequiredResponse } from '@/lib/plan-guard'
 import { chatWithMeetingContext } from '@/lib/llm-server'
 
 export async function POST(req: Request) {
   const auth = await authorizeLlmRequest(req)
   if (auth instanceof Response) return auth
 
-  const { userId, plan } = auth
+  const { plan } = auth
 
   let body: unknown
   try {
@@ -27,7 +21,6 @@ export async function POST(req: Request) {
     transcriptLines?: string[]
     useScreenContext?: boolean
     screenImage?: { imageBase64: string; mimeType: 'image/png' }
-    emailContext?: string
   }
 
   if (!payload.message || typeof payload.message !== 'string') {
@@ -44,25 +37,11 @@ export async function POST(req: Request) {
     ? payload.transcriptLines.filter((line): line is string => typeof line === 'string')
     : []
 
-  let emailContext =
-    typeof payload.emailContext === 'string' ? payload.emailContext.trim() : ''
-  if (!emailContext && messageRequestsGmailContext(payload.message)) {
-    const gmailOrBlock = await requireFeature(userId, 'gmail')
-    if (isPlanGuardResponse(gmailOrBlock)) return gmailOrBlock
-
-    const query = extractGmailSearchQuery(payload.message)
-    if (query) {
-      const messages = await searchGmailMessages(userId, query, 5)
-      emailContext = buildGmailContextText(messages)
-    }
-  }
-
   const result = await chatWithMeetingContext({
     message: payload.message,
     transcriptLines,
     useScreenContext: Boolean(payload.useScreenContext),
     screenImage: payload.screenImage,
-    emailContext: emailContext || undefined,
   })
 
   if ('error' in result) {

@@ -16,7 +16,6 @@ export function HeroSalesDemo() {
               size="sm"
               interactive={false}
               defaultRecording
-              defaultStealth
               defaultFollow
               defaultPanelMode="history"
               defaultModeLabel="Meetings"

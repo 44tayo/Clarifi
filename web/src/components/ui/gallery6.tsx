@@ -64,7 +64,7 @@ export function Gallery6({
     <section
       id={id}
       className={cn(
-        'landing-section landing-section-tint waitlist-features-section gallery6',
+        'landing-section landing-section-tint marketing-features-section gallery6',
         className,
       )}
       data-reveal

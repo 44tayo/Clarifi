@@ -1,6 +1,6 @@
 import fetch from 'node-fetch'
 import { getTranscriptionLanguage } from './audioPreferences'
-import { getDeepgramApiKey } from './keys'
+import { getDeepgramApiBaseUrl, getDeepgramApiKey } from './keys'
 import { isLikelyHallucination, normalizeTranscriptText } from './transcriptUtils'
 
 export type DiarizedUtterance = {
@@ -98,7 +98,7 @@ async function callDeepgram(
   contentType: string,
   query: string,
 ): Promise<DeepgramResponse | null> {
-  const response = await fetch(`https://api.deepgram.com/v1/listen?${query}`, {
+  const response = await fetch(`${getDeepgramApiBaseUrl()}/v1/listen?${query}`, {
     method: 'POST',
     headers: {
       Authorization: `Token ${apiKey}`,
@@ -126,9 +126,16 @@ export async function transcribeSystemWithDiarization(
   }
 
   const language = getTranscriptionLanguage()
-  const langParam = language && language !== 'auto' ? `&language=${language}` : ''
+  // nova-2 supports explicit auto-detection via detect_language — omitting the
+  // language param entirely would silently default to English instead.
+  const langParam =
+    language && language !== 'auto' ? `&language=${language}` : '&detect_language=true'
+  // mip_opt_out=true excludes this request from Deepgram's Model Improvement
+  // Partnership Program — without it, Deepgram's docs say some audio may be
+  // retained for model training by default. Required for our "we don't let
+  // vendors train on your audio" privacy claim to actually be true.
   const baseQuery =
-    'model=nova-2&diarize=true&punctuate=true&utterances=true&smart_format=true'
+    'model=nova-2&diarize=true&punctuate=true&utterances=true&smart_format=true&mip_opt_out=true'
   const audioBuffer = Buffer.from(audioBase64, 'base64')
 
   try {

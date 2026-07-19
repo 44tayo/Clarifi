@@ -16,14 +16,6 @@ mac:
       to: audio-capture-helper
       filter:
         - "**/*"
-    - from: resources/window_capture_exclude.node
-      to: window_capture_exclude.node
-      filter:
-        - "**/*"
-    - from: resources/dictation_ptt.node
-      to: dictation_ptt.node
-      filter:
-        - "**/*"
   target:
     - dmg
     - zip
@@ -35,7 +27,7 @@ mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     CFBundleDisplayName: Clarifi
-    NSMicrophoneUsageDescription: Clarifi needs microphone access to transcribe your meetings in real time.
+    NSMicrophoneUsageDescription: Clarifi needs microphone access to capture meeting audio.
     NSScreenCaptureUsageDescription: Clarifi needs screen recording access to capture system audio from meetings.
     CFBundleURLTypes:
       - CFBundleURLName: Clarifi Auth

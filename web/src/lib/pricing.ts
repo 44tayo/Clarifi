@@ -1,6 +1,6 @@
 export type BillingInterval = 'monthly' | 'annual'
 
-export type PricingPlanId = 'pro' | 'pro_plus'
+export type PricingPlanId = 'free' | 'pro' | 'pro_plus'
 
 export type PricingPlan = {
   id: PricingPlanId
@@ -16,12 +16,12 @@ export type PricingPlan = {
   features: string[]
 }
 
-const PLAN_AMOUNTS: Record<PricingPlanId, { monthly: number; annualTotal: number }> = {
+const PLAN_AMOUNTS: Record<'pro' | 'pro_plus', { monthly: number; annualTotal: number }> = {
   pro: { monthly: 19, annualTotal: 180 },
   pro_plus: { monthly: 39, annualTotal: 348 },
 }
 
-export function annualSavings(planId: PricingPlanId) {
+export function annualSavings(planId: 'pro' | 'pro_plus') {
   const { monthly, annualTotal } = PLAN_AMOUNTS[planId]
   const monthlyYearTotal = monthly * 12
   const amountSaved = monthlyYearTotal - annualTotal
@@ -40,9 +40,9 @@ export function maxAnnualSavingsPercent() {
 
 export const PRICING_FEATURES = [
   {
-    label: '7-day free trial',
-    pro: true,
-    proPlus: true,
+    label: 'Note history',
+    pro: 'Unlimited',
+    proPlus: 'Unlimited',
   },
   {
     label: 'AI messages',
@@ -75,11 +75,6 @@ export const PRICING_FEATURES = [
     proPlus: true,
   },
   {
-    label: 'Undetectability to screen share',
-    pro: false,
-    proPlus: true,
-  },
-  {
     label: 'Shared team communities',
     pro: false,
     proPlus: true,
@@ -106,6 +101,21 @@ export function getPricingPlans(interval: BillingInterval = 'monthly'): PricingP
 
   return [
     {
+      id: 'free',
+      name: 'Free',
+      audience: 'Individual',
+      price: '$0',
+      period: '',
+      tagline: 'Unlimited meetings with 30 days of note history.',
+      cta: 'Get started free',
+      features: [
+        'Unlimited meetings, recorded and transcribed',
+        '30 days of note history',
+        'Voice dictation into any app',
+        'AI-enhanced summaries and action items',
+      ],
+    },
+    {
       id: 'pro',
       name: 'Pro',
       audience: 'Individual',
@@ -113,10 +123,10 @@ export function getPricingPlans(interval: BillingInterval = 'monthly'): PricingP
       period: isAnnual ? '/ month' : '/ month',
       billedNote: isAnnual ? 'Billed $180 annually' : undefined,
       savingsNote: isAnnual ? annualSavings('pro').label : undefined,
-      tagline: 'Unlimited access for solo operators.',
-      cta: 'Start 7-day free trial',
+      tagline: 'Unlimited history and access for solo operators.',
+      cta: 'Upgrade to Pro',
       features: [
-        '7-day free trial',
+        'Unlimited note history — never locked out of old meetings',
         'Unlimited AI responses',
         'Unlimited meeting notetaking',
         'Voice dictation into any app',
@@ -129,18 +139,16 @@ export function getPricingPlans(interval: BillingInterval = 'monthly'): PricingP
       id: 'pro_plus',
       name: 'Pro+',
       audience: 'Team',
-      badge: 'Undetectable',
+      badge: 'For teams',
       price: isAnnual ? '$29' : '$39',
       period: '/ seat / month',
       billedNote: isAnnual ? 'Billed $348 per seat annually' : undefined,
       savingsNote: isAnnual ? annualSavings('pro_plus').label : undefined,
-      tagline: 'Undetectable during screen share for teams.',
-      cta: 'Start 7-day free trial',
+      tagline: 'Everything in Pro, built for teams.',
+      cta: 'Upgrade to Pro+',
       features: [
-        '7-day free trial',
         'Everything in Pro',
-        'Undetectability to screen share',
-        'Invisible on Zoom, Meet, and Teams',
+        'Unlimited note history',
         'Shared team communities',
         'Share meetings, notes, and summaries',
         'Folder organization',

@@ -10,3 +10,8 @@ export function resolveAuthNext(next: string | null | undefined, fallback = '/da
   if (next && next.startsWith('/') && next !== '/') return next
   return fallback
 }
+
+export function isBillingCheckoutNext(next: string): boolean {
+  const path = next.split('?')[0] || next
+  return path === '/billing' || path === '/checkout'
+}

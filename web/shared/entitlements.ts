@@ -8,26 +8,27 @@ export type Feature =
   | 'custom_keybinds'
   | 'premium_models'
   | 'screen_context'
-  | 'gmail'
-  | 'hubspot'
   | 'transcript_export'
-  | 'stealth'
   | 'communities'
 
+/** Core notetaking works on every plan, including free — Granola-style. */
+const FREE_FEATURES: Feature[] = ['ai_chat', 'ai_transcribe', 'voice_dictation']
+
 const PRO_FEATURES: Feature[] = [
-  'ai_chat',
-  'ai_transcribe',
-  'voice_dictation',
+  ...FREE_FEATURES,
   'custom_modes',
   'custom_keybinds',
   'premium_models',
   'screen_context',
-  'gmail',
-  'hubspot',
   'transcript_export',
 ]
 
-const PRO_PLUS_FEATURES: Feature[] = [...PRO_FEATURES, 'stealth', 'communities']
+const PRO_PLUS_FEATURES: Feature[] = [...PRO_FEATURES, 'communities']
+
+/** Free plan keeps unlimited meetings but only surfaces the most recent
+ * window of note history — matches Granola's free-tier shape. Paid plans
+ * keep full history forever. */
+export const FREE_HISTORY_RETENTION_DAYS = 30
 
 export function normalizePlan(value: unknown): Plan {
   if (value === 'pro' || value === 'pro_plus') return value
@@ -41,7 +42,7 @@ export function isPaidPlan(plan: Plan): boolean {
 export function getEntitlements(plan: Plan): Feature[] {
   if (plan === 'pro_plus') return [...PRO_PLUS_FEATURES]
   if (plan === 'pro') return [...PRO_FEATURES]
-  return []
+  return [...FREE_FEATURES]
 }
 
 export function hasFeature(plan: Plan, feature: Feature): boolean {
@@ -49,5 +50,9 @@ export function hasFeature(plan: Plan, feature: Feature): boolean {
 }
 
 export function upgradePlanForFeature(feature: Feature): 'pro' | 'pro_plus' {
-  return feature === 'stealth' || feature === 'communities' ? 'pro_plus' : 'pro'
+  return feature === 'communities' ? 'pro_plus' : 'pro'
+}
+
+export function getHistoryRetentionDays(plan: Plan): number {
+  return isPaidPlan(plan) ? Number.POSITIVE_INFINITY : FREE_HISTORY_RETENTION_DAYS
 }

@@ -2,7 +2,7 @@ import FormData from 'form-data'
 import fetch from 'node-fetch'
 import { getTranscriptionLanguage, getDictationLanguage } from './audioPreferences'
 import { groqKeepAliveAgent } from './groqHttp'
-import { getGroqApiKey } from './keys'
+import { getGroqApiBaseUrl, getGroqApiKey } from './keys'
 import { isProxyConfigured, proxyTranscribe } from './proxyClient'
 import { isTranscriptionDrainMode } from './transcriptionQueue'
 
@@ -172,7 +172,7 @@ async function transcribeAudioBuffer(
     }
     formData.append('temperature', '0')
 
-    const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+    const response = await fetch(`${getGroqApiBaseUrl()}/openai/v1/audio/transcriptions`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${groqKey}`,

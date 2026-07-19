@@ -93,7 +93,7 @@ export function AnimatedHero({
             <h1
               className={cn(
                 'max-w-3xl text-center tracking-tight text-[var(--cl-navy,#1a1a2e)]',
-                clarifiLayout ? 'waitlist-hero-title' : 'text-4xl font-semibold md:text-6xl md:leading-[1.08]',
+                clarifiLayout ? 'marketing-hero-title' : 'text-4xl font-semibold md:text-6xl md:leading-[1.08]',
               )}
             >
               {clarifiLayout ? (

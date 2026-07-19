@@ -22,7 +22,11 @@ export default function BillingClient() {
   }, [searchParams])
 
   const startCheckout = useCallback(
-    async (plan: 'pro' | 'pro_plus', billingInterval: BillingInterval = interval) => {
+    async (plan: 'free' | 'pro' | 'pro_plus', billingInterval: BillingInterval = interval) => {
+      if (plan === 'free') {
+        window.location.href = '/sign-up'
+        return
+      }
       setLoadingPlan(plan)
       setError(null)
 
@@ -67,8 +71,8 @@ export default function BillingClient() {
       <div className="max-w-4xl mx-auto px-8 py-12">
         <h1 className="text-3xl font-bold mb-2">Choose your plan</h1>
         <p className="text-white/50 mb-6">
-          Start with a 7-day free trial. Clarifi runs through our secure API proxy — you subscribe
-          here, not with your own keys.
+          Free forever with unlimited meetings and 30 days of note history. Upgrade any time for
+          unlimited history and team features.
         </p>
 
         {checkoutStatus === 'success' && (
@@ -126,7 +130,7 @@ export default function BillingClient() {
                   {plan.price}
                   <span className="text-base font-normal text-white/50">{plan.period}</span>
                 </div>
-                {interval === 'annual' ? (
+                {interval === 'annual' && plan.billedNote ? (
                   <>
                     <div className="text-sm text-white/40 mb-1">{plan.billedNote}</div>
                     {plan.savingsNote ? (
@@ -134,7 +138,7 @@ export default function BillingClient() {
                     ) : null}
                   </>
                 ) : (
-                  <div className="text-sm text-white/40 mb-4">7-day free trial included</div>
+                  <div className="text-sm text-white/40 mb-4">{plan.tagline}</div>
                 )}
                 <div className="font-medium mb-4">{plan.name}</div>
                 <ul className="space-y-2 mb-8">

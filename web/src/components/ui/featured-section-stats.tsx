@@ -2,25 +2,25 @@
 
 import { Area, AreaChart, ResponsiveContainer, Tooltip } from 'recharts'
 
-/** Illustrative assist activity across a sample sales call — not live user data. */
+/** Illustrative transcript growth across a sample meeting — not live user data. */
 const CHART_DATA = [
-  { minute: '0m', suggestions: 0 },
-  { minute: '5m', suggestions: 2 },
-  { minute: '10m', suggestions: 4 },
-  { minute: '15m', suggestions: 6 },
-  { minute: '20m', suggestions: 8 },
-  { minute: '25m', suggestions: 10 },
-  { minute: '30m', suggestions: 12 },
-  { minute: '35m', suggestions: 14 },
-  { minute: '40m', suggestions: 16 },
-  { minute: '45m', suggestions: 18 },
+  { minute: '0m', lines: 0 },
+  { minute: '5m', lines: 8 },
+  { minute: '10m', lines: 17 },
+  { minute: '15m', lines: 26 },
+  { minute: '20m', lines: 34 },
+  { minute: '25m', lines: 43 },
+  { minute: '30m', lines: 52 },
+  { minute: '35m', lines: 61 },
+  { minute: '40m', lines: 69 },
+  { minute: '45m', lines: 78 },
 ]
 
 const STATS = [
   { value: '0', label: 'Bots in your meetings' },
-  { value: '1.8s', label: 'Response time' },
   { value: '300ms', label: 'Avg transcription time' },
-  { value: 'Unlimited', label: 'Live assist per session' },
+  { value: 'Unlimited', label: 'Meetings notetaken' },
+  { value: 'Seconds', label: 'From "end call" to summary' },
 ] as const
 
 export function FeaturedSectionStats() {
@@ -30,8 +30,8 @@ export function FeaturedSectionStats() {
         <h3 className="mb-16 text-lg font-medium text-[var(--cl-navy)] sm:text-xl lg:text-4xl">
           Less scrambling. More clarity in every meeting.{' '}
           <span className="text-sm text-[var(--cl-muted)] sm:text-base lg:text-4xl">
-            Clarifi listens, watches your screen, and surfaces answers the moment you need them —
-            without joining the call.
+            Clarifi listens in the background and turns it into clean notes the moment you&apos;re
+            done — without ever joining the call as a bot.
           </span>
         </h3>
 
@@ -56,12 +56,12 @@ export function FeaturedSectionStats() {
                 </linearGradient>
               </defs>
               <Tooltip
-                formatter={(value) => [`${value ?? 0} suggestions`, 'Assist activity']}
-                labelFormatter={(label) => `${label} into call`}
+                formatter={(value) => [`${value ?? 0} lines`, 'Transcript captured']}
+                labelFormatter={(label) => `${label} into meeting`}
               />
               <Area
                 type="monotone"
-                dataKey="suggestions"
+                dataKey="lines"
                 stroke="#3b82f6"
                 strokeWidth={2}
                 fillOpacity={1}
@@ -71,7 +71,7 @@ export function FeaturedSectionStats() {
           </ResponsiveContainer>
         </div>
         <p className="mt-3 px-4 text-sm text-[var(--cl-muted)]">
-          Sample 45-min call — assist suggestions surfaced over time
+          Sample 45-min meeting — live transcript lines captured over time
         </p>
       </div>
     </section>

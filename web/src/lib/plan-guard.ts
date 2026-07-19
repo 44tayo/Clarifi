@@ -1,6 +1,5 @@
 import {
   hasFeature,
-  isPaidPlan,
   upgradePlanForFeature,
   type Feature,
   type Plan,
@@ -14,7 +13,7 @@ export function planRequiredResponse(
   return Response.json(
     {
       error: 'plan_required',
-      message: 'Start a 7-day free trial to use Clarifi.',
+      message: 'Upgrade to Pro to use this feature.',
       upgrade,
       feature,
     },
@@ -26,10 +25,15 @@ export function isPlanGuardResponse(value: Plan | Response): value is Response {
   return value instanceof Response
 }
 
-export async function requirePaidPlan(userId: string): Promise<Plan | Response> {
-  const plan = await getUserPlan(userId)
-  if (!isPaidPlan(plan)) return planRequiredResponse('pro')
-  return plan
+/**
+ * Core AI notetaking (transcribe/chat) is available on every plan, including
+ * free — it just resolves which plan the caller is on for rate limiting and
+ * entitlement checks. Kept as its own function (rather than inlining
+ * getUserPlan) so premium-only routes can still gate on isPaidPlan/hasFeature
+ * without re-deriving the plan.
+ */
+export async function resolvePlan(userId: string): Promise<Plan> {
+  return getUserPlan(userId)
 }
 
 export async function requireFeature(

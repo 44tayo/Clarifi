@@ -66,6 +66,24 @@ export async function getGeminiApiKey(): Promise<string | null> {
   return getKey('gemini')
 }
 
+// Groq's default endpoint processes audio/chat requests in the US. Groq also
+// runs an EU endpoint (api.eu.groq.com, Helsinki) for GDPR-sensitive traffic,
+// but it must be enabled per-account by Groq sales first — set
+// GROQ_API_BASE_URL once that's done. See:
+// https://groq.com/blog/groq-launches-european-data-center-footprint-in-helsinki-finland
+export function getGroqApiBaseUrl(): string {
+  loadRuntimeEnv()
+  return process.env.GROQ_API_BASE_URL?.trim() || 'https://api.groq.com'
+}
+
+// Deepgram's EU endpoint (api.eu.deepgram.com) is generally available and
+// self-serve — no sales contact required, just point at it. It keeps
+// diarization/transcription inference inside EU-based AWS regions.
+export function getDeepgramApiBaseUrl(): string {
+  loadRuntimeEnv()
+  return process.env.DEEPGRAM_API_BASE_URL?.trim() || 'https://api.deepgram.com'
+}
+
 /** Clarifi cloud API — desktop connects via clarifi:// auth from the website. */
 export function getClarifiApiUrl(): string | null {
   loadRuntimeEnv()

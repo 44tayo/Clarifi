@@ -1,23 +1,20 @@
 import { isCreatorUser } from './creator'
-import { getDailyLimit, isPaidPlan, type Plan } from './plans'
+import { getDailyLimit, type Plan } from './plans'
 import { getSupabaseAdmin } from './supabase-admin'
 
 /** Unified quota bucket for all LLM API usage (chat, suggest, transcribe). */
 export const LLM_QUOTA_ROUTE = 'llm_session'
 
+// Shared abuse-prevention ceiling, not a plan-tiering mechanism — free, Pro,
+// and Pro+ all get the same generous hourly budget. The free plan's real
+// limit is note history (see getHistoryRetentionDays in entitlements.ts).
 const HOURLY_LIMITS: Record<Plan, number> = {
-  free: 0,
+  free: 120,
   pro: 120,
   pro_plus: 200,
 }
 
-export function getRateLimitMessage(
-  window: 'hour' | 'day' | undefined,
-  plan?: Plan,
-): string {
-  if (!plan || !isPaidPlan(plan)) {
-    return 'Start a 7-day free trial to use Clarifi.'
-  }
+export function getRateLimitMessage(window: 'hour' | 'day' | undefined): string {
   if (window === 'hour') {
     return 'Hourly usage limit reached. Wait a bit and try again.'
   }
@@ -32,10 +29,6 @@ export async function enforceLlmRateLimit(
   plan: Plan,
 ): Promise<{ allowed: boolean; window?: 'hour' | 'day'; retryAfterSeconds?: number }> {
   if (isCreatorUser(userId)) return { allowed: true }
-
-  if (!isPaidPlan(plan)) {
-    return { allowed: false }
-  }
 
   const supabase = getSupabaseAdmin()
   const dailyLimit = getDailyLimit(plan)

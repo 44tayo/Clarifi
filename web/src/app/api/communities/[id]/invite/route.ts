@@ -1,8 +1,12 @@
 import { resolveIntegrationUserId } from '@/lib/integration-auth'
 import { requireFeature } from '@/lib/plan-guard'
 import { communityErrorResponse, inviteToCommunity } from '@/lib/communities'
+import { consumeRateLimit, rateLimitedResponse } from '@/lib/ip-rate-limit'
 
 type RouteContext = { params: Promise<{ id: string }> }
+
+const INVITE_LIMIT = 20
+const INVITE_WINDOW_SECONDS = 60 * 60
 
 export async function POST(req: Request, context: RouteContext) {
   const userId = await resolveIntegrationUserId(req)
@@ -10,6 +14,9 @@ export async function POST(req: Request, context: RouteContext) {
 
   const plan = await requireFeature(userId, 'communities')
   if (plan instanceof Response) return plan
+
+  const limit = await consumeRateLimit(`community_invite:user:${userId}`, INVITE_LIMIT, INVITE_WINDOW_SECONDS)
+  if (!limit.allowed) return rateLimitedResponse(limit.retryAfterSeconds)
 
   const { id } = await context.params
 

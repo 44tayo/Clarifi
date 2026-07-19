@@ -40,10 +40,10 @@ export function HeroScrollSection() {
 
         <AnimatedHero
           className="landing-hero-copy"
-          title="Your #1 AI Overlay"
+          title="Your AI notepad"
           accentPrefix="For Every"
           words={[...HERO_ROTATING_WORDS]}
-          description="Clarifi: real-time guidance through every meeting and task — invisible to everyone but you."
+          description="Clarifi listens in the background while you take light notes, then turns every meeting into a clean summary, decisions, and action items — no bot ever joins the call."
           actions={
             <DownloadWithInstallModal variant="compact" className="download-mac-btn-large" />
           }

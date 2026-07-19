@@ -113,5 +113,8 @@ begin
 end;
 $$;
 
-revoke all on function public.consume_clerk_api_quota(text, text, integer, integer) from public;
+-- Supabase grants EXECUTE on new public-schema functions to anon/authenticated
+-- by default privileges, separate from the PUBLIC pseudo-role — revoke both
+-- explicitly or the function stays callable over PostgREST.
+revoke all on function public.consume_clerk_api_quota(text, text, integer, integer) from public, anon, authenticated;
 grant execute on function public.consume_clerk_api_quota(text, text, integer, integer) to service_role;

@@ -73,7 +73,7 @@ Use `ds-mock-*` classes inside for doc bubbles, chips, etc. See `MeetingNotesSec
 
 ## Adding a new feature card
 
-1. Add a `MarketingFeatureCard` to a `MarketingFeatureRow` in `WaitlistModelsSection.tsx` (or your section’s data).
+1. Add a `MarketingFeatureCard` to a `MarketingFeatureRow` in `MarketingFeaturesSection.tsx` (or your section’s data).
 2. Pick `variant`: `wide` (4 cols), `narrow` (2 cols), or `third` (2 cols).
 3. Build a visual with `MarketingFeatureMock` + `ds-mock-*` classes, or compose custom content inside `MarketingFeatureVisual`.
 4. For accent colors in mocks, import from `featureAccentColors` in `@/lib/design-tokens`.
@@ -107,7 +107,7 @@ Dependencies: `@radix-ui/react-slot`, `class-variance-authority`, `lucide-react`
 
 ## Hero-specific (not in design-system components)
 
-Hero overrides live in `waitlist-page-sections.css`:
+Hero overrides live in `marketing-page-sections.css`:
 
 - Rotating word: `#60b4ff` (`--ds-hero-accent`)
 - “Trusted by” heading: monospace, `#94a3b8`

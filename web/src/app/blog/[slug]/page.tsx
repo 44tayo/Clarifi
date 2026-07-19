@@ -2,10 +2,10 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { MarketingNav } from '@/components/marketing/MarketingNav'
 import { BlogPostContent } from '@/components/blog/BlogPostContent'
-import { WaitlistSiteFooter } from '@/components/waitlist/WaitlistPageSections'
+import { MarketingSiteFooter } from '@/components/marketing/MarketingSiteFooter'
 import { BLOG_POST_SLUGS, getBlogPost } from '@/lib/blog-posts'
 import { getSiteOrigin } from '@/lib/site-url'
-import '@/components/waitlist/waitlist.css'
+import '@/components/marketing/marketing.css'
 import '../../landing-blog.css'
 
 type PageProps = { params: Promise<{ slug: string }> }
@@ -119,7 +119,7 @@ export default async function BlogPostPage({ params }: PageProps) {
   if (!post) notFound()
 
   return (
-    <div className="blog-root landing-root waitlist-page">
+    <div className="blog-root landing-root marketing-page">
       <FaqJsonLd slug={slug} />
       <BlogPostingJsonLd slug={slug} />
       <MarketingNav active="blog" showBack />
@@ -133,7 +133,7 @@ export default async function BlogPostPage({ params }: PageProps) {
           <Link href="/blog">← All posts</Link>
         </p>
       </article>
-      <WaitlistSiteFooter />
+      <MarketingSiteFooter />
     </div>
   )
 }

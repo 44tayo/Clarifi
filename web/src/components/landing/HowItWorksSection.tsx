@@ -3,7 +3,7 @@
 import { LandingSectionHeader } from '@/components/marketing'
 
 import { GmailDictationMock } from './GmailDictationMock'
-import { ScreenShareAssistMock } from './ScreenShareAssistMock'
+import { LiveNotesMock } from './LiveNotesMock'
 
 export function HowItWorksSection() {
   return (
@@ -26,14 +26,14 @@ export function HowItWorksSection() {
 
         <div className="landing-feature-card blue">
           <p className="landing-card-title">
-            Share your screen. Clarifi <span className="landing-pill-white">guides</span> you instantly.
+            Jot a few words. Clarifi <span className="landing-pill-white">fills in</span> the rest.
           </p>
           <p className="landing-card-sub">
-            Turn on screen context and Clarifi reads what&apos;s visible — then walks you through exactly
-            what to say, click, or fix. Step by step, in the moment.
+            Type light notes while you talk — Clarifi combines them with the live transcript into a
+            full summary, decisions, and action items the moment the call ends.
           </p>
           <div className="landing-card-overlay landing-card-visual">
-            <ScreenShareAssistMock />
+            <LiveNotesMock />
           </div>
         </div>
       </div>

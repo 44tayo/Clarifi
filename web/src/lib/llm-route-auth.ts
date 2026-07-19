@@ -1,28 +1,28 @@
-import { isPlanGuardResponse, requirePaidPlan } from '@/lib/plan-guard'
+import { resolvePlan } from '@/lib/plan-guard'
 import { enforceLlmRateLimit, getRateLimitMessage } from '@/lib/rate-limit'
 import { planLimitResponse, unauthorizedResponse } from '@/lib/request-auth'
 import { getUserIdFromRequest } from '@/lib/request-auth'
-import { getUserPlan } from '@/lib/usage'
 import type { Plan } from '@/lib/plans'
 
+// Core AI notetaking (transcribe/chat/suggest) is available on every plan,
+// including free — Granola-style. This only checks authentication and a
+// shared abuse-prevention rate limit, not payment status.
 export async function authorizeLlmRequest(
   req: Request,
 ): Promise<{ userId: string; plan: Plan } | Response> {
   const userId = await getUserIdFromRequest(req)
   if (!userId) return unauthorizedResponse()
 
-  const planOrBlock = await requirePaidPlan(userId)
-  if (isPlanGuardResponse(planOrBlock)) return planOrBlock
+  const plan = await resolvePlan(userId)
 
-  const rate = await enforceLlmRateLimit(userId, planOrBlock)
+  const rate = await enforceLlmRateLimit(userId, plan)
   if (!rate.allowed) {
-    const plan = await getUserPlan(userId)
     return planLimitResponse(
-      getRateLimitMessage(rate.window, plan),
+      getRateLimitMessage(rate.window),
       rate.window,
       rate.retryAfterSeconds,
     )
   }
 
-  return { userId, plan: planOrBlock }
+  return { userId, plan }
 }

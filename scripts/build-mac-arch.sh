@@ -14,7 +14,7 @@ export MAC_TARGET_ARCH="$ARCH"
 export CSC_IDENTITY_AUTO_DISCOVERY=false
 export SKIP_NOTARIZE=1
 export SKIP_AFTERPACK_SIGN=1
-rm -f resources/audio-capture-helper resources/window_capture_exclude.node
+rm -f resources/audio-capture-helper
 
 echo "Building Clarifi for macOS ($ARCH)..."
 npm run prebuild:mac

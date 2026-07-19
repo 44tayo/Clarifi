@@ -16,7 +16,7 @@ export const SUBPROCESSORS: Subprocessor[] = [
   {
     name: 'Supabase',
     purpose: 'Database, authentication, and edge functions',
-    location: 'United States',
+    location: 'Canada',
     website: 'https://supabase.com',
   },
   {
@@ -45,7 +45,7 @@ export const SUBPROCESSORS: Subprocessor[] = [
   },
   {
     name: 'Google',
-    purpose: 'OAuth sign-in (waitlist and app accounts)',
+    purpose: 'OAuth sign-in for app accounts',
     location: 'United States',
     website: 'https://google.com',
   },

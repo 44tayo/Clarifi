@@ -5,12 +5,19 @@ import {
   resolveStripeCustomerId,
 } from '@/lib/stripe'
 import { getUserBillingProfile } from '@/lib/usage'
+import { consumeRateLimit, rateLimitedResponse } from '@/lib/ip-rate-limit'
+
+const PORTAL_LIMIT = 20
+const PORTAL_WINDOW_SECONDS = 10 * 60
 
 export async function POST(req: Request) {
   const user = await getServerUser()
   if (!user) {
     return Response.json({ error: 'unauthorized' }, { status: 401 })
   }
+
+  const limit = await consumeRateLimit(`stripe_portal:user:${user.id}`, PORTAL_LIMIT, PORTAL_WINDOW_SECONDS)
+  if (!limit.allowed) return rateLimitedResponse(limit.retryAfterSeconds)
 
   const billing = await getUserBillingProfile(user.id)
   const customerId = await resolveStripeCustomerId({

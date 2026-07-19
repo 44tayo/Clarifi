@@ -1,7 +1,7 @@
 {
   "name": "clarifi-desktop",
   "version": "0.1.0",
-  "description": "Clarifi — AI meeting co-pilot desktop overlay",
+  "description": "Clarifi — AI meeting notetaker for Mac",
   "author": {
     "name": "Tayo",
     "email": "tayowilliams23@gmail.com"
@@ -34,7 +34,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "better-sqlite3": "^12.11.1",
     "dotenv": "^17.4.2",
     "electron-updater": "^6.3.9",
     "form-data": "^4.0.5",

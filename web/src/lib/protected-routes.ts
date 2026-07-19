@@ -23,7 +23,6 @@ const PUBLIC_PREFIXES = [
   '/api/desktop/exchange',
   '/api/desktop/status',
   '/api/desktop/profile',
-  '/api/waitlist',
   '/api/account',
   '/api/llm/chat',
   '/api/llm/suggest',
@@ -33,8 +32,6 @@ const PUBLIC_PREFIXES = [
 export function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith('/preview')) return true
   if (pathname.startsWith('/_next')) return true
-  if (pathname.startsWith('/api/integrations/hubspot')) return true
-  if (pathname.startsWith('/api/integrations/gmail')) return true
 
   return PUBLIC_PREFIXES.some((prefix) => {
     if (prefix === '/') return pathname === '/'

@@ -260,29 +260,6 @@
   background: #111;
 }
 
-.pricing-card-cta-waitlist {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  padding: 0.85rem 1.25rem;
-  border-radius: 12px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  text-decoration: none;
-  margin-bottom: 1rem;
-  background: #f5f3ff;
-  color: #1a1a2e;
-  border: 1px solid rgba(99, 102, 241, 0.22);
-  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.1);
-  transition: background 0.2s, box-shadow 0.2s;
-}
-
-.pricing-card-cta-waitlist:hover {
-  background: #ede9fe;
-  box-shadow: 0 4px 24px rgba(99, 102, 241, 0.16);
-}
-
 .pricing-card-tagline {
   font-size: 0.9rem;
   color: var(--cl-muted);

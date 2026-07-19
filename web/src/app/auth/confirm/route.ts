@@ -2,12 +2,14 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import type { EmailOtpType } from '@supabase/supabase-js'
 import { AUTH_NEXT_COOKIE, resolveAuthNext } from '@/lib/auth-next'
-import { LAUNCH_PREVIEW_COOKIE, resolveLaunchPreviewState } from '@/lib/launch-preview'
-import { resolvePostAuthRedirect } from '@/lib/prelaunch'
+import { consumeRateLimit, getClientIp } from '@/lib/ip-rate-limit'
 import { getSupabaseEnv } from '@/lib/supabase/env'
 import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 
 export const dynamic = 'force-dynamic'
+
+const CONFIRM_LIMIT = 20
+const CONFIRM_WINDOW_SECONDS = 10 * 60
 
 function buildRedirect(request: Request, path: string) {
   const response = NextResponse.redirect(new URL(path, request.url))
@@ -21,25 +23,22 @@ export async function GET(request: Request) {
   const type = searchParams.get('type') as EmailOtpType | null
   const cookieStore = await cookies()
   const authNextCookie = cookieStore.get(AUTH_NEXT_COOKIE)?.value ?? null
-  const launchPreview = resolveLaunchPreviewState(
-    searchParams,
-    cookieStore.get(LAUNCH_PREVIEW_COOKIE)?.value ?? null,
-  )
-  const safeNext = resolvePostAuthRedirect(
-    resolveAuthNext(
-      searchParams.get('next') ?? (authNextCookie ? decodeURIComponent(authNextCookie) : null),
-      '/dashboard',
-    ),
-    launchPreview.previewLive,
-    launchPreview.forceWaitlist,
+  const safeNext = resolveAuthNext(
+    searchParams.get('next') ?? (authNextCookie ? decodeURIComponent(authNextCookie) : null),
+    '/dashboard',
   )
 
   if (!tokenHash || !type || !getSupabaseEnv()) {
     return buildRedirect(request, '/sign-in?error=auth')
   }
 
-  const successPath = safeNext === '/?joined=1' ? '/?joined=1' : safeNext
-  let response = buildRedirect(request, successPath)
+  const ip = getClientIp(request)
+  const limit = await consumeRateLimit(`auth_confirm:ip:${ip}`, CONFIRM_LIMIT, CONFIRM_WINDOW_SECONDS)
+  if (!limit.allowed) {
+    return buildRedirect(request, '/sign-in?error=rate_limited')
+  }
+
+  let response = buildRedirect(request, safeNext)
   const supabase = await createRouteHandlerClient(response)
   if (!supabase) {
     return buildRedirect(request, '/sign-in?error=auth')

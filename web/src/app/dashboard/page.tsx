@@ -3,14 +3,10 @@ import Link from 'next/link'
 import { getAccountAuthProviders, readNameFromUserMetadata } from '@/lib/account-auth'
 import { DashboardDownloadSection } from '@/components/dashboard/DashboardDownloadSection'
 import { DashboardAccountSection } from '@/components/dashboard/DashboardAccountSection'
-import { DashboardGmailSection } from '@/components/dashboard/DashboardGmailSection'
 import { DashboardPricingSection } from '@/components/dashboard/DashboardPricingSection'
 import { DesktopConnect } from '@/components/DesktopConnect'
 import { getServerUser } from '@/lib/auth-server'
-import { getGmailConnection, isGmailConfigured, toPublicGmailStatus } from '@/lib/gmail'
-import { PLAN_LIMITS, isPaidPlan } from '@/lib/plans'
-import { getServerLaunchPreviewState } from '@/lib/launch-preview-server'
-import { shouldBlockPrelaunchAccess } from '@/lib/prelaunch'
+import { PLAN_LIMITS } from '@/lib/plans'
 import { getUsageStats } from '@/lib/usage'
 
 export const metadata = {
@@ -18,26 +14,9 @@ export const metadata = {
   robots: { index: false, follow: false },
 }
 
-export default async function DashboardPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ gmail?: string }>
-}) {
+export default async function DashboardPage() {
   const user = await getServerUser()
   if (!user) redirect('/sign-in?next=/dashboard')
-  const params = await searchParams
-  const launchPreview = await getServerLaunchPreviewState()
-  if (
-    shouldBlockPrelaunchAccess(
-      '/dashboard',
-      user.id,
-      launchPreview.previewLive,
-      launchPreview.forceWaitlist,
-      user.email,
-    )
-  ) {
-    redirect('/?joined=1')
-  }
 
   const stats = await getUsageStats(user.id)
   const { firstName, lastName, displayName } = readNameFromUserMetadata(
@@ -45,14 +24,9 @@ export default async function DashboardPage({
     user.email,
   )
   const { hasEmailAuth, hasGoogleAuth } = getAccountAuthProviders(user.identities, user.email)
-  const limitLabel = !isPaidPlan(stats.plan)
-    ? 'Start a trial to use Clarifi'
-    : Number.isFinite(stats.limit)
-      ? `${stats.used} / ${stats.limit}`
-      : `${stats.used} (unlimited)`
-  const gmailConnection = await getGmailConnection(user.id)
-  const gmailStatus = toPublicGmailStatus(gmailConnection)
-  const gmailConfigured = isGmailConfigured()
+  const limitLabel = Number.isFinite(stats.limit)
+    ? `${stats.used} / ${stats.limit}`
+    : `${stats.used} (unlimited)`
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -95,15 +69,6 @@ export default async function DashboardPage({
         </div>
 
         <DesktopConnect />
-
-        {gmailConfigured ? (
-          <DashboardGmailSection
-            initialStatus={gmailStatus}
-            connectUrl="/api/integrations/gmail/connect"
-            showConnectedBanner={params.gmail === 'connected'}
-            showErrorBanner={params.gmail === 'error'}
-          />
-        ) : null}
 
         <div className="mt-6 rounded-xl border border-border bg-card p-6 shadow-sm shadow-black/5">
           <h2 className="mb-1 font-semibold">Download Clarifi</h2>

@@ -46,7 +46,7 @@ export default function TermsOfServicePage() {
 
           <p>
             This Agreement governs your purchase of or subscription to Clarifi&apos;s software-as-a-service
-            products, desktop applications, waitlist registration, and related services (collectively,
+            products, desktop applications, and related services (collectively,
             the &quot;Services&quot;) pursuant to any ordering documents, online registration, checkout
             flows, or order confirmations referencing this Agreement (&quot;Order Form(s)&quot;).
           </p>

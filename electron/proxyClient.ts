@@ -1,7 +1,22 @@
 import fetch from 'node-fetch'
+
 import { getDeviceCredentials } from './deviceAuth'
 import { getClarifiApiUrl } from './keys'
-import type { ChatRequest, ChatResult, Suggestion } from './llm'
+
+export type ChatRequest = {
+  message: string
+  transcriptLines?: string[]
+  useScreenContext?: boolean
+}
+
+export type ChatResult =
+  | { reply: string }
+  | { error: string }
+
+export type Suggestion = {
+  title: string
+  body: string
+}
 
 export async function isProxyConfigured(): Promise<boolean> {
   const creds = await getDeviceCredentials()
@@ -47,8 +62,12 @@ async function proxyFetch(
   return { ok: response.ok, status: response.status, data }
 }
 
-export async function proxyChat(request: ChatRequest): Promise<ChatResult> {
-  const { ok, status, data } = await proxyFetch('/api/llm/chat', request)
+export async function proxyMeetingChat(request: ChatRequest): Promise<ChatResult> {
+  const { ok, status, data } = await proxyFetch('/api/llm/chat', {
+    message: request.message,
+    transcriptLines: request.transcriptLines ?? [],
+    useScreenContext: request.useScreenContext ?? false,
+  })
 
   if (status === 401) return { error: 'auth_expired' }
   if (status === 403) return { error: 'plan_required' }
@@ -58,9 +77,14 @@ export async function proxyChat(request: ChatRequest): Promise<ChatResult> {
     return { error: err || 'chat_failed' }
   }
 
-  const result = data as ChatResult
-  if ('reply' in result && result.reply) return result
-  return { error: 'chat_failed' }
+  const result = data as { reply?: string; error?: string }
+  if (result.reply) return { reply: result.reply }
+  return { error: result.error || 'chat_failed' }
+}
+
+/** @deprecated Use proxyMeetingChat */
+export async function proxyChat(request: ChatRequest): Promise<ChatResult> {
+  return proxyMeetingChat(request)
 }
 
 export async function proxySuggest(

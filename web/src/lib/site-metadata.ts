@@ -1,32 +1,32 @@
 export const SITE_NAME = 'Clarifi'
 
-/** ~155 chars — optimized for Google SERP snippets (Cluely / LockedIn style). */
+/** ~155 chars — optimized for Google SERP snippets. */
 export const SITE_DESCRIPTION =
-  'Clarifi is an invisible AI notetaker and chat overlay for meetings. Perfect notes, real-time answers, and transcripts — completely undetectable on screen share. No meeting bot.'
+  'Clarifi is an AI notepad for meetings. It listens in the background while you take light notes, then turns every call into a clean summary, decisions, and action items. No meeting bot.'
 
-export const SITE_TITLE = 'Clarifi — Invisible AI Notetaker & Meeting Overlay'
+export const SITE_TITLE = 'Clarifi — AI Meeting Notes & Notepad'
 
 export const SITE_TAGLINE =
-  'Perfect meeting notes and real-time answers — invisible on your screen and on screen share.'
+  'Take light notes during your meeting — Clarifi turns them into a clean summary the moment you\'re done.'
 
 export const SITE_KEYWORDS = [
   'Clarifi',
   'AI meeting notetaker',
-  'invisible AI overlay',
-  'undetectable AI for meetings',
+  'AI meeting notepad',
+  'meeting notes app',
   'AI meeting assistant',
   'meeting transcription',
-  'screen share invisible',
+  'no bot meeting notes',
   'Zoom meeting notes',
   'Google Meet AI notes',
   'Microsoft Teams notetaker',
-  'real-time meeting answers',
-  'desktop AI overlay',
+  'automatic meeting summary',
+  'desktop AI notetaker',
 ]
 
 export const SITE_OG_IMAGE = {
   url: '/clarifi-logo.png',
   width: 1024,
   height: 1024,
-  alt: 'Clarifi — invisible AI notetaker for meetings',
+  alt: 'Clarifi — AI notepad for meetings',
 } as const

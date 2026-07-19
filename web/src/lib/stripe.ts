@@ -72,8 +72,10 @@ export async function createStripeCheckoutSession(
       plan: input.plan,
       interval: input.interval,
     },
+    // No trial period — there's a genuine free plan (unlimited meetings, 30
+    // days of history) before users ever reach checkout, so paid plans bill
+    // immediately for the unlimited-history/team features they unlock.
     subscription_data: {
-      trial_period_days: 7,
       metadata: {
         userId: input.userId,
         plan: input.plan,
