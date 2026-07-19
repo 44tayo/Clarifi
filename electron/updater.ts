@@ -1,7 +1,9 @@
-import { app } from 'electron'
+import { app, dialog } from 'electron'
 import { autoUpdater } from 'electron-updater'
 
 const ALLOWED_UPDATE_HOSTS = ['github.com', 'api.github.com'] as const
+
+let updatePromptOpen = false
 
 export async function configureUpdater(): Promise<void> {
   if (!app.isPackaged) {
@@ -11,8 +13,46 @@ export async function configureUpdater(): Promise<void> {
   autoUpdater.autoDownload = false
   autoUpdater.allowDowngrade = false
 
-  autoUpdater.on('update-available', () => {
-    // User must explicitly approve before download begins.
+  autoUpdater.on('update-available', (info) => {
+    if (updatePromptOpen) return
+    updatePromptOpen = true
+    void dialog
+      .showMessageBox({
+        type: 'info',
+        title: 'Update available',
+        message: `Clarifi ${info.version} is ready to download.`,
+        detail: 'Updates install after download and require a restart.',
+        buttons: ['Download', 'Later'],
+        defaultId: 0,
+        cancelId: 1,
+      })
+      .then(async ({ response }) => {
+        updatePromptOpen = false
+        if (response === 0) {
+          await autoUpdater.downloadUpdate()
+        }
+      })
+      .catch(() => {
+        updatePromptOpen = false
+      })
+  })
+
+  autoUpdater.on('update-downloaded', (info) => {
+    void dialog
+      .showMessageBox({
+        type: 'info',
+        title: 'Update ready',
+        message: `Clarifi ${info.version} downloaded.`,
+        detail: 'Restart now to install the update.',
+        buttons: ['Restart', 'Later'],
+        defaultId: 0,
+        cancelId: 1,
+      })
+      .then(({ response }) => {
+        if (response === 0) {
+          autoUpdater.quitAndInstall()
+        }
+      })
   })
 
   autoUpdater.on('error', (error) => {
@@ -45,5 +85,9 @@ export async function checkForSignedUpdates(): Promise<void> {
   if (!app.isPackaged) {
     return
   }
-  await autoUpdater.checkForUpdates()
+  try {
+    await autoUpdater.checkForUpdates()
+  } catch (error) {
+    console.error('Update check failed:', error instanceof Error ? error.message : error)
+  }
 }

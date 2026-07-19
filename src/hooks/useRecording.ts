@@ -27,9 +27,17 @@ export function useRecording(meetingId: string | null) {
       const data = payload as { state?: string }
       if (data.state) setActivity(data.state)
     })
+    const offStopped = window.electronAPI.on('audio:stopped', () => {
+      mediaRecorderRef.current?.stop()
+      mediaRecorderRef.current = null
+      streamRef.current?.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
+      setState('idle')
+    })
     return () => {
       offTranscript()
       offActivity()
+      offStopped()
     }
   }, [])
 
@@ -41,8 +49,16 @@ export function useRecording(meetingId: string | null) {
   }, [])
 
   const startMicCapture = useCallback(async () => {
+    const prefs = (await window.electronAPI.invoke('audio:get-preferences')) as {
+      preferredMicrophoneId?: string
+    }
+    const deviceId = prefs.preferredMicrophoneId?.trim()
     const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true },
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+      },
     })
     streamRef.current = stream
     const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' })

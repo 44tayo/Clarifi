@@ -7,6 +7,7 @@ import {
   ConnectFluxLoader,
   useSimulatedProgress,
 } from '@/components/ui/connect-flux-loader'
+import '@/components/auth/auth.css'
 
 export default function DesktopConnectPage() {
   const [ready, setReady] = useState(false)
@@ -71,14 +72,20 @@ export default function DesktopConnectPage() {
 
   if (!signedIn) {
     return (
-      <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center gap-4 px-8">
-        <h1 className="text-2xl font-bold">Sign in to connect Clarifi Desktop</h1>
-        <Link
-          href="/desktop/sign-in"
-          className="bg-white text-black px-6 py-2 rounded-lg text-sm font-medium hover:bg-white/90"
-        >
-          Sign in
-        </Link>
+      <main className="auth-page">
+        <div className="auth-card">
+          <Link href="/" className="auth-logo">
+            Clarifi
+          </Link>
+          <h1 className="auth-title">Never scramble for meeting notes again</h1>
+          <p className="auth-subtitle">Sign in to pair Clarifi Desktop with your account.</p>
+          <Link href="/desktop/sign-in" className="auth-oauth-btn" style={{ textDecoration: 'none' }}>
+            Continue to sign in
+          </Link>
+          <p className="auth-alt" style={{ marginTop: '1rem' }}>
+            <Link href="/desktop/sign-up">Need an account? Sign up</Link>
+          </p>
+        </div>
       </main>
     )
   }

@@ -138,8 +138,8 @@ export function InstallModal({ open, onClose, onDownloadAgain }: InstallModalPro
                 Hold <strong>Fn (Globe)</strong> or click the bottom pill to dictate into any text field.
               </li>
               <li>
-                If you still see &ldquo;can&apos;t be opened,&rdquo; run in Terminal:{' '}
-                <code>xattr -cr /Applications/Clarifi.app</code> then try step 2 again.
+                Signed builds open after right-click → Open. For unsigned test builds only, run in
+                Terminal: <code>xattr -cr /Applications/Clarifi.app</code> then try step 2 again.
               </li>
             </ol>
           </div>

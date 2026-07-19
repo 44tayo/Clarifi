@@ -56,6 +56,7 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         input: {
           main: 'index.html',
+          widget: 'widget.html',
         },
       },
     },

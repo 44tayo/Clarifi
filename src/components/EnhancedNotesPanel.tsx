@@ -7,49 +7,32 @@ type EnhancedNotesPanelProps = {
   onRegenerate: () => void
 }
 
-export function EnhancedNotesPanel({ meeting, onRegenerate }: EnhancedNotesPanelProps) {
-  const [tab, setTab] = useState<'enhanced' | 'raw'>('enhanced')
+export function EnhancedNotesPanel({ meeting }: EnhancedNotesPanelProps) {
+  const [copied, setCopied] = useState(false)
 
   const body = useMemo(() => {
-    if (tab === 'raw') return meeting.userNotes || '(no notes taken)'
     return meeting.enhancedNotes || meeting.summary || 'Enhanced notes will appear here.'
-  }, [meeting.enhancedNotes, meeting.summary, meeting.userNotes, tab])
+  }, [meeting.enhancedNotes, meeting.summary])
+
+  const copySummary = async () => {
+    const parts = [body]
+    if (meeting.actionItems && meeting.actionItems.length > 0) {
+      parts.push('', 'Action items:', ...meeting.actionItems.map((item) => `- ${item}`))
+    }
+    await navigator.clipboard.writeText(parts.join('\n'))
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1600)
+  }
 
   return (
     <section className="enhanced-panel">
-      <div className="enhanced-tabs">
-        <button
-          type="button"
-          className={`tab-btn${tab === 'enhanced' ? ' is-active' : ''}`}
-          onClick={() => setTab('enhanced')}
-        >
-          Enhanced notes
+      <div className="enhanced-panel-toolbar">
+        <button type="button" className="btn btn-secondary" onClick={() => void copySummary()}>
+          {copied ? 'Copied' : 'Copy summary'}
         </button>
-        <button
-          type="button"
-          className={`tab-btn${tab === 'raw' ? ' is-active' : ''}`}
-          onClick={() => setTab('raw')}
-        >
-          Raw notes
-        </button>
-        {meeting.status === 'ready' || meeting.status === 'error' ? (
-          <button type="button" className="tab-btn" onClick={onRegenerate}>
-            Regenerate
-          </button>
-        ) : null}
       </div>
 
-      {meeting.status === 'processing' ? (
-        <div className="processing-banner">Enhancing your notes with AI…</div>
-      ) : null}
-
-      {meeting.status === 'error' ? (
-        <div className="processing-banner" style={{ background: '#fef2f2', color: '#b91c1c' }}>
-          Enhancement failed{meeting.enhanceError ? `: ${meeting.enhanceError}` : ''}. Try again.
-        </div>
-      ) : null}
-
-      {meeting.actionItems && meeting.actionItems.length > 0 && tab === 'enhanced' ? (
+      {meeting.actionItems && meeting.actionItems.length > 0 ? (
         <div style={{ marginBottom: 16 }}>
           <div className="pane-header" style={{ paddingLeft: 0 }}>
             Action items

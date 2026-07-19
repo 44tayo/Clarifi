@@ -29,14 +29,13 @@ export default async function SignUpPage({ searchParams }: PageProps) {
     <>
       <AuthRedirect next={redirectNext} />
       <AuthForm
-      mode="sign-up"
-      next={redirectNext}
-      error={error === 'auth' ? 'Sign-up failed. Please try again.' : null}
-      title="Create your Clarifi account"
-      subtitle="Sign up with email or Google to use Clarifi on desktop and manage your plan."
-      alternateHref={`/sign-in${redirectNext !== '/dashboard' ? `?next=${encodeURIComponent(redirectNext)}` : ''}`}
-      alternateLabel="Already have an account? Sign in"
-    />
+        mode="sign-up"
+        next={redirectNext}
+        error={error === 'auth' ? 'Sign-up failed. Please try again.' : null}
+        subtitle="Create an account to pair Clarifi Desktop and unlock AI summaries."
+        alternateHref={`/sign-in${redirectNext !== '/dashboard' ? `?next=${encodeURIComponent(redirectNext)}` : ''}`}
+        alternateLabel="Already have an account? Sign in"
+      />
     </>
   )
 }

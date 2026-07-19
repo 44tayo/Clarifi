@@ -1,12 +1,7 @@
+import { FREE_HISTORY_RETENTION_DAYS } from '../../shared/entitlements'
 import { MeetingRow } from './MeetingRow'
 import type { ConnectionStatus, Meeting } from '../types/meeting'
 
-// Free plan keeps unlimited meetings but only surfaces the most recent
-// window of note history — mirrors FREE_HISTORY_RETENTION_DAYS in
-// shared/entitlements.ts. Kept as a local constant (rather than importing
-// that module) since the desktop renderer bundle doesn't currently pull in
-// the shared entitlements package.
-const FREE_HISTORY_RETENTION_DAYS = 30
 const FREE_HISTORY_RETENTION_MS = FREE_HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000
 
 type SidebarProps = {

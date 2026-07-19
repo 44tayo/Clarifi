@@ -13,10 +13,16 @@ export type AudioPreferences = {
   transcriptionMode: 'dual' | 'group'
 }
 
-type LanguagePatch = Partial<
+type PrefsPatch = Partial<
   Pick<
     AudioPreferences,
-    'transcriptionLanguage' | 'outputLanguage' | 'dictationLanguage' | 'dictationOutputLanguage'
+    | 'transcriptionLanguage'
+    | 'outputLanguage'
+    | 'dictationLanguage'
+    | 'dictationOutputLanguage'
+    | 'preferredMicrophoneId'
+    | 'preferredMicrophoneLabel'
+    | 'systemAudioCapture'
   >
 >
 
@@ -36,7 +42,7 @@ export function useAudioPreferences() {
     return off
   }, [refresh])
 
-  const update = useCallback(async (patch: LanguagePatch) => {
+  const update = useCallback(async (patch: PrefsPatch) => {
     const result = (await window.electronAPI.invoke('audio:set-preferences', patch)) as AudioPreferences
     setPrefs(result)
     return result

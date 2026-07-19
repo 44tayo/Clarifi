@@ -4,7 +4,9 @@ type ElectronInvoke =
   | 'ping'
   | 'auth:connection-status'
   | 'auth:open-connect'
+  | 'auth:open-sign-in'
   | 'auth:open-dashboard'
+  | 'auth:open-legal'
   | 'meetings:list'
   | 'meetings:get'
   | 'meetings:create'
@@ -20,6 +22,18 @@ type ElectronInvoke =
   | 'audio:session-transcript'
   | 'audio:get-preferences'
   | 'audio:set-preferences'
+  | 'audio:list-microphones'
+  | 'onboarding:get'
+  | 'onboarding:save'
+  | 'onboarding:complete'
+  | 'permissions:status'
+  | 'permissions:request-microphone'
+  | 'permissions:open-system-audio-settings'
+  | 'widget:show'
+  | 'widget:hide'
+  | 'widget:close'
+  | 'widget:focus-main'
+  | 'widget:stop-recording'
 
 type ElectronEvent =
   | 'transcript:update'
@@ -28,6 +42,8 @@ type ElectronEvent =
   | 'meetings:changed'
   | 'meetings:enhanced'
   | 'audio:prefs-changed'
+  | 'widget:state'
+  | 'audio:stopped'
 
 interface Window {
   electronAPI: {

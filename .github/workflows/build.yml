@@ -4,9 +4,7 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - 'web/**'
-      - '**.md'
+  pull_request:
   workflow_dispatch:
 
 env:
@@ -14,7 +12,38 @@ env:
   SKIP_NATIVE_REBUILD: '1'
 
 jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install desktop dependencies
+        run: npm ci
+
+      - name: Typecheck + unit tests (desktop)
+        run: |
+          npx tsc --noEmit
+          npx tsc --noEmit -p tsconfig.node.json
+          npm test
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Typecheck web
+        working-directory: web
+        run: npx tsc --noEmit
+
   build-mac:
+    needs: quality
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
@@ -54,6 +83,7 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           CSC_IDENTITY_AUTO_DISCOVERY: true
+          CLARIFI_API_URL: https://www.clarifiapp.com
         run: npm run build:mac
 
       - name: Build unsigned macOS artifacts (no signing secrets)
@@ -62,6 +92,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
           SKIP_NOTARIZE: '1'
           SKIP_NATIVE_REBUILD: ''
+          CLARIFI_API_URL: https://www.clarifiapp.com
         run: MAC_CI_ARCH=arm64 bash scripts/build-mac-ci.sh
 
       - name: Upload macOS artifact
@@ -72,6 +103,7 @@ jobs:
           if-no-files-found: error
 
   build-win:
+    needs: quality
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -91,6 +123,8 @@ jobs:
         run: npx --yes @electron/rebuild -f -w keytar
 
       - name: Build frontend
+        env:
+          CLARIFI_API_URL: https://www.clarifiapp.com
         run: npx tsc --noEmit && npm run build
 
       - name: Package Windows installer
@@ -107,29 +141,54 @@ jobs:
 
   publish-release:
     needs: [build-mac, build-win]
-    if: always() && needs.build-mac.result == 'success'
+    # Only publish when Mac was signed. Unsigned CI builds stay as artifacts.
+    if: >
+      always() &&
+      needs.build-mac.result == 'success' &&
+      github.event_name != 'pull_request' &&
+      github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read package version
+        id: version
+        run: echo "tag=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Require signing secrets for public latest release
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+        run: |
+          if [ -z "$BUILD_CERTIFICATE_BASE64" ]; then
+            echo "Skipping GitHub Release publish — unsigned builds must not be marked latest."
+            echo "skip=1" >> "$GITHUB_ENV"
+          else
+            echo "skip=0" >> "$GITHUB_ENV"
+          fi
+
       - name: Download macOS DMGs
+        if: env.skip != '1'
         uses: actions/download-artifact@v4
         with:
           name: clarifi-macos-dmg
           path: release-assets
 
       - name: Download Windows installer
-        if: needs.build-win.result == 'success'
+        if: env.skip != '1' && needs.build-win.result == 'success'
         uses: actions/download-artifact@v4
         with:
           name: clarifi-windows-exe
           path: release-assets
 
       - name: Publish GitHub Release assets
+        if: env.skip != '1'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.1.0
-          name: Clarifi 0.1.0
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Clarifi ${{ steps.version.outputs.tag }}
           draft: false
           prerelease: false
           make_latest: true
@@ -138,7 +197,9 @@ jobs:
           generate_release_notes: true
 
       - name: Verify release DMG URLs
+        if: env.skip != '1'
         run: |
+          VERSION=$(node -p "require('./package.json').version")
           node scripts/verify-download-artifact.mjs \
-            "https://github.com/Tayowill/clarificluely/releases/download/v0.1.0/Clarifi-0.1.0-arm64.dmg" \
+            "https://github.com/Tayowill/clarificluely/releases/download/v${VERSION}/Clarifi-${VERSION}-arm64.dmg" \
             50000000 || true

@@ -106,7 +106,7 @@ export function collectDiarizedSpeakers(entries: TranscriptEntry[]): string[] {
     const key = speakerLabel(entry)
     if (isDiarizedSpeakerLabel(key)) speakers.add(key)
   }
-  return [...speakers].sort((a, b) => {
+  return Array.from(speakers).sort((a, b) => {
     const na = Number(a.match(/\d+/)?.[0] ?? 0)
     const nb = Number(b.match(/\d+/)?.[0] ?? 0)
     return na - nb

@@ -4,7 +4,9 @@ const INVOKE_CHANNELS = [
   'ping',
   'auth:connection-status',
   'auth:open-connect',
+  'auth:open-sign-in',
   'auth:open-dashboard',
+  'auth:open-legal',
   'meetings:list',
   'meetings:get',
   'meetings:create',
@@ -20,6 +22,18 @@ const INVOKE_CHANNELS = [
   'audio:session-transcript',
   'audio:get-preferences',
   'audio:set-preferences',
+  'audio:list-microphones',
+  'onboarding:get',
+  'onboarding:save',
+  'onboarding:complete',
+  'permissions:status',
+  'permissions:request-microphone',
+  'permissions:open-system-audio-settings',
+  'widget:show',
+  'widget:hide',
+  'widget:close',
+  'widget:focus-main',
+  'widget:stop-recording',
 ] as const
 
 const SEND_CHANNELS = [] as const
@@ -31,6 +45,8 @@ const ON_CHANNELS = [
   'meetings:changed',
   'meetings:enhanced',
   'audio:prefs-changed',
+  'widget:state',
+  'audio:stopped',
 ] as const
 
 type InvokeChannel = (typeof INVOKE_CHANNELS)[number]

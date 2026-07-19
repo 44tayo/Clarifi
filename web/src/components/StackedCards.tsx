@@ -26,13 +26,13 @@ const cards: StackedCard[] = [
     id: 'card-1',
     variant: 'voice',
     heading: 'Clarifi in meetings',
-    body: 'Record your sessions. Clarifi listens to your conversations analyses your meeting in real time and gathers knowledge to add to its memory',
+    body: 'Start recording, jot a few words, and stay in the conversation. Clarifi listens in the background and turns the call into notes you can trust.',
   },
   {
     id: 'card-2',
     variant: 'assist-preview',
-    heading: 'Always one step ahead',
-    body: 'No prompting needed — Clarifi surfaces help the moment you need it.',
+    heading: 'Hang up. Notes ready.',
+    body: 'When the meeting ends, Clarifi delivers a clean summary, decisions, and action items — plus your scratchpad and transcript.',
   },
 ]
 

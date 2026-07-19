@@ -18,16 +18,25 @@ export function takePendingAuthUrl(): string | null {
   return url
 }
 
+export type DesktopAuthProvider = 'google' | 'azure' | 'email'
+
 export function getConnectPageUrl(): string {
   const base = getClarifiApiUrl()
   if (!base) return 'http://localhost:3000/desktop/connect'
   return `${base.replace(/\/$/, '')}/desktop/connect`
 }
 
-export function getSignInUrl(): string {
+export function getSignInUrl(provider?: DesktopAuthProvider): string {
   const base = getClarifiApiUrl()
-  if (!base) return 'http://localhost:3000/desktop/sign-in'
-  return `${base.replace(/\/$/, '')}/desktop/sign-in`
+  const origin = base ? base.replace(/\/$/, '') : 'http://localhost:3000'
+  if (!provider || provider === 'email') {
+    return `${origin}/desktop/sign-in`
+  }
+  const params = new URLSearchParams({
+    provider,
+    next: '/desktop/connect',
+  })
+  return `${origin}/desktop/auth?${params.toString()}`
 }
 
 export function getBillingUrl(): string {
@@ -40,6 +49,18 @@ export function getDashboardUrl(): string {
   const base = getClarifiApiUrl()
   if (!base) return 'http://localhost:3000/dashboard'
   return `${base.replace(/\/$/, '')}/dashboard`
+}
+
+export function getTermsUrl(): string {
+  const base = getClarifiApiUrl()
+  if (!base) return 'http://localhost:3000/terms'
+  return `${base.replace(/\/$/, '')}/terms`
+}
+
+export function getPrivacyUrl(): string {
+  const base = getClarifiApiUrl()
+  if (!base) return 'http://localhost:3000/privacy'
+  return `${base.replace(/\/$/, '')}/privacy`
 }
 
 function parseAuthToken(url: string): string | null {

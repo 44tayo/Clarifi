@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 import { EnhancedNotesPanel } from './EnhancedNotesPanel'
 import { NotesEditor } from './NotesEditor'
 import { RecordingBar } from './RecordingBar'
@@ -14,6 +16,8 @@ type MeetingWorkspaceProps = {
   onConnect: () => void
 }
 
+type ReadyTab = 'summary' | 'transcript' | 'scratchpad'
+
 export function MeetingWorkspace({
   meeting,
   connected,
@@ -24,6 +28,7 @@ export function MeetingWorkspace({
 }: MeetingWorkspaceProps) {
   const canCapture = meeting.status === 'draft' || meeting.status === 'live'
   const recording = useRecording(canCapture ? meeting.id : null)
+  const [readyTab, setReadyTab] = useState<ReadyTab>('summary')
 
   const isCapturing = recording.state === 'recording' || recording.state === 'paused'
   const showLiveLayout = canCapture || isCapturing
@@ -58,6 +63,7 @@ export function MeetingWorkspace({
       {showLiveLayout && !showEnhanced ? (
         <div className="editor-layout">
           <NotesEditor
+            label="Scratchpad"
             value={meeting.userNotes}
             onChange={(userNotes) => onUpdate({ userNotes })}
           />
@@ -72,12 +78,76 @@ export function MeetingWorkspace({
       {showEnhanced ? (
         <>
           {meeting.status === 'processing' ? (
-            <div className="editor-layout">
-              <NotesEditor value={meeting.userNotes} onChange={() => undefined} readOnly />
-              <TranscriptPanel entries={meeting.transcript} activity="silent" live={false} />
+            <div className="processing-banner">Enhancing your notes with AI…</div>
+          ) : null}
+
+          {meeting.status === 'error' ? (
+            <div className="processing-banner processing-banner-error">
+              Enhancement failed{meeting.enhanceError ? `: ${meeting.enhanceError}` : ''}.
+              <button type="button" className="link-btn" onClick={onEnhance}>
+                Try again
+              </button>
             </div>
           ) : null}
-          <EnhancedNotesPanel meeting={meeting} onRegenerate={onEnhance} />
+
+          <div className="enhanced-tabs meeting-ready-tabs">
+            {(
+              [
+                { id: 'summary', label: 'Summary' },
+                { id: 'transcript', label: 'Transcript' },
+                { id: 'scratchpad', label: 'Scratchpad' },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={`tab-btn${readyTab === tab.id ? ' is-active' : ''}`}
+                onClick={() => setReadyTab(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+            {meeting.status === 'ready' || meeting.status === 'error' ? (
+              <button type="button" className="tab-btn" onClick={onEnhance}>
+                Regenerate
+              </button>
+            ) : null}
+          </div>
+
+          {readyTab === 'summary' ? (
+            <EnhancedNotesPanel meeting={meeting} onRegenerate={onEnhance} />
+          ) : null}
+
+          {readyTab === 'transcript' ? (
+            <section className="enhanced-panel">
+              <div className="enhanced-panel-toolbar">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    const text = meeting.transcript
+                      .map((entry) => `${entry.speaker}: ${entry.text}`)
+                      .join('\n')
+                    void navigator.clipboard.writeText(text)
+                  }}
+                >
+                  Copy transcript
+                </button>
+              </div>
+              <TranscriptPanel entries={meeting.transcript} activity="silent" live={false} />
+            </section>
+          ) : null}
+
+          {readyTab === 'scratchpad' ? (
+            <div className="editor-layout">
+              <NotesEditor
+                label="Scratchpad"
+                hint="Private notes from the call — kept separate from the AI summary."
+                value={meeting.userNotes}
+                onChange={(userNotes) => onUpdate({ userNotes })}
+              />
+            </div>
+          ) : null}
         </>
       ) : null}
     </>

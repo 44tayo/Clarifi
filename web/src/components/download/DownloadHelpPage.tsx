@@ -151,7 +151,10 @@ function MacInstallGuide() {
           <code>{MAC_QUARANTINE_COMMAND}</code>
           <CopyButton text={MAC_QUARANTINE_COMMAND} />
         </div>
-        <p className="dh-step-footnote">This is a one-time setup. Future updates will install automatically.</p>
+        <p className="dh-step-footnote">
+          Only needed for unsigned test builds. Signed and notarized Clarifi releases open normally
+          after a one-time right-click → Open.
+        </p>
         <GuideScreenshot
           src="/install/mac/step-3-terminal.png"
           alt="Terminal window with the xattr quarantine removal command for Clarifi"

@@ -67,7 +67,7 @@ export function MeetingNotesSection() {
                   <div className="landing-notes-tabs">
                     <span className="active">Summary</span>
                     <span>Transcript</span>
-                    <span>Recap</span>
+                    <span>Scratchpad</span>
                   </div>
                   <div className="landing-notes-showcase-actions">
                     <button type="button" className="landing-notes-showcase-action-btn">

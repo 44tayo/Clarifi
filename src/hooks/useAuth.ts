@@ -21,12 +21,16 @@ export function useAuth() {
   }, [refresh])
 
   const openConnect = useCallback(async () => {
-    await window.electronAPI.invoke('auth:open-connect')
+    await window.electronAPI.invoke('auth:open-sign-in', 'email')
+  }, [])
+
+  const openSignIn = useCallback(async (provider: 'google' | 'azure' | 'email') => {
+    await window.electronAPI.invoke('auth:open-sign-in', provider)
   }, [])
 
   const openDashboard = useCallback(async () => {
     await window.electronAPI.invoke('auth:open-dashboard')
   }, [])
 
-  return { connection, loading, refresh, openConnect, openDashboard }
+  return { connection, loading, refresh, openConnect, openSignIn, openDashboard }
 }

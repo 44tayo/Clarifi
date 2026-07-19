@@ -17,9 +17,12 @@ import {
 } from '../audioPreferences'
 import {
   fetchDeviceProfileCached,
-  getConnectPageUrl,
   getDashboardUrl,
+  getPrivacyUrl,
+  getSignInUrl,
+  getTermsUrl,
   hasLocalDeviceCredentials,
+  type DesktopAuthProvider,
 } from '../deviceAuth'
 import {
   createMeeting,
@@ -30,6 +33,22 @@ import {
   type StoredMeeting,
 } from '../meetingStore'
 import { enhanceMeetingNotes } from '../noteEnhance'
+import {
+  loadOnboardingState,
+  markOnboardingComplete,
+  saveOnboardingState,
+} from '../onboardingState'
+import {
+  getPermissionStatus,
+  openSystemAudioSettings,
+  requestMicrophoneAccess,
+} from '../permissions'
+import {
+  closeWidget,
+  createOrShowWidget,
+  hideWidget,
+  setRecordingStartedAt,
+} from '../recordingWidget'
 import { isAllowedExternalUrl } from '../urlSafety'
 import {
   clearSystemCaptureActive,
@@ -112,7 +131,7 @@ function enqueueAudioChunk(
   source: TranscriptSource,
   rms?: number,
 ): void {
-  enqueueTranscription({ base64, source, enqueuedAt: Date.now(), rms })
+  enqueueTranscription(base64, source, rms)
 }
 
 async function finalizeActiveMeeting(): Promise<StoredMeeting | null> {
@@ -162,7 +181,7 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
   })
 
   ipcMain.handle('auth:open-connect', async () => {
-    const url = getConnectPageUrl()
+    const url = getSignInUrl()
     if (isAllowedExternalUrl(url)) {
       await shell.openExternal(url)
     } else {
@@ -171,12 +190,37 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
     return { url }
   })
 
+  ipcMain.handle('auth:open-sign-in', async (_event, provider?: unknown) => {
+    const allowed: DesktopAuthProvider[] = ['google', 'azure', 'email']
+    const selected =
+      typeof provider === 'string' && (allowed as string[]).includes(provider)
+        ? (provider as DesktopAuthProvider)
+        : 'email'
+    const url = getSignInUrl(selected)
+    if (isAllowedExternalUrl(url)) {
+      await shell.openExternal(url)
+    } else {
+      console.warn('Blocked auth:open-sign-in to disallowed scheme:', url)
+    }
+    return { url, provider: selected }
+  })
+
   ipcMain.handle('auth:open-dashboard', async () => {
     const url = getDashboardUrl()
     if (isAllowedExternalUrl(url)) {
       await shell.openExternal(url)
     } else {
       console.warn('Blocked auth:open-dashboard to disallowed scheme:', url)
+    }
+    return { url }
+  })
+
+  ipcMain.handle('auth:open-legal', async (_event, page?: unknown) => {
+    const url = page === 'privacy' ? getPrivacyUrl() : getTermsUrl()
+    if (isAllowedExternalUrl(url)) {
+      await shell.openExternal(url)
+    } else {
+      console.warn('Blocked auth:open-legal to disallowed scheme:', url)
     }
     return { url }
   })
@@ -267,6 +311,9 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
         }
       }
 
+      setRecordingStartedAt(Date.now())
+      createOrShowWidget()
+
       return { status: 'started', meetingId: activeMeetingId }
     },
   )
@@ -285,6 +332,7 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
         markSystemCaptureActive()
       }
     }
+    createOrShowWidget()
     return { status: 'resumed', isPaused: getIsPaused() }
   })
 
@@ -293,6 +341,8 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
     clearSystemCaptureActive()
     stopRecording()
     onSystemAudioData = null
+    setRecordingStartedAt(null)
+    hideWidget()
     await flushTranscriptionQueue()
     clearTranscriptionQueue()
     await finalizeActiveMeeting()
@@ -340,8 +390,86 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
       ...(typeof payload?.dictationOutputLanguage === 'string'
         ? { dictationOutputLanguage: payload.dictationOutputLanguage }
         : {}),
+      ...(typeof payload?.preferredMicrophoneId === 'string'
+        ? { preferredMicrophoneId: payload.preferredMicrophoneId }
+        : {}),
+      ...(typeof payload?.preferredMicrophoneLabel === 'string'
+        ? { preferredMicrophoneLabel: payload.preferredMicrophoneLabel }
+        : {}),
+      ...(payload?.systemAudioCapture === 'meeting' || payload?.systemAudioCapture === 'display'
+        ? { systemAudioCapture: payload.systemAudioCapture }
+        : {}),
     }
     saveAudioPreferences(next)
     return next
+  })
+
+  ipcMain.handle('audio:list-microphones', async () => {
+    // Renderer enumerates devices via navigator.mediaDevices; this channel
+    // exists so Settings can refresh after permission grants on macOS.
+    return getPermissionStatus()
+  })
+
+  ipcMain.handle('onboarding:get', () => loadOnboardingState())
+
+  ipcMain.handle('onboarding:save', (_event, patch: Record<string, unknown>) => {
+    return saveOnboardingState({
+      ...(typeof patch?.welcomeSeen === 'boolean' ? { welcomeSeen: patch.welcomeSeen } : {}),
+      ...(typeof patch?.permissionsSeen === 'boolean'
+        ? { permissionsSeen: patch.permissionsSeen }
+        : {}),
+      ...(typeof patch?.completed === 'boolean' ? { completed: patch.completed } : {}),
+    })
+  })
+
+  ipcMain.handle('onboarding:complete', () => markOnboardingComplete())
+
+  ipcMain.handle('permissions:status', () => getPermissionStatus())
+
+  ipcMain.handle('permissions:request-microphone', () => requestMicrophoneAccess())
+
+  ipcMain.handle('permissions:open-system-audio-settings', () => openSystemAudioSettings())
+
+  ipcMain.handle('widget:show', () => {
+    createOrShowWidget()
+    return { ok: true }
+  })
+
+  ipcMain.handle('widget:hide', () => {
+    hideWidget()
+    return { ok: true }
+  })
+
+  ipcMain.handle('widget:close', () => {
+    closeWidget()
+    return { ok: true }
+  })
+
+  ipcMain.handle('widget:focus-main', () => {
+    const win = getMainWindow(getWindow)
+    if (win) {
+      if (win.isMinimized()) win.restore()
+      win.show()
+      win.focus()
+    }
+    return { ok: true }
+  })
+
+  ipcMain.handle('widget:stop-recording', async () => {
+    stopSystemAudio()
+    clearSystemCaptureActive()
+    stopRecording()
+    onSystemAudioData = null
+    setRecordingStartedAt(null)
+    hideWidget()
+    await flushTranscriptionQueue()
+    clearTranscriptionQueue()
+    await finalizeActiveMeeting()
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) {
+        win.webContents.send('audio:stopped')
+      }
+    }
+    return { status: 'stopped' }
   })
 }

@@ -11,8 +11,7 @@ export default function DesktopSignInPage() {
     <AuthForm
       mode="sign-in"
       next="/desktop/connect"
-      title="Sign in to connect desktop"
-      subtitle="Authenticate here so Clarifi Desktop can link to your account."
+      subtitle="Sign in to pair Clarifi Desktop with your account."
       alternateHref="/desktop/sign-up"
       alternateLabel="Need an account? Sign up"
     />

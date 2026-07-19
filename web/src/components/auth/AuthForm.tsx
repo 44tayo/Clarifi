@@ -10,6 +10,8 @@ import { authNextCookieValue } from '@/lib/auth-next'
 import { createClient } from '@/lib/supabase/client'
 import { authCallbackUrl } from '@/lib/site-url'
 
+type OAuthProvider = 'google' | 'azure'
+
 function GoogleIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
@@ -19,7 +21,7 @@ function GoogleIcon() {
       />
       <path
         fill="#34A853"
-        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
       />
       <path
         fill="#FBBC05"
@@ -33,15 +35,28 @@ function GoogleIcon() {
   )
 }
 
+function MicrosoftIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 23 23" aria-hidden>
+      <path fill="#f35325" d="M1 1h10v10H1z" />
+      <path fill="#81bc06" d="M12 1h10v10H12z" />
+      <path fill="#05a6f0" d="M1 12h10v10H1z" />
+      <path fill="#ffba08" d="M12 12h10v10H12z" />
+    </svg>
+  )
+}
+
 type AuthFormProps = {
   mode: 'sign-in' | 'sign-up'
   next?: string
-  title: string
-  subtitle: string
+  title?: string
+  subtitle?: string
   alternateHref: string
   alternateLabel: string
   error?: string | null
 }
+
+const DEFAULT_TITLE = 'Never scramble for meeting notes again'
 
 function rememberAuthNext(next: string) {
   document.cookie = authNextCookieValue(next)
@@ -50,7 +65,7 @@ function rememberAuthNext(next: string) {
 export function AuthForm({
   mode,
   next = '/dashboard',
-  title,
+  title = DEFAULT_TITLE,
   subtitle,
   alternateHref,
   alternateLabel,
@@ -59,6 +74,13 @@ export function AuthForm({
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<'idle' | 'loading' | 'email_sent' | 'error'>('idle')
   const [message, setMessage] = useState(error ?? '')
+  const [showEmail, setShowEmail] = useState(false)
+
+  const resolvedSubtitle =
+    subtitle ??
+    (mode === 'sign-up'
+      ? 'Create an account to pair Clarifi Desktop and unlock AI summaries.'
+      : 'Sign in to access your dashboard and pair Clarifi Desktop.')
 
   const redirectTo = authCallbackUrl(next)
 
@@ -96,7 +118,7 @@ export function AuthForm({
     setMessage('Check your email for a magic link to continue.')
   }
 
-  const handleGoogle = async () => {
+  const handleOAuth = async (provider: OAuthProvider) => {
     setStatus('loading')
     setMessage('')
     rememberAuthNext(next)
@@ -109,7 +131,7 @@ export function AuthForm({
     }
 
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
+      provider,
       options: { redirectTo },
     })
 
@@ -126,40 +148,58 @@ export function AuthForm({
           Clarifi
         </Link>
         <h1 className="auth-title">{title}</h1>
-        <p className="auth-subtitle">{subtitle}</p>
+        <p className="auth-subtitle">{resolvedSubtitle}</p>
 
-        <form className="auth-form" onSubmit={(e) => void handleEmail(e)}>
-          <div className="space-y-2">
-            <Label htmlFor="auth-email">Email</Label>
-            <Input
-              id="auth-email"
-              type="email"
-              placeholder="you@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-            />
-          </div>
-          <Button type="submit" className="w-full" disabled={status === 'loading'}>
-            {mode === 'sign-up' ? 'Create account' : 'Continue with email'}
-          </Button>
-        </form>
-
-        <div className="auth-divider">
-          <span>Or</span>
+        <div className="auth-oauth-stack">
+          <button
+            type="button"
+            className="auth-oauth-btn"
+            onClick={() => void handleOAuth('google')}
+            disabled={status === 'loading'}
+          >
+            <GoogleIcon />
+            Continue with Google
+          </button>
+          <button
+            type="button"
+            className="auth-oauth-btn"
+            onClick={() => void handleOAuth('azure')}
+            disabled={status === 'loading'}
+          >
+            <MicrosoftIcon />
+            Continue with Microsoft
+          </button>
         </div>
 
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full"
-          onClick={() => void handleGoogle()}
-          disabled={status === 'loading'}
-        >
-          <GoogleIcon />
-          Continue with Google
-        </Button>
+        {!showEmail ? (
+          <button type="button" className="auth-email-toggle" onClick={() => setShowEmail(true)}>
+            Sign in with email or SSO instead
+          </button>
+        ) : (
+          <form className="auth-form" onSubmit={(e) => void handleEmail(e)}>
+            <div className="space-y-2">
+              <Label htmlFor="auth-email">Email</Label>
+              <Input
+                id="auth-email"
+                type="email"
+                placeholder="you@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+                className="auth-input"
+              />
+            </div>
+            <Button type="submit" className="w-full auth-email-submit" disabled={status === 'loading'}>
+              {mode === 'sign-up' ? 'Create account' : 'Continue with email'}
+            </Button>
+          </form>
+        )}
+
+        <p className="auth-legal">
+          By clicking continue, you agree to our <Link href="/terms">Terms of Service</Link> and{' '}
+          <Link href="/privacy">Privacy Policy</Link>.
+        </p>
 
         {message ? (
           <p

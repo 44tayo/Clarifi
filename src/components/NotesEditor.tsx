@@ -4,9 +4,17 @@ type NotesEditorProps = {
   value: string
   onChange: (value: string) => void
   readOnly?: boolean
+  label?: string
+  hint?: string
 }
 
-export function NotesEditor({ value, onChange, readOnly }: NotesEditorProps) {
+export function NotesEditor({
+  value,
+  onChange,
+  readOnly,
+  label = 'Scratchpad',
+  hint,
+}: NotesEditorProps) {
   const [draft, setDraft] = useState(value)
 
   useEffect(() => {
@@ -21,7 +29,8 @@ export function NotesEditor({ value, onChange, readOnly }: NotesEditorProps) {
 
   return (
     <section className="editor-pane">
-      <div className="pane-header">Your notes</div>
+      <div className="pane-header">{label}</div>
+      {hint ? <p className="pane-hint">{hint}</p> : null}
       <textarea
         className="notes-editor"
         value={draft}

@@ -31,7 +31,9 @@
     "publish:mac:unsigned": "bash scripts/publish-mac-unsigned.sh",
     "install:mac:unsigned": "bash scripts/install-mac-unsigned.sh",
     "build:win": "npm run build:native:win && tsc --noEmit && vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --x64",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
@@ -53,6 +55,7 @@
     "typescript": "^5.7.2",
     "vite": "^6.0.3",
     "vite-plugin-electron": "^0.28.8",
-    "vite-plugin-electron-renderer": "^0.14.6"
+    "vite-plugin-electron-renderer": "^0.14.6",
+    "vitest": "^3.2.7"
   }
 }

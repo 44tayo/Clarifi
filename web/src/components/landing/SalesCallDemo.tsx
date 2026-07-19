@@ -8,10 +8,10 @@ export function SalesCallDemo() {
     <div className="scd-page">
       <div className="scd-intro">
         <p className="scd-eyebrow">Live demo</p>
-        <h1>Clarifi on a real sales call</h1>
+        <h1>Clarifi on a real meeting</h1>
         <p className="scd-sub">
-          Your footage in a Zoom-style layout — Clarifi recording and assisting from the top,
-          invisible on screen share.
+          Your footage in a Zoom-style layout — Clarifi recording as your AI notepad, no bot on the
+          guest list.
         </p>
       </div>
 

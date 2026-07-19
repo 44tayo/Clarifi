@@ -76,5 +76,8 @@ export {
   getBillingUrl,
   getConnectPageUrl,
   getDashboardUrl,
+  getPrivacyUrl,
   getSignInUrl,
+  getTermsUrl,
+  type DesktopAuthProvider,
 } from './protocolAuth'

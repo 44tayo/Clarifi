@@ -4,9 +4,20 @@
 // input (a compromised renderer, a malformed deep link, etc.).
 const ALLOWED_EXTERNAL_SCHEMES = new Set(['https:', 'mailto:'])
 
+function isLocalDevHttp(parsed: URL): boolean {
+  if (parsed.protocol !== 'http:') return false
+  return (
+    parsed.hostname === 'localhost' ||
+    parsed.hostname === '127.0.0.1' ||
+    parsed.hostname === '[::1]'
+  )
+}
+
 export function isAllowedExternalUrl(url: string): boolean {
   try {
-    return ALLOWED_EXTERNAL_SCHEMES.has(new URL(url).protocol)
+    const parsed = new URL(url)
+    if (ALLOWED_EXTERNAL_SCHEMES.has(parsed.protocol)) return true
+    return isLocalDevHttp(parsed)
   } catch {
     return false
   }

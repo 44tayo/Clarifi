@@ -4,12 +4,14 @@ Monorepo for Clarifi:
 
 | Folder | What |
 |--------|------|
-| **Root** (`/`) | Desktop app (Electron) — Granola-style rebuild in progress |
+| **Root** (`/`) | Desktop app (Electron) — Granola-style AI meeting notepad |
 | **`web/`** | Next.js site + API (deploy to Vercel with **Root Directory = `web`**) |
+
+See [`PRODUCT.md`](./PRODUCT.md) for positioning: Clarifi is the AI notepad for back-to-back meetings — for everyone in Europe (personal email OK).
 
 ## Clarifi Desktop
 
-AI meeting notetaker for macOS. The desktop app was reset to a minimal shell (auth + audio capture + transcription). The previous Cluely-style overlay lives on branch `archive/cluely-desktop`.
+AI meeting notepad for macOS. Jot light notes while Clarifi listens (mic + system audio), then get a structured summary, decisions, and action items. No bot joins the call.
 
 ## Development
 
@@ -19,15 +21,22 @@ cp .env.example .env.local   # CLARIFI_API_URL + optional BYOK keys
 npm run electron:dev
 ```
 
-## What the minimal shell includes
+In another terminal, run the website:
 
-- Granola-style UI: sidebar meeting list, in-call notepad, live transcript, enhanced notes
-- Local meeting storage (`~/Library/Application Support/Clarifi/meetings.json`)
-- Post-meeting AI enhancement via cloud API (requires connected account + paid plan)
+```bash
+cd web && npm run dev
+```
+
+## What the app includes
+
+- First-run onboarding (welcome → connect → mic / system-audio permissions)
+- Meetings sidebar with free-plan 30-day history lock
+- In-call scratchpad + live transcript
+- Floating recording widget (timer / stop) while capturing
+- Post-meeting AI summary with Summary / Transcript / Scratchpad tabs
+- Local encrypted meeting storage
 - Device auth via `clarifi://` deep link + cloud API
-- Mic + macOS system audio capture (Swift helper)
-- Live transcription pipeline (Groq / cloud proxy)
-- Auto-update + Mac signing scripts
+- Language + microphone settings
 
 ## Build installers
 

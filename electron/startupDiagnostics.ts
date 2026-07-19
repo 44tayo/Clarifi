@@ -36,6 +36,9 @@ export function logStartup(
 }
 
 export function stripMacQuarantine(): void {
+  // Only for explicitly unsigned local installs. Notarized Gatekeeper builds
+  // must not strip quarantine — that hides signing problems.
+  if (process.env.CLARIFI_STRIP_QUARANTINE !== '1') return
   if (process.platform !== 'darwin' || !app.isPackaged) return
 
   const appBundle = path.resolve(process.execPath, '..', '..', '..')

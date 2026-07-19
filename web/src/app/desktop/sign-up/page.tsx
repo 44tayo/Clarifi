@@ -11,8 +11,7 @@ export default function DesktopSignUpPage() {
     <AuthForm
       mode="sign-up"
       next="/desktop/connect"
-      title="Create account for desktop"
-      subtitle="Sign up to pair Clarifi Desktop with your plan and usage limits."
+      subtitle="Create an account to pair Clarifi Desktop and unlock AI summaries."
       alternateHref="/desktop/sign-in"
       alternateLabel="Already have an account? Sign in"
     />

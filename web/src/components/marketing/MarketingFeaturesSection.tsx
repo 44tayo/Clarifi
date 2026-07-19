@@ -64,16 +64,16 @@ export function MarketingFeaturesSection() {
     },
     {
       id: 'drag-drop',
-      title: 'Drag and drop.',
-      summary: 'Move Clarifi anywhere on your screen — always within reach.',
+      title: 'Floating widget while you meet.',
+      summary: 'A compact always-on-top pill shows the timer and stop — click to jump back to your notepad.',
       visualClassName: 'gallery6-visual-move',
       visual: <MoveOverlayDemo demoRef={moveDemoRef} />,
     },
     {
       id: 'models',
-      title: 'Models',
+      title: 'Your notes, your languages.',
       summary:
-        'Scroll and expand providers to preview Anthropic, OpenAI, and Gemini — the same lineup in the desktop app.',
+        'Clarifi supports the languages you meet in — set preferences once and get summaries that match how you work.',
       visualClassName: 'gallery6-visual-models',
       visual: <ModelExploreDemo />,
     },

@@ -1,6 +1,6 @@
 import * as path from 'path'
 
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, crashReporter, shell } from 'electron'
 
 import { exchangeAuthToken } from './deviceAuth'
 import { registerHandlers } from './ipc/handlers'
@@ -11,6 +11,14 @@ import { checkForSignedUpdates, configureUpdater } from './updater'
 import { isAllowedExternalUrl } from './urlSafety'
 
 app.setName('Clarifi')
+
+crashReporter.start({
+  productName: 'Clarifi',
+  companyName: 'Clarifi',
+  submitURL: '',
+  uploadToServer: false,
+  compress: true,
+})
 
 logStartup('H2', 'main-module-loaded')
 stripMacQuarantine()
