@@ -1,14 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { FREE_HISTORY_RETENTION_DAYS } from '../shared/entitlements'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { MeetingWorkspace } from './components/MeetingWorkspace'
+import { MicPickerModal } from './components/MicPickerModal'
 import { OfflineBanner } from './components/OfflineBanner'
 import { OnboardingFlow } from './components/OnboardingFlow'
 import { SettingsPanel } from './components/SettingsPanel'
 import { Sidebar } from './components/Sidebar'
+import { useAudioPreferences } from './hooks/useAudioPreferences'
 import { useAuth } from './hooks/useAuth'
 import { useMeetings } from './hooks/useMeetings'
+import { useRecording } from './hooks/useRecording'
+import { formatMicCaptureError, isMicPermissionError } from './lib/microphones'
 import type { Meeting } from './types/meeting'
 
 const FREE_HISTORY_RETENTION_MS = FREE_HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000
@@ -21,12 +25,24 @@ function isMeetingLocked(meeting: Meeting, plan?: string): boolean {
 
 function App() {
   const { connection, openConnect, openSignIn, openDashboard } = useAuth()
+  const { prefs, update: updatePrefs } = useAudioPreferences()
   const { meetings, createMeeting, updateMeeting, deleteMeeting, enhanceMeeting, getMeeting } =
     useMeetings()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [activeMeeting, setActiveMeeting] = useState<Meeting | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null)
+  const [captureMeetingId, setCaptureMeetingId] = useState<string | null>(null)
+  const [micPickerOpen, setMicPickerOpen] = useState(false)
+  const [micPickerError, setMicPickerError] = useState<string | null>(null)
+  const [micPermissionDenied, setMicPermissionDenied] = useState(false)
+  const captureMeetingIdRef = useRef<string | null>(null)
+
+  const recording = useRecording(captureMeetingId)
+
+  useEffect(() => {
+    captureMeetingIdRef.current = captureMeetingId
+  }, [captureMeetingId])
 
   useEffect(() => {
     void window.electronAPI.invoke('onboarding:get').then((state) => {
@@ -34,6 +50,35 @@ function App() {
       setOnboardingDone(Boolean(data.completed))
     })
   }, [])
+
+  useEffect(() => {
+    const off = window.electronAPI.on('audio:stopped', () => {
+      const id = captureMeetingIdRef.current
+      if (!id) return
+      void getMeeting(id).then((meeting) => {
+        if (meeting) {
+          setSelectedId(id)
+          setActiveMeeting(meeting)
+        }
+      })
+      setCaptureMeetingId(null)
+    })
+    return off
+  }, [getMeeting])
+
+  useEffect(() => {
+    const off = window.electronAPI.on('widget:navigate-meeting', (payload) => {
+      const data = payload as { meetingId?: string }
+      if (!data.meetingId) return
+      void getMeeting(data.meetingId).then((meeting) => {
+        if (meeting) {
+          setSelectedId(data.meetingId!)
+          setActiveMeeting(meeting)
+        }
+      })
+    })
+    return off
+  }, [getMeeting])
 
   const selectedFromList = useMemo(
     () => meetings.find((meeting) => meeting.id === selectedId) ?? null,
@@ -51,11 +96,89 @@ function App() {
     }
   }, [selectedFromList, connection.plan])
 
+  const beginCapture = useCallback(
+    async (meetingId: string) => {
+      setMicPickerError(null)
+      setMicPermissionDenied(false)
+
+      const status = (await window.electronAPI.invoke('audio:status')) as {
+        isRecording?: boolean
+        meetingId?: string | null
+      }
+      if (status.isRecording) {
+        const activeId = status.meetingId ?? meetingId
+        setCaptureMeetingId(activeId)
+        setSelectedId(activeId)
+        setMicPickerOpen(false)
+        return
+      }
+
+      setCaptureMeetingId(meetingId)
+      if (prefs?.skipMicPicker) {
+        try {
+          await recording.start(meetingId)
+          setMicPickerOpen(false)
+          setSelectedId(meetingId)
+        } catch (error) {
+          console.error('[capture]', error)
+          setMicPickerError(formatMicCaptureError(error))
+          setMicPermissionDenied(isMicPermissionError(error))
+          setMicPickerOpen(true)
+        }
+        return
+      }
+      setMicPickerOpen(true)
+    },
+    [prefs?.skipMicPicker, recording],
+  )
+
   const handleNewMeeting = useCallback(async () => {
     const meeting = await createMeeting()
-    setSelectedId(meeting.id)
-    setActiveMeeting(meeting)
-  }, [createMeeting])
+    await beginCapture(meeting.id)
+  }, [beginCapture, createMeeting])
+
+  const handleStartCapture = useCallback(
+    (meetingId: string) => {
+      void beginCapture(meetingId)
+    },
+    [beginCapture],
+  )
+
+  const handleMicPickerClose = useCallback(() => {
+    setMicPickerOpen(false)
+    setMicPickerError(null)
+    setMicPermissionDenied(false)
+    setCaptureMeetingId(null)
+  }, [])
+
+  const handleMicPickerStart = useCallback(
+    async (deviceId: string, label: string, skipNextTime: boolean) => {
+      const meetingId = captureMeetingIdRef.current
+      if (!meetingId) return
+
+      setMicPickerError(null)
+      setMicPermissionDenied(false)
+      await updatePrefs({
+        preferredMicrophoneId: deviceId,
+        preferredMicrophoneLabel: label,
+      })
+
+      try {
+        await recording.start(meetingId)
+        setMicPickerOpen(false)
+        setMicPickerError(null)
+        setSelectedId(meetingId)
+        if (skipNextTime) {
+          await updatePrefs({ skipMicPicker: true })
+        }
+      } catch (error) {
+        console.error('[mic capture]', error)
+        setMicPickerError(formatMicCaptureError(error))
+        setMicPermissionDenied(isMicPermissionError(error))
+      }
+    },
+    [recording, updatePrefs],
+  )
 
   const handleUpdate = useCallback(
     async (patch: { title?: string; userNotes?: string }) => {
@@ -110,6 +233,7 @@ function App() {
   return (
     <ErrorBoundary>
       <div className="app-shell">
+        <div className="app-titlebar-drag" aria-hidden="true" />
         <OfflineBanner />
         <Sidebar
           meetings={meetings}
@@ -123,6 +247,16 @@ function App() {
         />
 
         {settingsOpen ? <SettingsPanel onClose={() => setSettingsOpen(false)} /> : null}
+
+        <MicPickerModal
+          open={micPickerOpen}
+          error={micPickerError}
+          permissionDenied={micPermissionDenied}
+          onClose={handleMicPickerClose}
+          onStart={(deviceId, label, skipNextTime) =>
+            handleMicPickerStart(deviceId, label, skipNextTime)
+          }
+        />
 
         <main className="workspace">
           {!activeMeeting ? (
@@ -139,7 +273,7 @@ function App() {
                   className="btn btn-primary"
                   onClick={() => void handleNewMeeting()}
                 >
-                  Start a meeting note
+                  New meeting
                 </button>
               </div>
             </div>
@@ -147,6 +281,9 @@ function App() {
             <MeetingWorkspace
               meeting={activeMeeting}
               connected={connection.paired}
+              captureMeetingId={captureMeetingId}
+              recording={recording}
+              onStartCapture={handleStartCapture}
               onUpdate={(patch) => void handleUpdate(patch)}
               onDelete={() => void handleDelete()}
               onEnhance={() => void handleEnhance()}

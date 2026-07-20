@@ -28,12 +28,24 @@ const INVOKE_CHANNELS = [
   'onboarding:complete',
   'permissions:status',
   'permissions:request-microphone',
+  'permissions:open-microphone-settings',
   'permissions:open-system-audio-settings',
   'widget:show',
   'widget:hide',
   'widget:close',
   'widget:focus-main',
+  'widget:open-meeting',
   'widget:stop-recording',
+  'widget:pause-recording',
+  'widget:resume-recording',
+  'widget:expand',
+  'widget:collapse',
+  'widget:set-panel',
+  'widget:get-session',
+  'widget:update-notes',
+  'widget:rename-speaker',
+  'error:report',
+  'enhance:retry-pending',
 ] as const
 
 const SEND_CHANNELS = [] as const
@@ -44,9 +56,13 @@ const ON_CHANNELS = [
   'auth:connected',
   'meetings:changed',
   'meetings:enhanced',
+  'meetings:needs-connect',
   'audio:prefs-changed',
   'widget:state',
+  'widget:navigate-meeting',
   'audio:stopped',
+  'audio:session-paused',
+  'audio:session-resumed',
 ] as const
 
 type InvokeChannel = (typeof INVOKE_CHANNELS)[number]

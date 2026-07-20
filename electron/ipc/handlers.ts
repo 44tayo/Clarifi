@@ -17,6 +17,7 @@ import {
 } from '../audioPreferences'
 import {
   fetchDeviceProfileCached,
+  getConnectPageUrl,
   getDashboardUrl,
   getPrivacyUrl,
   getSignInUrl,
@@ -32,7 +33,14 @@ import {
   updateMeeting,
   type StoredMeeting,
 } from '../meetingStore'
+import {
+  clearEnhanceRetry,
+  flushEnhanceRetryQueue,
+  queueEnhanceRetry,
+  registerEnhanceRunner,
+} from '../enhanceQueue'
 import { enhanceMeetingNotes } from '../noteEnhance'
+import { isProxyConfigured } from '../proxyClient'
 import {
   loadOnboardingState,
   markOnboardingComplete,
@@ -40,15 +48,23 @@ import {
 } from '../onboardingState'
 import {
   getPermissionStatus,
+  openMicrophoneSettings,
   openSystemAudioSettings,
   requestMicrophoneAccess,
 } from '../permissions'
 import {
+  broadcastTranscriptToWidget,
   closeWidget,
   createOrShowWidget,
   hideWidget,
+  setActiveMeetingForWidget,
   setRecordingStartedAt,
+  setWidgetActivity,
+  setWidgetMode,
+  setWidgetPanel,
+  setWidgetPaused,
 } from '../recordingWidget'
+import type { WidgetPanel } from '../widgetBounds'
 import { isAllowedExternalUrl } from '../urlSafety'
 import {
   clearSystemCaptureActive,
@@ -71,6 +87,7 @@ let handlersRegistered = false
 let sessionTranscriptEntries: TranscriptEntry[] = []
 let onSystemAudioData: ((wavBuffer: Buffer) => void) | null = null
 let activeMeetingId: string | null = null
+let resolveMainWindow: (() => BrowserWindow | null) | undefined
 
 function broadcastMeetingsChanged(): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -96,14 +113,16 @@ function getSessionTranscriptEntries(): TranscriptEntry[] {
 }
 
 function broadcastTranscript(): void {
+  const payload = {
+    recent: sessionTranscriptEntries.slice(-12),
+    full: sessionTranscriptEntries,
+  }
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {
-      win.webContents.send('transcript:update', {
-        recent: sessionTranscriptEntries.slice(-12),
-        full: sessionTranscriptEntries,
-      })
+      win.webContents.send('transcript:update', payload)
     }
   }
+  broadcastTranscriptToWidget(payload)
 }
 
 function pushTranscriptEntry(entry: TranscriptEntry): void {
@@ -119,11 +138,92 @@ function pruneTranscriptEntries(entryIds: string[]): void {
 }
 
 function broadcastTranscriptionActivity(state: TranscriptionActivityState): void {
+  setWidgetActivity(state)
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {
       win.webContents.send('transcription:activity', { state })
     }
   }
+}
+
+function broadcastToAllWindows(channel: string): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send(channel)
+    }
+  }
+}
+
+async function abortCaptureSession(): Promise<void> {
+  stopSystemAudio()
+  clearSystemCaptureActive()
+  stopRecording()
+  onSystemAudioData = null
+  setRecordingStartedAt(null)
+  setWidgetPaused(false)
+  closeWidget()
+  clearTranscriptionQueue()
+  sessionTranscriptEntries = []
+
+  const main = getMainWindow(resolveMainWindow)
+  if (main) {
+    main.show()
+    main.focus()
+  }
+
+  if (activeMeetingId) {
+    updateMeeting(activeMeetingId, {
+      status: 'draft',
+      startedAt: undefined,
+      transcript: [],
+    })
+    broadcastMeetingsChanged()
+    activeMeetingId = null
+  }
+}
+
+function pauseCaptureSession(): void {
+  pauseRecording()
+  stopSystemAudio()
+  clearSystemCaptureActive()
+  setWidgetPaused(true)
+}
+
+function resumeCaptureSession(): void {
+  resumeRecording()
+  if (process.platform === 'darwin' && onSystemAudioData) {
+    if (startSystemAudio(onSystemAudioData)) {
+      markSystemCaptureActive()
+    }
+  }
+  setWidgetPaused(false)
+  createOrShowWidget()
+}
+
+async function finishRecordingSession(): Promise<StoredMeeting | null> {
+  stopSystemAudio()
+  clearSystemCaptureActive()
+  stopRecording()
+  onSystemAudioData = null
+  setRecordingStartedAt(null)
+  setWidgetPaused(false)
+  closeWidget()
+
+  const main = getMainWindow(resolveMainWindow)
+  if (main) {
+    main.show()
+    main.focus()
+  }
+
+  await flushTranscriptionQueue()
+  clearTranscriptionQueue()
+  const meeting = await finalizeActiveMeeting()
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send('audio:stopped')
+    }
+  }
+  return meeting
 }
 
 function enqueueAudioChunk(
@@ -132,6 +232,16 @@ function enqueueAudioChunk(
   rms?: number,
 ): void {
   enqueueTranscription(base64, source, rms)
+}
+
+async function runMeetingEnhance(meetingId: string): Promise<StoredMeeting | null> {
+  const enhanced = await enhanceMeetingNotes(meetingId)
+  if (enhanced?.status === 'ready') {
+    clearEnhanceRetry(meetingId)
+  } else if (enhanced?.status === 'error' && enhanced.enhanceError === 'network_error') {
+    queueEnhanceRetry(meetingId)
+  }
+  return enhanced
 }
 
 async function finalizeActiveMeeting(): Promise<StoredMeeting | null> {
@@ -148,7 +258,22 @@ async function finalizeActiveMeeting(): Promise<StoredMeeting | null> {
 
   if (!meeting) return null
 
-  void enhanceMeetingNotes(meetingId).then((enhanced) => {
+  const configured = await isProxyConfigured()
+  if (!configured) {
+    const waiting = updateMeeting(meetingId, {
+      status: 'error',
+      enhanceError: 'Connect your account to generate your AI summary.',
+    })
+    broadcastMeetingsChanged()
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) {
+        win.webContents.send('meetings:needs-connect', { id: meetingId })
+      }
+    }
+    return waiting
+  }
+
+  void runMeetingEnhance(meetingId).then((enhanced) => {
     broadcastMeetingsChanged()
     if (enhanced) {
       for (const win of BrowserWindow.getAllWindows()) {
@@ -165,13 +290,16 @@ async function finalizeActiveMeeting(): Promise<StoredMeeting | null> {
 export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
   if (handlersRegistered) return
   handlersRegistered = true
+  resolveMainWindow = getWindow
+  registerEnhanceRunner(runMeetingEnhance)
 
   ipcMain.handle('ping', () => 'pong')
 
-  ipcMain.handle('auth:connection-status', async () => {
+  ipcMain.handle('auth:connection-status', async (_event, options?: { force?: boolean }) => {
     const pairedLocally = await hasLocalDeviceCredentials()
     if (!pairedLocally) return { paired: false }
-    const profile = await fetchDeviceProfileCached()
+    const force = options?.force === true
+    const profile = await fetchDeviceProfileCached(force)
     return {
       paired: profile.paired,
       email: profile.email,
@@ -181,7 +309,7 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
   })
 
   ipcMain.handle('auth:open-connect', async () => {
-    const url = getSignInUrl()
+    const url = getConnectPageUrl()
     if (isAllowedExternalUrl(url)) {
       await shell.openExternal(url)
     } else {
@@ -240,11 +368,19 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
 
   ipcMain.handle(
     'meetings:update',
-    (_event, payload: { id?: string; title?: string; userNotes?: string }) => {
+    (_event, payload: {
+      id?: string
+      title?: string
+      userNotes?: string
+      speakerLabels?: Record<string, string>
+    }) => {
       if (!payload?.id) return null
       const patch: Partial<StoredMeeting> = {}
       if (typeof payload.title === 'string') patch.title = payload.title
       if (typeof payload.userNotes === 'string') patch.userNotes = payload.userNotes
+      if (payload.speakerLabels && typeof payload.speakerLabels === 'object') {
+        patch.speakerLabels = payload.speakerLabels
+      }
       const updated = updateMeeting(payload.id, patch)
       if (updated) broadcastMeetingsChanged()
       return updated
@@ -260,9 +396,21 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
 
   ipcMain.handle('meetings:enhance', async (_event, id: unknown) => {
     if (typeof id !== 'string') return null
-    const result = await enhanceMeetingNotes(id)
+    const result = await runMeetingEnhance(id)
     broadcastMeetingsChanged()
     return result
+  })
+
+  ipcMain.handle('error:report', (_event, payload?: { message?: string; stack?: string }) => {
+    const message = payload?.message ?? 'renderer_error'
+    console.error('Renderer error report:', message, payload?.stack)
+    return { ok: true }
+  })
+
+  ipcMain.handle('enhance:retry-pending', async () => {
+    await flushEnhanceRetryQueue(runMeetingEnhance)
+    broadcastMeetingsChanged()
+    return { ok: true }
   })
 
   ipcMain.handle('audio:session-transcript', () => sessionTranscriptEntries)
@@ -312,40 +460,36 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
       }
 
       setRecordingStartedAt(Date.now())
+      setActiveMeetingForWidget(activeMeetingId)
+      setWidgetMode('compact')
+      setWidgetPaused(false)
       createOrShowWidget()
+
+      const mainWin = getMainWindow(getWindow)
+      if (mainWin) {
+        mainWin.hide()
+      }
 
       return { status: 'started', meetingId: activeMeetingId }
     },
   )
 
   ipcMain.handle('audio:pause', () => {
-    pauseRecording()
-    stopSystemAudio()
-    clearSystemCaptureActive()
+    pauseCaptureSession()
     return { status: 'paused', isPaused: getIsPaused() }
   })
 
   ipcMain.handle('audio:resume', () => {
-    resumeRecording()
-    if (process.platform === 'darwin' && onSystemAudioData) {
-      if (startSystemAudio(onSystemAudioData)) {
-        markSystemCaptureActive()
-      }
-    }
-    createOrShowWidget()
+    resumeCaptureSession()
     return { status: 'resumed', isPaused: getIsPaused() }
   })
 
-  ipcMain.handle('audio:stop', async () => {
-    stopSystemAudio()
-    clearSystemCaptureActive()
-    stopRecording()
-    onSystemAudioData = null
-    setRecordingStartedAt(null)
-    hideWidget()
-    await flushTranscriptionQueue()
-    clearTranscriptionQueue()
-    await finalizeActiveMeeting()
+  ipcMain.handle('audio:stop', async (_event, payload?: { abort?: boolean }) => {
+    if (payload?.abort) {
+      await abortCaptureSession()
+      return { status: 'aborted' }
+    }
+    await finishRecordingSession()
     return { status: 'stopped' }
   })
 
@@ -399,6 +543,14 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
       ...(payload?.systemAudioCapture === 'meeting' || payload?.systemAudioCapture === 'display'
         ? { systemAudioCapture: payload.systemAudioCapture }
         : {}),
+      ...(payload?.transcriptionMode === 'auto' ||
+      payload?.transcriptionMode === 'dual' ||
+      payload?.transcriptionMode === 'group'
+        ? { transcriptionMode: payload.transcriptionMode }
+        : {}),
+      ...(typeof payload?.skipMicPicker === 'boolean'
+        ? { skipMicPicker: payload.skipMicPicker }
+        : {}),
     }
     saveAudioPreferences(next)
     return next
@@ -428,6 +580,8 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
 
   ipcMain.handle('permissions:request-microphone', () => requestMicrophoneAccess())
 
+  ipcMain.handle('permissions:open-microphone-settings', () => openMicrophoneSettings())
+
   ipcMain.handle('permissions:open-system-audio-settings', () => openSystemAudioSettings())
 
   ipcMain.handle('widget:show', () => {
@@ -455,21 +609,91 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
     return { ok: true }
   })
 
-  ipcMain.handle('widget:stop-recording', async () => {
-    stopSystemAudio()
-    clearSystemCaptureActive()
-    stopRecording()
-    onSystemAudioData = null
-    setRecordingStartedAt(null)
-    hideWidget()
-    await flushTranscriptionQueue()
-    clearTranscriptionQueue()
-    await finalizeActiveMeeting()
-    for (const win of BrowserWindow.getAllWindows()) {
-      if (!win.isDestroyed()) {
-        win.webContents.send('audio:stopped')
+  ipcMain.handle('widget:open-meeting', () => {
+    const win = getMainWindow(getWindow)
+    if (win) {
+      if (win.isMinimized()) win.restore()
+      win.show()
+      win.focus()
+      if (activeMeetingId) {
+        win.webContents.send('widget:navigate-meeting', { meetingId: activeMeetingId })
       }
     }
+    setWidgetMode('compact')
+    return { ok: true, meetingId: activeMeetingId }
+  })
+
+  ipcMain.handle('widget:expand', () => {
+    setWidgetMode('expanded')
+    return { ok: true }
+  })
+
+  ipcMain.handle('widget:collapse', () => {
+    setWidgetMode('compact')
+    return { ok: true }
+  })
+
+  ipcMain.handle('widget:set-panel', (_event, payload?: { panel?: string }) => {
+    const panel: WidgetPanel = payload?.panel === 'transcript' ? 'transcript' : 'notepad'
+    setWidgetPanel(panel)
+    return { ok: true, panel }
+  })
+
+  ipcMain.handle('widget:get-session', () => {
+    if (!activeMeetingId) {
+      return {
+        title: 'Meeting note',
+        userNotes: '',
+        transcript: sessionTranscriptEntries,
+        speakerLabels: {},
+      }
+    }
+    const meeting = getMeeting(activeMeetingId)
+    return {
+      title: meeting?.title ?? 'Meeting note',
+      userNotes: meeting?.userNotes ?? '',
+      transcript: sessionTranscriptEntries,
+      speakerLabels: meeting?.speakerLabels ?? {},
+    }
+  })
+
+  ipcMain.handle('widget:update-notes', (_event, payload?: { userNotes?: string }) => {
+    if (!activeMeetingId || typeof payload?.userNotes !== 'string') return { ok: false }
+    updateMeeting(activeMeetingId, { userNotes: payload.userNotes })
+    broadcastMeetingsChanged()
+    return { ok: true }
+  })
+
+  ipcMain.handle(
+    'widget:rename-speaker',
+    (_event, payload?: { speaker?: string; name?: string }) => {
+      if (!activeMeetingId || !payload?.speaker || !payload?.name) return { ok: false }
+      const meeting = getMeeting(activeMeetingId)
+      if (!meeting) return { ok: false }
+      const speakerLabels = {
+        ...(meeting.speakerLabels ?? {}),
+        [payload.speaker]: payload.name.trim(),
+      }
+      updateMeeting(activeMeetingId, { speakerLabels })
+      broadcastMeetingsChanged()
+      return { ok: true, speakerLabels }
+    },
+  )
+
+  ipcMain.handle('widget:stop-recording', async () => {
+    await finishRecordingSession()
     return { status: 'stopped' }
+  })
+
+  ipcMain.handle('widget:pause-recording', () => {
+    pauseCaptureSession()
+    broadcastToAllWindows('audio:session-paused')
+    return { status: 'paused', isPaused: getIsPaused() }
+  })
+
+  ipcMain.handle('widget:resume-recording', () => {
+    resumeCaptureSession()
+    broadcastToAllWindows('audio:session-resumed')
+    return { status: 'resumed', isPaused: getIsPaused() }
   })
 }
