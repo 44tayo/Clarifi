@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { MoveRight } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { KineticTextReveal } from '@/components/ui/kinetic-text-reveal'
 import { cn } from '@/lib/utils'
 
 export type AnimatedHeroProps = {
@@ -93,27 +94,64 @@ export function AnimatedHero({
             <h1
               className={cn(
                 'max-w-3xl text-center tracking-tight text-[var(--cl-navy,#1a1a2e)]',
-                clarifiLayout ? 'marketing-hero-title' : 'text-4xl font-semibold md:text-6xl md:leading-[1.08]',
+                clarifiLayout
+                  ? 'marketing-hero-title'
+                  : 'text-4xl font-semibold md:text-6xl md:leading-[1.08]',
               )}
             >
               {clarifiLayout ? (
                 <>
-                  <span className="block">{title}</span>
+                  <span className="block">
+                    <KineticTextReveal
+                      text={title!}
+                      className="justify-center"
+                      splitBy="words"
+                      direction="up"
+                      distance={28}
+                      stagger={0.08}
+                    />
+                  </span>
                   <span className="mt-1 inline-flex flex-wrap items-baseline justify-center gap-x-[0.25em] whitespace-nowrap leading-[1.15] md:mt-2">
-                    <span className="text-[var(--cl-navy,#1a1a2e)]">{accentPrefix}</span>
+                    <KineticTextReveal
+                      text={accentPrefix!}
+                      className="text-[var(--cl-navy,#1a1a2e)]"
+                      splitBy="words"
+                      direction="up"
+                      distance={20}
+                      stagger={0.06}
+                      delay={0.18}
+                    />
                     {rotatingWords}
                   </span>
                 </>
               ) : (
                 <>
-                  <span className="block">{lead}</span>
+                  <span className="block">
+                    {lead ? (
+                      <KineticTextReveal
+                        text={lead}
+                        className="justify-center"
+                        splitBy="words"
+                        direction="up"
+                      />
+                    ) : null}
+                  </span>
                   <span className="relative mt-1 flex md:mt-2">{rotatingWords}</span>
                 </>
               )}
             </h1>
 
             <p className="mx-auto max-w-2xl text-center text-base leading-relaxed tracking-tight text-muted-foreground md:text-lg">
-              {description}
+              <KineticTextReveal
+                text={description}
+                className="justify-center"
+                splitBy="words"
+                direction="up"
+                distance={16}
+                stagger={0.02}
+                delay={0.35}
+                blur={false}
+              />
             </p>
           </div>
 
