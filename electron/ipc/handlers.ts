@@ -16,8 +16,13 @@ import {
   type AudioPreferences,
 } from '../audioPreferences'
 import {
+  fetchCalendarEvents,
+  fetchCalendarStatus,
+} from '../calendarClient'
+import {
   fetchDeviceProfileCached,
   getConnectPageUrl,
+  getCalendarConnectUrl,
   getDashboardUrl,
   getPrivacyUrl,
   getSignInUrl,
@@ -353,6 +358,21 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
     return { url }
   })
 
+  ipcMain.handle('calendar:status', async () => fetchCalendarStatus())
+
+  ipcMain.handle('calendar:events', async () => fetchCalendarEvents())
+
+  ipcMain.handle('calendar:open-connect', async (_event, provider?: unknown) => {
+    const selected = provider === 'microsoft' ? 'microsoft' : 'google'
+    const url = getCalendarConnectUrl(selected)
+    if (isAllowedExternalUrl(url)) {
+      await shell.openExternal(url)
+    } else {
+      console.warn('Blocked calendar:open-connect to disallowed scheme:', url)
+    }
+    return { url, provider: selected }
+  })
+
   ipcMain.handle('meetings:list', () => listMeetings())
 
   ipcMain.handle('meetings:get', (_event, id: unknown) => {
@@ -360,8 +380,15 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
     return getMeeting(id)
   })
 
-  ipcMain.handle('meetings:create', (_event, payload?: { title?: string }) => {
-    const meeting = createMeeting(payload?.title)
+  ipcMain.handle('meetings:create', (_event, payload?: {
+    title?: string
+    calendarEventId?: string
+    calendarProvider?: 'google' | 'microsoft'
+    scheduledStart?: number
+    attendeeEmails?: string[]
+    speakerLabels?: Record<string, string>
+  }) => {
+    const meeting = createMeeting(payload)
     broadcastMeetingsChanged()
     return meeting
   })

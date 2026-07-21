@@ -74,6 +74,7 @@ export async function fetchDeviceProfileCached(force = false): Promise<DevicePro
 export {
   exchangeAuthToken,
   getBillingUrl,
+  getCalendarConnectUrl,
   getConnectPageUrl,
   getDashboardUrl,
   getPrivacyUrl,

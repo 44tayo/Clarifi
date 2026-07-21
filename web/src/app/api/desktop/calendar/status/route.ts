@@ -1,0 +1,12 @@
+import { getUserIdFromDeviceRequest } from '@/lib/device-auth'
+import { getCalendarStatus } from '@/lib/calendar/sync'
+
+export async function GET(req: Request) {
+  const userId = await getUserIdFromDeviceRequest(req)
+  if (!userId) {
+    return Response.json({ error: 'unauthorized' }, { status: 401 })
+  }
+
+  const status = await getCalendarStatus(userId)
+  return Response.json(status)
+}

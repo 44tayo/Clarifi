@@ -63,6 +63,12 @@ export function getPrivacyUrl(): string {
   return `${base.replace(/\/$/, '')}/privacy`
 }
 
+export function getCalendarConnectUrl(provider: 'google' | 'microsoft'): string {
+  const base = getClarifiApiUrl()
+  const origin = base ? base.replace(/\/$/, '') : 'http://localhost:3000'
+  return `${origin}/desktop/calendar/connect?provider=${provider}`
+}
+
 function parseAuthToken(url: string): string | null {
   try {
     const parsed = new URL(url)

@@ -1,4 +1,6 @@
 import { FREE_HISTORY_RETENTION_DAYS } from '../../shared/entitlements'
+import type { CalendarEvent } from '../../shared/calendar'
+import { CalendarEventRow } from './CalendarEventRow'
 import { MeetingRow } from './MeetingRow'
 import type { ConnectionStatus, Meeting } from '../types/meeting'
 
@@ -6,10 +8,15 @@ const FREE_HISTORY_RETENTION_MS = FREE_HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1
 
 type SidebarProps = {
   meetings: Meeting[]
+  calendarEvents: CalendarEvent[]
+  calendarConnected: boolean
+  calendarLoading: boolean
   selectedId: string | null
   connection: ConnectionStatus
   onSelect: (id: string) => void
   onNewMeeting: () => void
+  onStartCalendarEvent: (event: CalendarEvent) => void
+  onConnectCalendar: (provider: 'google' | 'microsoft') => void
   onConnect: () => void
   onOpenDashboard: () => void
   onOpenSettings: () => void
@@ -23,14 +30,21 @@ function isMeetingLocked(meeting: Meeting, plan?: string): boolean {
 
 export function Sidebar({
   meetings,
+  calendarEvents,
+  calendarConnected,
+  calendarLoading,
   selectedId,
   connection,
   onSelect,
   onNewMeeting,
+  onStartCalendarEvent,
+  onConnectCalendar,
   onConnect,
   onOpenDashboard,
   onOpenSettings,
 }: SidebarProps) {
+  const activeCalendarEventId = meetings.find((m) => m.id === selectedId)?.calendarEventId
+
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
@@ -41,8 +55,44 @@ export function Sidebar({
           <span className="sidebar-brand-name">Clarifi</span>
         </div>
         <button type="button" className="sidebar-new-btn" onClick={onNewMeeting}>
-          New meeting note
+          New meeting
         </button>
+      </div>
+
+      <div className="sidebar-section-label">Coming up</div>
+      <div className="sidebar-calendar-list">
+        {!connection.paired ? (
+          <p className="sidebar-calendar-empty">Sign in to sync your calendar</p>
+        ) : calendarLoading ? (
+          <p className="sidebar-calendar-empty">Loading calendar…</p>
+        ) : !calendarConnected ? (
+          <div className="sidebar-calendar-connect">
+            <p className="sidebar-calendar-empty">Connect Google or Outlook to see upcoming meetings.</p>
+            <div className="sidebar-calendar-connect-actions">
+              <button type="button" className="link-btn" onClick={() => onConnectCalendar('google')}>
+                Google Calendar
+              </button>
+              <button
+                type="button"
+                className="link-btn"
+                onClick={() => onConnectCalendar('microsoft')}
+              >
+                Outlook
+              </button>
+            </div>
+          </div>
+        ) : calendarEvents.length === 0 ? (
+          <p className="sidebar-calendar-empty">No upcoming meetings in the next 10 days</p>
+        ) : (
+          calendarEvents.slice(0, 8).map((event) => (
+            <CalendarEventRow
+              key={`${event.provider}:${event.id}`}
+              event={event}
+              active={activeCalendarEventId === event.id}
+              onStart={onStartCalendarEvent}
+            />
+          ))
+        )}
       </div>
 
       <div className="sidebar-section-label">Recent</div>

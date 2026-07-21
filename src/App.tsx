@@ -10,9 +10,11 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { Sidebar } from './components/Sidebar'
 import { useAudioPreferences } from './hooks/useAudioPreferences'
 import { useAuth } from './hooks/useAuth'
+import { speakerHintsFromEvent, useCalendar } from './hooks/useCalendar'
 import { useMeetings } from './hooks/useMeetings'
 import { useRecording } from './hooks/useRecording'
 import { formatMicCaptureError, isMicPermissionError } from './lib/microphones'
+import type { CalendarEvent } from '../shared/calendar'
 import type { Meeting } from './types/meeting'
 
 const FREE_HISTORY_RETENTION_MS = FREE_HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000
@@ -26,6 +28,13 @@ function isMeetingLocked(meeting: Meeting, plan?: string): boolean {
 function App() {
   const { connection, openConnect, openSignIn, openDashboard } = useAuth()
   const { prefs, update: updatePrefs } = useAudioPreferences()
+  const {
+    status: calendarStatus,
+    events: calendarEvents,
+    loading: calendarLoading,
+    openConnect: openCalendarConnect,
+    refresh: refreshCalendar,
+  } = useCalendar(connection.paired)
   const { meetings, createMeeting, updateMeeting, deleteMeeting, enhanceMeeting, getMeeting } =
     useMeetings()
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -137,6 +146,40 @@ function App() {
     await beginCapture(meeting.id)
   }, [beginCapture, createMeeting])
 
+  const handleStartCalendarEvent = useCallback(
+    async (event: CalendarEvent) => {
+      const existing = meetings.find(
+        (meeting) =>
+          meeting.calendarEventId === event.id && meeting.calendarProvider === event.provider,
+      )
+
+      if (existing) {
+        setSelectedId(existing.id)
+        setActiveMeeting(existing)
+        await beginCapture(existing.id)
+        return
+      }
+
+      const meeting = await createMeeting({
+        title: event.title,
+        calendarEventId: event.id,
+        calendarProvider: event.provider,
+        scheduledStart: new Date(event.startAt).getTime(),
+        attendeeEmails: event.attendees.map((person) => person.email),
+        speakerLabels: speakerHintsFromEvent(event),
+      })
+      setSelectedId(meeting.id)
+      setActiveMeeting(meeting)
+      await beginCapture(meeting.id)
+    },
+    [beginCapture, createMeeting, meetings],
+  )
+
+  useEffect(() => {
+    if (!settingsOpen || !connection.paired) return
+    void refreshCalendar()
+  }, [settingsOpen, connection.paired, refreshCalendar])
+
   const handleStartCapture = useCallback(
     (meetingId: string) => {
       void beginCapture(meetingId)
@@ -237,16 +280,23 @@ function App() {
         <OfflineBanner />
         <Sidebar
           meetings={meetings}
+          calendarEvents={calendarEvents}
+          calendarConnected={calendarStatus.connected}
+          calendarLoading={calendarLoading}
           selectedId={selectedId}
           connection={connection}
           onSelect={(id) => void handleSelect(id)}
           onNewMeeting={() => void handleNewMeeting()}
+          onStartCalendarEvent={(event) => void handleStartCalendarEvent(event)}
+          onConnectCalendar={(provider) => void openCalendarConnect(provider)}
           onConnect={() => void openConnect()}
           onOpenDashboard={() => void openDashboard()}
           onOpenSettings={() => setSettingsOpen(true)}
         />
 
-        {settingsOpen ? <SettingsPanel onClose={() => setSettingsOpen(false)} /> : null}
+        {settingsOpen ? (
+          <SettingsPanel onClose={() => setSettingsOpen(false)} calendarEnabled={connection.paired} />
+        ) : null}
 
         <MicPickerModal
           open={micPickerOpen}
