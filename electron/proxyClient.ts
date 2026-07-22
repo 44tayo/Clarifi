@@ -43,23 +43,27 @@ async function proxyFetch(
     return { ok: false, status: 401, data: { error: 'not_authenticated' } }
   }
 
-  const response = await fetch(`${baseUrl}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...headers,
-    },
-    body: JSON.stringify(body),
-  })
-
-  let data: unknown = null
   try {
-    data = await response.json()
-  } catch {
-    data = null
-  }
+    const response = await fetch(`${baseUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...headers,
+      },
+      body: JSON.stringify(body),
+    })
 
-  return { ok: response.ok, status: response.status, data }
+    let data: unknown = null
+    try {
+      data = await response.json()
+    } catch {
+      data = null
+    }
+
+    return { ok: response.ok, status: response.status, data }
+  } catch {
+    return { ok: false, status: 0, data: { error: 'network_error' } }
+  }
 }
 
 export async function proxyMeetingChat(request: ChatRequest): Promise<ChatResult> {
@@ -69,6 +73,7 @@ export async function proxyMeetingChat(request: ChatRequest): Promise<ChatResult
     useScreenContext: request.useScreenContext ?? false,
   })
 
+  if (status === 0) return { error: 'network_error' }
   if (status === 401) return { error: 'auth_expired' }
   if (status === 403) return { error: 'plan_required' }
   if (status === 429) return { error: 'rate_limit' }
@@ -121,4 +126,22 @@ export async function proxyTranscribe(
 
   const result = data as { text?: string }
   return result.text?.trim() || null
+}
+
+export type DiarizedUtterance = {
+  speaker: string
+  text: string
+}
+
+export async function proxyDiarize(audioBase64: string): Promise<DiarizedUtterance[]> {
+  const { ok, status, data } = await proxyFetch('/api/llm/diarize', {
+    audioBase64,
+    format: 'wav',
+    language: 'auto',
+  })
+
+  if (status === 401 || status === 403 || status === 429 || !ok) return []
+
+  const result = data as { utterances?: DiarizedUtterance[] }
+  return Array.isArray(result.utterances) ? result.utterances : []
 }

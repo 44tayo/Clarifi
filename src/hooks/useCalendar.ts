@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { CalendarEvent, CalendarStatus } from '../../shared/calendar'
 
 const POLL_MS = 5 * 60 * 1000
+const POST_CONNECT_POLL_MS = 8 * 1000
+const POST_CONNECT_WINDOW_MS = 2 * 60 * 1000
 
 const EMPTY_STATUS: CalendarStatus = {
   connected: false,
@@ -14,6 +16,7 @@ export function useCalendar(enabled: boolean) {
   const [status, setStatus] = useState<CalendarStatus>(EMPTY_STATUS)
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [loading, setLoading] = useState(true)
+  const watchUntilRef = useRef(0)
 
   const refresh = useCallback(async () => {
     if (!enabled) {
@@ -33,6 +36,9 @@ export function useCalendar(enabled: boolean) {
       ])
       setStatus(nextStatus ?? EMPTY_STATUS)
       setEvents(Array.isArray(nextEvents?.events) ? nextEvents.events : [])
+      if (nextStatus?.connected) {
+        watchUntilRef.current = 0
+      }
     } catch {
       setStatus(EMPTY_STATUS)
       setEvents([])
@@ -49,12 +55,42 @@ export function useCalendar(enabled: boolean) {
       void refresh()
     }, POLL_MS)
 
+    const onFocus = () => {
+      void refresh()
+    }
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refresh()
+    }
+
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisible)
+
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [enabled, refresh])
+
+  useEffect(() => {
+    if (!enabled) return undefined
+
+    const timer = window.setInterval(() => {
+      if (Date.now() > watchUntilRef.current) return
+      void refresh()
+    }, POST_CONNECT_POLL_MS)
+
     return () => window.clearInterval(timer)
   }, [enabled, refresh])
 
-  const openConnect = useCallback(async (provider: 'google' | 'microsoft') => {
-    await window.electronAPI.invoke('calendar:open-connect', provider)
-  }, [])
+  const openConnect = useCallback(
+    async (provider: 'google' | 'microsoft') => {
+      watchUntilRef.current = Date.now() + POST_CONNECT_WINDOW_MS
+      await window.electronAPI.invoke('calendar:open-connect', provider)
+      void refresh()
+    },
+    [refresh],
+  )
 
   return {
     status,

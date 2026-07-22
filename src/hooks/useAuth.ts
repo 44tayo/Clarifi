@@ -6,22 +6,29 @@ export function useAuth() {
   const [connection, setConnection] = useState<ConnectionStatus>({ paired: false })
   const [loading, setLoading] = useState(true)
 
-  const refresh = useCallback(async () => {
-    const status = (await window.electronAPI.invoke('auth:connection-status')) as ConnectionStatus
+  const refresh = useCallback(async (force = false) => {
+    const status = (await window.electronAPI.invoke('auth:connection-status', { force })) as ConnectionStatus
     setConnection(status)
     setLoading(false)
   }, [])
 
   useEffect(() => {
     void refresh()
-    const off = window.electronAPI.on('auth:connected', () => {
-      void refresh()
+    const offConnected = window.electronAPI.on('auth:connected', () => {
+      void refresh(true)
     })
-    return off
+    const onFocus = () => {
+      void refresh(true)
+    }
+    window.addEventListener('focus', onFocus)
+    return () => {
+      offConnected()
+      window.removeEventListener('focus', onFocus)
+    }
   }, [refresh])
 
   const openConnect = useCallback(async () => {
-    await window.electronAPI.invoke('auth:open-sign-in', 'email')
+    await window.electronAPI.invoke('auth:open-connect')
   }, [])
 
   const openSignIn = useCallback(async (provider: 'google' | 'azure' | 'email') => {

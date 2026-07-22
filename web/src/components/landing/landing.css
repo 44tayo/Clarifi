@@ -524,10 +524,30 @@
 }
 
 .landing-hero-demo-wrap {
+  position: relative;
   width: auto;
   max-width: none;
   margin: 1.5rem 3.5cm 0;
   padding: 0;
+}
+
+/* Softens the seam where the demo panel's top edge meets the sky
+   background, so the panel reads as sitting in front of the photo
+   rather than colliding with the horizon line. */
+.landing-hero-demo-seam {
+  position: absolute;
+  top: -28px;
+  left: -4%;
+  right: -4%;
+  height: 72px;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to top,
+    rgba(12, 36, 64, 0.16) 0%,
+    rgba(12, 36, 64, 0) 100%
+  );
+  filter: blur(20px);
 }
 
 .landing-hero-scroll {
@@ -543,6 +563,8 @@
 }
 
 .landing-hero-demo-wrap .hero-sales-screen {
+  position: relative;
+  z-index: 1;
   max-width: none;
   width: 100%;
   height: calc(14cm * 13 / 10) !important;
@@ -552,7 +574,9 @@
   overflow: hidden;
   box-sizing: border-box;
   border-radius: 16px;
-  box-shadow: 0 8px 40px rgba(15, 23, 42, 0.12);
+  box-shadow:
+    0 24px 48px -12px rgba(0, 0, 0, 0.28),
+    0 8px 24px rgba(15, 23, 42, 0.1);
 }
 
 .landing-hero-demo-wrap .hero-desktop-stage {

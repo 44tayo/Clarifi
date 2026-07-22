@@ -32,7 +32,13 @@ async function getValidAccessToken(
   const refreshed = await refreshCalendarAccessToken(provider, connection.refresh_token)
   if (!refreshed) return null
 
-  await updateAccessToken(userId, provider, refreshed.accessToken, refreshed.expiresAt)
+  await updateAccessToken(
+    userId,
+    provider,
+    refreshed.accessToken,
+    refreshed.expiresAt,
+    refreshed.refreshToken,
+  )
 
   return {
     accessToken: refreshed.accessToken,

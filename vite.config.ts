@@ -5,6 +5,13 @@ import renderer from 'vite-plugin-electron-renderer'
 
 import { DEFAULT_PRODUCTION_API_URL } from './electron/app-config'
 
+/** Cursor sets ELECTRON_RUN_AS_NODE=1; child Electron must not inherit it or it SIGABRTs. */
+function electronChildEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env }
+  delete env.ELECTRON_RUN_AS_NODE
+  return env
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const clarifiApiUrl = env.CLARIFI_API_URL?.trim() || DEFAULT_PRODUCTION_API_URL
@@ -19,7 +26,7 @@ export default defineConfig(({ mode }) => {
         {
           entry: 'electron/main.ts',
           onstart(args) {
-            args.startup()
+            args.startup(['.', '--no-sandbox'], { env: electronChildEnv() })
           },
           vite: {
             define: electronDefine,

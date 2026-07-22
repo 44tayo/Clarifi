@@ -21,6 +21,10 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error('Renderer error boundary:', error, info.componentStack)
+    void window.electronAPI.invoke('error:report', {
+      message: error.message,
+      stack: info.componentStack ?? error.stack,
+    })
   }
 
   render() {

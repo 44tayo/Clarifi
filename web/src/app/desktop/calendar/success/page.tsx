@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 const PROVIDER_LABELS = {
@@ -8,7 +9,7 @@ const PROVIDER_LABELS = {
   microsoft: 'Microsoft Outlook',
 } as const
 
-export default function DesktopCalendarSuccessPage() {
+function DesktopCalendarSuccessContent() {
   const searchParams = useSearchParams()
   const providerParam = searchParams.get('provider')
   const provider =
@@ -34,5 +35,13 @@ export default function DesktopCalendarSuccessPage() {
         </Link>
       </div>
     </main>
+  )
+}
+
+export default function DesktopCalendarSuccessPage() {
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-[#f4f4f5]" />}>
+      <DesktopCalendarSuccessContent />
+    </Suspense>
   )
 }

@@ -124,8 +124,7 @@ export function InstallModal({ open, onClose, onDownloadAgain }: InstallModalPro
 
         {showTroubleshoot ? (
           <div className="landing-install-troubleshoot">
-            <strong>App won&apos;t open?</strong> Clarifi is not Apple-notarized yet — macOS may block it
-            until you approve it once.
+            <strong>App won&apos;t open?</strong> On first launch, macOS may ask you to approve Clarifi once.
             <ol>
               <li>
                 Drag Clarifi into <strong>Applications</strong> (do not run it from the DMG).
@@ -135,11 +134,11 @@ export function InstallModal({ open, onClose, onDownloadAgain }: InstallModalPro
                 time.
               </li>
               <li>
-                Hold <strong>Fn (Globe)</strong> or click the bottom pill to dictate into any text field.
+                Open Clarifi and sign in with Google, Microsoft, or email to pair your desktop app.
               </li>
               <li>
-                Signed builds open after right-click → Open. For unsigned test builds only, run in
-                Terminal: <code>xattr -cr /Applications/Clarifi.app</code> then try step 2 again.
+                For unsigned test builds only, run in Terminal:{' '}
+                <code>xattr -cr /Applications/Clarifi.app</code> then try step 2 again.
               </li>
             </ol>
           </div>

@@ -1,17 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 
-export type AudioPreferences = {
-  transcriptionLanguage: string
-  outputLanguage: string
-  dictationLanguage: string
-  dictationOutputLanguage: string
-  dictationEnabled: boolean
-  uiSoundsEnabled: boolean
-  preferredMicrophoneId: string
-  preferredMicrophoneLabel: string
-  systemAudioCapture: 'meeting' | 'display'
-  transcriptionMode: 'dual' | 'group'
-}
+import type {
+  AudioPreferences,
+  ThemePreference,
+  TranscriptionMode,
+} from '../../shared/audio-preferences'
+
+export type { AudioPreferences, ThemePreference, TranscriptionMode }
 
 type PrefsPatch = Partial<
   Pick<
@@ -23,6 +18,9 @@ type PrefsPatch = Partial<
     | 'preferredMicrophoneId'
     | 'preferredMicrophoneLabel'
     | 'systemAudioCapture'
+    | 'transcriptionMode'
+    | 'skipMicPicker'
+    | 'theme'
   >
 >
 

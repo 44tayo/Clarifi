@@ -50,6 +50,7 @@ export function HeroScrollSection() {
         />
 
         <div className="landing-hero-demo-wrap" id="demo">
+          <div className="landing-hero-demo-seam" aria-hidden="true" />
           <HeroSalesDemo />
         </div>
 

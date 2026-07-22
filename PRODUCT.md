@@ -37,8 +37,8 @@ A new user can: first launch → grant permissions → record a call → see a s
 
 ## First-run auth
 
-Onboarding Sign up / Login opens the website (Google / Microsoft / Apple / email) and pairs via `clarifi://` deep link — same account as clarifiapp.com.
+Onboarding Sign up / Login opens the website (Google / Microsoft / email) and pairs via `clarifi://` deep link — same account as clarifiapp.com.
 
 ## Explicit non-goals for v1
 
-Team workspaces, People directory, referral program, calendar auto-start, Ask AI across all meetings, template library, iOS app.
+Team workspaces, People directory, referral program, calendar auto-start (recording begins automatically), Ask AI across all meetings, template library, iOS app.

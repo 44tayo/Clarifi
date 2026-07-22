@@ -51,3 +51,27 @@ describe('app-config', () => {
     expect(DEFAULT_PRODUCTION_API_URL).toBe('https://www.clarifiapp.com')
   })
 })
+
+describe('public routes', () => {
+  it('allows desktop auth and trust pages without session', async () => {
+    const { isPublicPath } = await import('../web/src/lib/protected-routes')
+    expect(isPublicPath('/desktop/auth')).toBe(true)
+    expect(isPublicPath('/trust')).toBe(true)
+    expect(isPublicPath('/desktop/connect')).toBe(true)
+    expect(isPublicPath('/privacy')).toBe(true)
+  })
+})
+
+describe('enhance queue', () => {
+  it('queues and clears meeting retries', async () => {
+    const {
+      queueEnhanceRetry,
+      clearEnhanceRetry,
+      getPendingEnhanceIds,
+    } = await import('../electron/enhanceQueue')
+    queueEnhanceRetry('meeting-1')
+    expect(getPendingEnhanceIds()).toContain('meeting-1')
+    clearEnhanceRetry('meeting-1')
+    expect(getPendingEnhanceIds()).not.toContain('meeting-1')
+  })
+})

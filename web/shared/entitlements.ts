@@ -10,6 +10,8 @@ export type Feature =
   | 'screen_context'
   | 'transcript_export'
   | 'communities'
+  | 'share_meetings'
+  | 'folders'
 
 /** Core notetaking works on every plan, including free — Granola-style. */
 const FREE_FEATURES: Feature[] = ['ai_chat', 'ai_transcribe', 'voice_dictation']
@@ -23,7 +25,12 @@ const PRO_FEATURES: Feature[] = [
   'transcript_export',
 ]
 
-const PRO_PLUS_FEATURES: Feature[] = [...PRO_FEATURES, 'communities']
+const PRO_PLUS_FEATURES: Feature[] = [
+  ...PRO_FEATURES,
+  'communities',
+  'share_meetings',
+  'folders',
+]
 
 /** Free plan keeps unlimited meetings but only surfaces the most recent
  * window of note history — matches Granola's free-tier shape. Paid plans
@@ -50,7 +57,10 @@ export function hasFeature(plan: Plan, feature: Feature): boolean {
 }
 
 export function upgradePlanForFeature(feature: Feature): 'pro' | 'pro_plus' {
-  return feature === 'communities' ? 'pro_plus' : 'pro'
+  if (feature === 'communities' || feature === 'share_meetings' || feature === 'folders') {
+    return 'pro_plus'
+  }
+  return 'pro'
 }
 
 export function getHistoryRetentionDays(plan: Plan): number {

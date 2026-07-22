@@ -4,8 +4,19 @@ import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 
+const DEBUG_SESSION_LOG = path.join(
+  process.cwd(),
+  '.cursor',
+  'debug-977aa0.log',
+)
+
 function logPath(): string {
   return path.join(os.homedir(), 'Library', 'Logs', 'Clarifi', 'startup.log')
+}
+
+function writeLine(file: string, payload: Record<string, unknown>): void {
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.appendFileSync(file, `${JSON.stringify(payload)}\n`)
 }
 
 export function logStartup(
@@ -14,6 +25,8 @@ export function logStartup(
   data: Record<string, unknown> = {},
 ): void {
   const payload = {
+    sessionId: '977aa0',
+    runId: 'electron-startup',
     hypothesisId,
     location: 'electron/startupDiagnostics.ts',
     message,
@@ -22,17 +35,30 @@ export function logStartup(
       pid: process.pid,
       packaged: app.isPackaged,
       execPath: process.execPath,
+      electronRunAsNode: process.env.ELECTRON_RUN_AS_NODE ?? null,
     },
     timestamp: Date.now(),
   }
-  const line = `${JSON.stringify(payload)}\n`
   try {
-    const file = logPath()
-    fs.mkdirSync(path.dirname(file), { recursive: true })
-    fs.appendFileSync(file, line)
+    writeLine(logPath(), payload)
   } catch {
     /* ignore */
   }
+  try {
+    writeLine(DEBUG_SESSION_LOG, payload)
+  } catch {
+    /* ignore */
+  }
+  // #region agent log
+  fetch('http://127.0.0.1:7322/ingest/1a7943fc-ddb6-4af4-85aa-dbaa3426b428', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Debug-Session-Id': '977aa0',
+    },
+    body: JSON.stringify(payload),
+  }).catch(() => {})
+  // #endregion
 }
 
 export function stripMacQuarantine(): void {

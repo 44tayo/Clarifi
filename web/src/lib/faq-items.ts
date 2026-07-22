@@ -12,8 +12,8 @@ export const FAQ_ITEMS = [
     a: "Yes. Clarifi's free plan includes unlimited meetings with 30 days of note history. Upgrade to Pro or Pro+ for unlimited history, sharing, and team features.",
   },
   {
-    q: 'Is voice dictation included?',
-    a: 'Yes. Voice dictation is included on every plan, including free — hold Fn or use the dictation pill to speak into any app.',
+    q: 'How do I pair the desktop app?',
+    a: 'Download Clarifi for Mac, open the app, and sign in with Google, Microsoft, or email during onboarding. Your browser completes sign-in and pairs the desktop automatically — no extra codes.',
   },
   {
     q: 'Does Clarifi join my meeting as a bot?',

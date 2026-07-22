@@ -55,11 +55,6 @@ export const PRICING_FEATURES = [
     proPlus: 'Unlimited',
   },
   {
-    label: 'Voice dictation',
-    pro: true,
-    proPlus: true,
-  },
-  {
     label: 'Custom prompting',
     pro: 'Unlimited files and customization',
     proPlus: 'Unlimited files and customization',
@@ -111,8 +106,8 @@ export function getPricingPlans(interval: BillingInterval = 'monthly'): PricingP
       features: [
         'Unlimited meetings, recorded and transcribed',
         '30 days of note history',
-        'Voice dictation into any app',
         'AI-enhanced summaries and action items',
+        'Floating widget + scratchpad during calls',
       ],
     },
     {
@@ -129,7 +124,6 @@ export function getPricingPlans(interval: BillingInterval = 'monthly'): PricingP
         'Unlimited note history — never locked out of old meetings',
         'Unlimited AI responses',
         'Unlimited meeting notetaking',
-        'Voice dictation into any app',
         'Unlimited custom prompting',
         'Custom keybinds',
         'Priority support',

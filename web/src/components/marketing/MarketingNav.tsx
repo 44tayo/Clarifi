@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 type MarketingNavProps = {
-  active?: 'blog' | 'pricing'
+  active?: 'blog' | 'pricing' | 'privacy'
   showBack?: boolean
   variant?: 'default' | 'hero'
 }
@@ -24,6 +24,7 @@ export function MarketingNav({ active, showBack = false, variant = 'default' }: 
       { label: 'FAQ', href: '/#faq', active: false },
       { label: 'Blog', href: '/blog', active: active === 'blog' },
       { label: 'Pricing', href: '/pricing', active: active === 'pricing' },
+      { label: 'Privacy', href: '/privacy', active: active === 'privacy' },
     ],
     [active],
   )

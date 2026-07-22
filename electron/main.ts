@@ -1,10 +1,13 @@
 import * as path from 'path'
 
-import { app, BrowserWindow, crashReporter, shell } from 'electron'
+import { app, BrowserWindow, crashReporter, nativeTheme, shell } from 'electron'
 
-import { exchangeAuthToken } from './deviceAuth'
+import { exchangeAuthToken, invalidateDeviceProfileCache } from './deviceAuth'
+import { initErrorReporting } from './errorReporting'
 import { registerHandlers } from './ipc/handlers'
 import { loadRuntimeEnv } from './keys'
+import { loadAudioPreferences } from './audioPreferences'
+import { applyNativeTheme, THEME_WINDOW_BG } from './theme'
 import { queueAuthUrl, takePendingAuthUrl } from './protocolAuth'
 import { logStartup, stripMacQuarantine } from './startupDiagnostics'
 import { checkForSignedUpdates, configureUpdater } from './updater'
@@ -36,6 +39,7 @@ async function handleAuthDeepLink(url: string): Promise<void> {
   const result = await exchangeAuthToken(url)
   if (result.ok) {
     console.log('Desktop connected via web auth')
+    invalidateDeviceProfileCache()
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) {
         win.webContents.send('auth:connected')
@@ -72,13 +76,14 @@ if (process.platform === 'darwin') {
 }
 
 function createMainWindow(): BrowserWindow {
+  const resolved = applyNativeTheme(loadAudioPreferences().theme)
   const win = new BrowserWindow({
     width: 1120,
     height: 760,
     minWidth: 880,
     minHeight: 560,
     title: 'Clarifi',
-    backgroundColor: '#f7f8fc',
+    backgroundColor: THEME_WINDOW_BG[resolved],
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: process.platform === 'darwin' ? { x: 16, y: 18 } : undefined,
     webPreferences: {
@@ -108,6 +113,7 @@ function createMainWindow(): BrowserWindow {
 }
 
 const gotLock = app.requestSingleInstanceLock()
+logStartup('H3', 'single-instance-lock', { gotLock })
 if (!gotLock) {
   app.quit()
 } else {
@@ -125,9 +131,14 @@ if (!gotLock) {
   registerProtocolClient()
 
   app.whenReady().then(async () => {
+    logStartup('H4', 'app-ready')
     loadRuntimeEnv()
+    await initErrorReporting()
+    logStartup('H4', 'error-reporting-ready')
     registerHandlers(() => mainWindow)
+    logStartup('H5', 'handlers-registered')
     mainWindow = createMainWindow()
+    logStartup('H5', 'main-window-created')
 
     const pending = takePendingAuthUrl()
     if (pending) {
@@ -140,6 +151,12 @@ if (!gotLock) {
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
         mainWindow = createMainWindow()
+      }
+    })
+
+    nativeTheme.on('updated', () => {
+      if (loadAudioPreferences().theme === 'system') {
+        applyNativeTheme('system')
       }
     })
   })

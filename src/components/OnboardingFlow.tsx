@@ -215,7 +215,7 @@ export function OnboardingFlow({ paired, onSignIn, onComplete }: OnboardingFlowP
               className="link-btn onboarding-skip"
               onClick={() => setStep('permissions')}
             >
-              Skip for now — local notes only
+              Skip for now — record locally (connect later for AI summary)
             </button>
           </>
         ) : null}

@@ -7,6 +7,8 @@ import {
   WIDGET_EXPANDED_MIN,
   WIDGET_SIZES,
 } from './widgetBounds'
+import { loadAudioPreferences } from './audioPreferences'
+import { resolveAppTheme } from './theme'
 
 const isDev = !app.isPackaged
 
@@ -21,7 +23,7 @@ let isPaused = false
 let lastExpandedSize = { ...WIDGET_SIZES.expanded }
 
 function currentTheme(): 'light' | 'dark' {
-  return nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
+  return resolveAppTheme(loadAudioPreferences().theme)
 }
 
 function backgroundColorFor(mode: WidgetMode): string {

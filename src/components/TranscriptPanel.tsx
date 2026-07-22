@@ -1,12 +1,18 @@
 import type { TranscriptEntry } from '../types/meeting'
+import { speakerColor } from '../lib/speakerColors'
 
 type TranscriptPanelProps = {
   entries: TranscriptEntry[]
   activity: string
   live: boolean
+  speakerLabels?: Record<string, string>
 }
 
-export function TranscriptPanel({ entries, activity, live }: TranscriptPanelProps) {
+function displaySpeaker(speaker: string, labels?: Record<string, string>): string {
+  return labels?.[speaker]?.trim() || speaker
+}
+
+export function TranscriptPanel({ entries, activity, live, speakerLabels }: TranscriptPanelProps) {
   return (
     <section className="transcript-pane">
       <div className="pane-header">
@@ -22,7 +28,11 @@ export function TranscriptPanel({ entries, activity, live }: TranscriptPanelProp
         ) : (
           entries.map((entry) => (
             <p key={entry.id} className="transcript-line">
-              <strong>{entry.speaker}</strong> {entry.text}
+              <span
+                className="transcript-speaker-dot"
+                style={{ background: speakerColor(entry.speaker) }}
+              />
+              <strong>{displaySpeaker(entry.speaker, speakerLabels)}</strong> {entry.text}
             </p>
           ))
         )}

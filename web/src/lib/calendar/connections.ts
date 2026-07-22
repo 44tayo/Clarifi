@@ -54,12 +54,20 @@ export async function upsertCalendarConnection(
   const supabase = getSupabaseAdmin()
   if (!supabase) return false
 
+  // Preserve an existing refresh token if the provider omitted a new one.
+  let refreshToken = tokens.refreshToken
+  if (!refreshToken) {
+    const existing = await getCalendarConnection(userId, provider)
+    refreshToken = existing?.refresh_token ?? ''
+  }
+  if (!refreshToken) return false
+
   const { error } = await supabase.from('calendar_connections').upsert(
     {
       user_id: userId,
       provider,
       access_token: tokens.accessToken,
-      refresh_token: tokens.refreshToken,
+      refresh_token: refreshToken,
       expires_at: tokens.expiresAt.toISOString(),
       account_email: tokens.accountEmail ?? null,
       updated_at: new Date().toISOString(),
@@ -138,17 +146,28 @@ export async function updateAccessToken(
   provider: CalendarProvider,
   accessToken: string,
   expiresAt: Date,
+  refreshToken?: string,
 ): Promise<boolean> {
   const supabase = getSupabaseAdmin()
   if (!supabase) return false
 
+  const patch: {
+    access_token: string
+    expires_at: string
+    updated_at: string
+    refresh_token?: string
+  } = {
+    access_token: accessToken,
+    expires_at: expiresAt.toISOString(),
+    updated_at: new Date().toISOString(),
+  }
+  if (refreshToken) {
+    patch.refresh_token = refreshToken
+  }
+
   const { error } = await supabase
     .from('calendar_connections')
-    .update({
-      access_token: accessToken,
-      expires_at: expiresAt.toISOString(),
-      updated_at: new Date().toISOString(),
-    })
+    .update(patch)
     .eq('user_id', userId)
     .eq('provider', provider)
 

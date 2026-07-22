@@ -26,11 +26,21 @@ export function useMeetings() {
     }
   }, [refresh])
 
-  const createMeeting = useCallback(async (title?: string) => {
-    const meeting = (await window.electronAPI.invoke('meetings:create', { title })) as Meeting
-    await refresh()
-    return meeting
-  }, [refresh])
+  const createMeeting = useCallback(
+    async (input?: {
+      title?: string
+      calendarEventId?: string
+      calendarProvider?: 'google' | 'microsoft'
+      scheduledStart?: number
+      attendeeEmails?: string[]
+      speakerLabels?: Record<string, string>
+    }) => {
+      const meeting = (await window.electronAPI.invoke('meetings:create', input ?? {})) as Meeting
+      await refresh()
+      return meeting
+    },
+    [refresh],
+  )
 
   const updateMeeting = useCallback(
     async (id: string, patch: { title?: string; userNotes?: string }) => {

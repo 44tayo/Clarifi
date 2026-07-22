@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto'
-import { isDualCallMode, isGroupCallMode } from './audioPreferences'
+import { mergeWavBuffers } from './wavMerge'
+import { isAutoCallMode, isDualCallMode, isGroupCallMode, usesDiarization } from './audioPreferences'
 import { transcribeSystemWithDiarization } from './diarizeTranscribe'
 import { processAudioChunk, getIsPaused, wavHasSpeechEnergy, wavRms } from './audio'
 import {
@@ -64,9 +65,15 @@ type SystemChunkWindow = {
 let recentSystemSpeech: SpeechWindow[] = []
 let recentMicSpeech: SpeechWindow[] = []
 let recentSystemChunks: SystemChunkWindow[] = []
-let systemCaptureActiveSince = 0
+const SYSTEM_DIARIZE_BUFFER_MS = 4000
+const SYSTEM_DIARIZE_MIN_CHUNKS = 3
+
+let systemDiarizeBuffer: QueuedChunk[] = []
+let systemDiarizeBufferStartedAt = 0
 
 const SYSTEM_CAPTURE_WARMUP_MS = 3000
+
+let systemCaptureActiveSince = 0
 
 export function configureTranscriptionQueue(next: TranscriptionQueueOptions): void {
   options = next
@@ -82,6 +89,8 @@ export function clearTranscriptionQueue(): void {
   recentMicSpeech = []
   recentSystemChunks = []
   systemCaptureActiveSince = 0
+  systemDiarizeBuffer = []
+  systemDiarizeBufferStartedAt = 0
   options?.onActivity?.('listening')
 }
 
@@ -127,6 +136,10 @@ export function enqueueTranscription(
 
 export async function flushTranscriptionQueue(): Promise<void> {
   draining = true
+  if (systemDiarizeBuffer.length > 0 && options) {
+    const last = systemDiarizeBuffer[systemDiarizeBuffer.length - 1]!
+    await flushSystemDiarizeBuffer(last)
+  }
   for (let attempt = 0; attempt < 200; attempt += 1) {
     const busy =
       activeMicJobs > 0 ||
@@ -227,7 +240,7 @@ function resolveMicEntryTarget(chunk: QueuedChunk): {
   speaker: string
   source: TranscriptSource
 } | null {
-  if (!isDualCallMode()) {
+  if (!isDualCallMode() && !isAutoCallMode()) {
     return { speaker: 'Me', source: 'mic' }
   }
 
@@ -248,7 +261,7 @@ function resolveMicEntryTarget(chunk: QueuedChunk): {
 }
 
 function shouldSkipMicChunkBeforeTranscribe(chunk: QueuedChunk): boolean {
-  if (!isDualCallMode()) return false
+  if (!isDualCallMode() && !isAutoCallMode()) return false
 
   const micRms = chunk.rms ?? 0
   const captureActive = isSystemCaptureSessionActive(chunk.enqueuedAt)
@@ -451,6 +464,25 @@ async function processMicChunk(chunk: QueuedChunk): Promise<void> {
   updateActivityState()
 }
 
+async function flushSystemDiarizeBuffer(chunk: QueuedChunk): Promise<void> {
+  if (!options || systemDiarizeBuffer.length === 0) return
+  const buffers = systemDiarizeBuffer.map((item) => Buffer.from(item.base64, 'base64'))
+  systemDiarizeBuffer = []
+  systemDiarizeBufferStartedAt = 0
+  const merged = mergeWavBuffers(buffers)
+  if (!merged) {
+    updateActivityState()
+    return
+  }
+  const utterances = await transcribeSystemWithDiarization(merged.toString('base64'))
+  if (utterances && utterances.length > 0) {
+    for (const utterance of utterances) {
+      emitEntry(chunk, utterance.text, utterance.speaker, 'system')
+    }
+  }
+  updateActivityState()
+}
+
 async function processSystemChunk(chunk: QueuedChunk): Promise<void> {
   if (!options || getIsPaused()) return
 
@@ -466,14 +498,20 @@ async function processSystemChunk(chunk: QueuedChunk): Promise<void> {
 
   recordSystemSpeech(chunk.enqueuedAt, rms)
 
-  if (isGroupCallMode()) {
-    const utterances = await transcribeSystemWithDiarization(chunk.base64)
-    if (utterances && utterances.length > 0) {
-      for (const utterance of utterances) {
-        emitEntry(chunk, utterance.text, utterance.speaker, 'system')
-      }
+  if (usesDiarization()) {
+    if (systemDiarizeBuffer.length === 0) {
+      systemDiarizeBufferStartedAt = chunk.enqueuedAt
     }
-    updateActivityState()
+    systemDiarizeBuffer.push(chunk)
+    const elapsed = chunk.enqueuedAt - systemDiarizeBufferStartedAt
+    if (
+      systemDiarizeBuffer.length >= SYSTEM_DIARIZE_MIN_CHUNKS ||
+      elapsed >= SYSTEM_DIARIZE_BUFFER_MS
+    ) {
+      await flushSystemDiarizeBuffer(chunk)
+    } else {
+      updateActivityState()
+    }
     return
   }
 

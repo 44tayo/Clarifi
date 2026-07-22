@@ -7,7 +7,10 @@ export function OfflineBanner() {
 
   useEffect(() => {
     const goOffline = () => setOffline(true)
-    const goOnline = () => setOffline(false)
+    const goOnline = () => {
+      setOffline(false)
+      void window.electronAPI.invoke('enhance:retry-pending')
+    }
     window.addEventListener('offline', goOffline)
     window.addEventListener('online', goOnline)
     return () => {

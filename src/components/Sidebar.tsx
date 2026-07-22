@@ -1,119 +1,203 @@
-import { FREE_HISTORY_RETENTION_DAYS } from '../../shared/entitlements'
-import type { CalendarEvent } from '../../shared/calendar'
-import { CalendarEventRow } from './CalendarEventRow'
-import { MeetingRow } from './MeetingRow'
-import type { ConnectionStatus, Meeting } from '../types/meeting'
+import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 
-const FREE_HISTORY_RETENTION_MS = FREE_HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000
+import { FREE_HISTORY_RETENTION_DAYS } from '../../shared/entitlements'
+import type { Folder, ConnectionStatus } from '../types/meeting'
+import type { SidebarSelection } from '../types/navigation'
 
 type SidebarProps = {
-  meetings: Meeting[]
-  calendarEvents: CalendarEvent[]
-  calendarConnected: boolean
-  calendarLoading: boolean
-  selectedId: string | null
+  selection: SidebarSelection
+  onSelectView: (selection: SidebarSelection) => void
+  folders: Folder[]
+  onCreateFolder: (name: string) => void
+  onRenameFolder: (id: string, name: string) => void
+  onDeleteFolder: (id: string) => void
   connection: ConnectionStatus
-  onSelect: (id: string) => void
   onNewMeeting: () => void
-  onStartCalendarEvent: (event: CalendarEvent) => void
-  onConnectCalendar: (provider: 'google' | 'microsoft') => void
   onConnect: () => void
   onOpenDashboard: () => void
   onOpenSettings: () => void
+  onOpenSearch?: () => void
+  resizing?: boolean
+  onResizePointerDown?: (event: ReactPointerEvent<HTMLDivElement>) => void
+  onResizeDoubleClick?: () => void
 }
 
-function isMeetingLocked(meeting: Meeting, plan?: string): boolean {
-  if (plan === 'pro' || plan === 'pro_plus') return false
-  const at = meeting.startedAt ?? meeting.createdAt
-  return Date.now() - at > FREE_HISTORY_RETENTION_MS
+function NavIcon({ children }: { children: ReactNode }) {
+  return (
+    <span className="sidebar-nav-icon" aria-hidden>
+      {children}
+    </span>
+  )
 }
 
 export function Sidebar({
-  meetings,
-  calendarEvents,
-  calendarConnected,
-  calendarLoading,
-  selectedId,
+  selection,
+  onSelectView,
+  folders,
+  onCreateFolder,
+  onRenameFolder,
+  onDeleteFolder,
   connection,
-  onSelect,
   onNewMeeting,
-  onStartCalendarEvent,
-  onConnectCalendar,
   onConnect,
   onOpenDashboard,
   onOpenSettings,
+  onOpenSearch,
+  resizing = false,
+  onResizePointerDown,
+  onResizeDoubleClick,
 }: SidebarProps) {
-  const activeCalendarEventId = meetings.find((m) => m.id === selectedId)?.calendarEventId
+  const isActive = (view: SidebarSelection['view'], folderId?: string) => {
+    if (view === 'folder') {
+      return selection.view === 'folder' && selection.folderId === folderId
+    }
+    return selection.view === view
+  }
 
   return (
     <aside className="sidebar">
+      <div
+        className={`sidebar-resize-handle${resizing ? ' is-dragging' : ''}`}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize sidebar"
+        onPointerDown={onResizePointerDown}
+        onDoubleClick={onResizeDoubleClick}
+      />
       <div className="sidebar-header">
         <div className="sidebar-brand">
-          <div className="sidebar-brand-mark" aria-hidden="true">
-            C
-          </div>
+          <img
+            className="sidebar-brand-mark"
+            src={`${import.meta.env.BASE_URL}clarifi-logo.png`}
+            alt=""
+            width={28}
+            height={28}
+            draggable={false}
+          />
           <span className="sidebar-brand-name">Clarifi</span>
         </div>
-        <button type="button" className="sidebar-new-btn" onClick={onNewMeeting}>
-          New meeting
+        <button type="button" className="sidebar-start-btn" onClick={onNewMeeting}>
+          Start meeting
+        </button>
+        {onOpenSearch ? (
+          <button type="button" className="sidebar-search-btn" onClick={onOpenSearch}>
+            <span>Search</span>
+            <kbd>⌘K</kbd>
+          </button>
+        ) : null}
+      </div>
+
+      <nav className="sidebar-nav" aria-label="Main">
+        <button
+          type="button"
+          className={`sidebar-nav-item${isActive('home') ? ' is-active' : ''}`}
+          onClick={() => onSelectView({ view: 'home' })}
+        >
+          <NavIcon>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+              <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" />
+            </svg>
+          </NavIcon>
+          Home
+        </button>
+        <button
+          type="button"
+          className={`sidebar-nav-item${isActive('chat') ? ' is-active' : ''}`}
+          onClick={() => onSelectView({ view: 'chat' })}
+        >
+          <NavIcon>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+              <path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v7A2.5 2.5 0 0 1 16.5 16H10l-4 3.5V16H7.5A2.5 2.5 0 0 1 5 13.5v-7Z" />
+            </svg>
+          </NavIcon>
+          Chat
+        </button>
+        <button
+          type="button"
+          className={`sidebar-nav-item${isActive('meetings') ? ' is-active' : ''}`}
+          onClick={() => onSelectView({ view: 'meetings' })}
+        >
+          <NavIcon>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+              <rect x="4" y="5" width="16" height="15" rx="2" />
+              <path d="M8 3v4M16 3v4M4 10h16" />
+            </svg>
+          </NavIcon>
+          Meetings
+        </button>
+        <button
+          type="button"
+          className={`sidebar-nav-item${isActive('shared') ? ' is-active' : ''}`}
+          onClick={() => onSelectView({ view: 'shared' })}
+        >
+          <NavIcon>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="18" cy="5" r="2.5" />
+              <circle cx="6" cy="12" r="2.5" />
+              <circle cx="18" cy="19" r="2.5" />
+              <path d="M8.4 13.2 15.6 17.3M15.6 6.7 8.4 10.8" />
+            </svg>
+          </NavIcon>
+          Shared with me
+        </button>
+      </nav>
+
+      <div className="sidebar-section-label sidebar-section-label-row">
+        <span>Folders</span>
+        <button
+          type="button"
+          className="link-btn"
+          onClick={() => {
+            const name = window.prompt('Folder name', 'New folder')
+            if (name?.trim()) onCreateFolder(name.trim())
+          }}
+        >
+          Add folder
         </button>
       </div>
 
-      <div className="sidebar-section-label">Coming up</div>
-      <div className="sidebar-calendar-list">
-        {!connection.paired ? (
-          <p className="sidebar-calendar-empty">Sign in to sync your calendar</p>
-        ) : calendarLoading ? (
-          <p className="sidebar-calendar-empty">Loading calendar…</p>
-        ) : !calendarConnected ? (
-          <div className="sidebar-calendar-connect">
-            <p className="sidebar-calendar-empty">Connect Google or Outlook to see upcoming meetings.</p>
-            <div className="sidebar-calendar-connect-actions">
-              <button type="button" className="link-btn" onClick={() => onConnectCalendar('google')}>
-                Google Calendar
+      <div className="sidebar-folder-list">
+        {folders.length === 0 ? (
+          <p className="sidebar-calendar-empty">No folders yet</p>
+        ) : (
+          folders.map((folder) => (
+            <div key={folder.id} className="sidebar-folder-row">
+              <button
+                type="button"
+                className={`sidebar-folder-item${isActive('folder', folder.id) ? ' is-active' : ''}`}
+                onClick={() => onSelectView({ view: 'folder', folderId: folder.id })}
+                onDoubleClick={() => {
+                  const name = window.prompt('Rename folder', folder.name)
+                  if (name?.trim() && name.trim() !== folder.name) {
+                    onRenameFolder(folder.id, name.trim())
+                  }
+                }}
+                title="Double-click to rename"
+              >
+                <NavIcon>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+                    <path d="M3.5 8.5A2.5 2.5 0 0 1 6 6h4l2 2h6a2.5 2.5 0 0 1 2.5 2.5v7A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5v-9Z" />
+                  </svg>
+                </NavIcon>
+                {folder.name}
               </button>
               <button
                 type="button"
-                className="link-btn"
-                onClick={() => onConnectCalendar('microsoft')}
+                className="sidebar-folder-delete"
+                aria-label={`Delete ${folder.name}`}
+                onClick={() => {
+                  if (window.confirm(`Delete folder “${folder.name}”? Meetings stay in Meetings.`)) {
+                    onDeleteFolder(folder.id)
+                    if (selection.view === 'folder' && selection.folderId === folder.id) {
+                      onSelectView({ view: 'meetings' })
+                    }
+                  }
+                }}
               >
-                Outlook
+                ×
               </button>
             </div>
-          </div>
-        ) : calendarEvents.length === 0 ? (
-          <p className="sidebar-calendar-empty">No upcoming meetings in the next 10 days</p>
-        ) : (
-          calendarEvents.slice(0, 8).map((event) => (
-            <CalendarEventRow
-              key={`${event.provider}:${event.id}`}
-              event={event}
-              active={activeCalendarEventId === event.id}
-              onStart={onStartCalendarEvent}
-            />
           ))
-        )}
-      </div>
-
-      <div className="sidebar-section-label">Recent</div>
-      <div className="sidebar-list">
-        {meetings.length === 0 ? (
-          <p className="transcript-empty" style={{ padding: '8px 12px' }}>
-            No meetings yet
-          </p>
-        ) : (
-          meetings.map((meeting) => {
-            const locked = isMeetingLocked(meeting, connection.plan)
-            return (
-              <MeetingRow
-                key={meeting.id}
-                meeting={meeting}
-                active={meeting.id === selectedId}
-                locked={locked}
-                onSelect={locked ? () => onOpenDashboard() : onSelect}
-              />
-            )
-          })
         )}
       </div>
 

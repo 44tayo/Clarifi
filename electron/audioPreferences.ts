@@ -2,41 +2,24 @@ import { app, BrowserWindow } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
 import { languageLabel } from './languages'
+import type {
+  AudioPreferences,
+  SystemAudioCaptureMode,
+  ThemePreference,
+  TranscriptionMode,
+} from '../shared/audio-preferences'
+import { DEFAULT_AUDIO_PREFERENCES } from '../shared/audio-preferences'
+import { applyNativeTheme } from './theme'
 
-export type SystemAudioCaptureMode = 'meeting' | 'display'
-
-export type TranscriptionMode = 'dual' | 'group'
-
-export type AudioPreferences = {
-  transcriptionLanguage: string
-  outputLanguage: string
-  dictationLanguage: string
-  dictationOutputLanguage: string
-  dictationEnabled: boolean
-  uiSoundsEnabled: boolean
-  preferredMicrophoneId: string
-  preferredMicrophoneLabel: string
-  systemAudioCapture: SystemAudioCaptureMode
-  transcriptionMode: TranscriptionMode
-}
+export type { AudioPreferences, SystemAudioCaptureMode, ThemePreference, TranscriptionMode }
 
 const PREFS_FILE = 'audio-preferences.json'
 
-// transcriptionLanguage defaults to 'auto' so Whisper/Deepgram detect the
-// spoken language automatically — forcing 'en' would garble non-English
-// meetings out of the box. outputLanguage stays 'en' by default; notes are
-// only translated when a user explicitly picks a different output language.
-const DEFAULTS: AudioPreferences = {
-  transcriptionLanguage: 'auto',
-  outputLanguage: 'en',
-  dictationLanguage: 'auto',
-  dictationOutputLanguage: 'same',
-  dictationEnabled: true,
-  uiSoundsEnabled: true,
-  preferredMicrophoneId: '',
-  preferredMicrophoneLabel: '',
-  systemAudioCapture: 'meeting',
-  transcriptionMode: 'dual',
+const DEFAULTS: AudioPreferences = { ...DEFAULT_AUDIO_PREFERENCES }
+
+function parseTheme(value: unknown): ThemePreference {
+  if (value === 'dark' || value === 'system' || value === 'light') return value
+  return 'light'
 }
 
 function prefsPath(): string {
@@ -44,6 +27,11 @@ function prefsPath(): string {
 }
 
 let cached: AudioPreferences | null = null
+
+function parseTranscriptionMode(value: unknown): TranscriptionMode {
+  if (value === 'dual' || value === 'group' || value === 'auto') return value
+  return 'auto'
+}
 
 export function loadAudioPreferences(): AudioPreferences {
   if (cached) return cached
@@ -85,7 +73,12 @@ export function loadAudioPreferences(): AudioPreferences {
           : DEFAULTS.preferredMicrophoneLabel,
       systemAudioCapture:
         parsed.systemAudioCapture === 'display' ? 'display' : 'meeting',
-      transcriptionMode: parsed.transcriptionMode === 'dual' ? 'dual' : 'group',
+      transcriptionMode: parseTranscriptionMode(parsed.transcriptionMode),
+      skipMicPicker:
+        typeof parsed.skipMicPicker === 'boolean'
+          ? parsed.skipMicPicker
+          : DEFAULTS.skipMicPicker,
+      theme: parseTheme(parsed.theme),
     }
     return cached
   } catch {
@@ -102,6 +95,7 @@ export function saveAudioPreferences(prefs: AudioPreferences): void {
   } catch (err) {
     console.error('Failed to save audio preferences:', err)
   }
+  applyNativeTheme(prefs.theme)
   notifyAudioPrefsChanged()
 }
 
@@ -135,6 +129,15 @@ export function isGroupCallMode(): boolean {
 
 export function isDualCallMode(): boolean {
   return getTranscriptionMode() === 'dual'
+}
+
+export function isAutoCallMode(): boolean {
+  return getTranscriptionMode() === 'auto'
+}
+
+export function usesDiarization(): boolean {
+  const mode = getTranscriptionMode()
+  return mode === 'group' || mode === 'auto'
 }
 
 export function getOutputLanguage(): string {

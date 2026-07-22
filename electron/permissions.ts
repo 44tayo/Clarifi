@@ -56,6 +56,15 @@ export async function requestMicrophoneAccess(): Promise<PermissionStatus> {
   return getPermissionStatus()
 }
 
+export async function openMicrophoneSettings(): Promise<PermissionStatus> {
+  if (process.platform === 'darwin') {
+    await shell.openExternal(
+      'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone',
+    )
+  }
+  return getPermissionStatus()
+}
+
 export async function openSystemAudioSettings(): Promise<PermissionStatus> {
   if (process.platform === 'darwin') {
     // Opens macOS Screen Recording privacy pane — required for system audio.

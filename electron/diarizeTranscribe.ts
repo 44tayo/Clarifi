@@ -1,6 +1,8 @@
 import fetch from 'node-fetch'
+
 import { getTranscriptionLanguage } from './audioPreferences'
 import { getDeepgramApiBaseUrl, getDeepgramApiKey } from './keys'
+import { proxyDiarize } from './proxyClient'
 import { isLikelyHallucination, normalizeTranscriptText } from './transcriptUtils'
 
 export type DiarizedUtterance = {
@@ -116,64 +118,60 @@ async function callDeepgram(
   return (await response.json()) as DeepgramResponse
 }
 
-export async function transcribeSystemWithDiarization(
-  audioBase64: string,
-): Promise<DiarizedUtterance[] | null> {
-  const apiKey = await getDeepgramApiKey()
-  if (!apiKey) {
-    console.error('Deepgram API key is not configured')
-    return null
-  }
-
+async function diarizeWithDeepgram(audioBase64: string): Promise<DiarizedUtterance[] | null> {
   const language = getTranscriptionLanguage()
-  // nova-2 supports explicit auto-detection via detect_language — omitting the
-  // language param entirely would silently default to English instead.
   const langParam =
     language && language !== 'auto' ? `&language=${language}` : '&detect_language=true'
-  // mip_opt_out=true excludes this request from Deepgram's Model Improvement
-  // Partnership Program — without it, Deepgram's docs say some audio may be
-  // retained for model training by default. Required for our "we don't let
-  // vendors train on your audio" privacy claim to actually be true.
   const baseQuery =
     'model=nova-2&diarize=true&punctuate=true&utterances=true&smart_format=true&mip_opt_out=true'
   const audioBuffer = Buffer.from(audioBase64, 'base64')
 
-  try {
-    const pcm = extractPcmFromWav(audioBuffer)
-    const attempts: Array<{ body: Buffer; contentType: string; query: string }> = []
+  const pcm = extractPcmFromWav(audioBuffer)
+  const attempts: Array<{ body: Buffer; contentType: string; query: string }> = []
 
-    if (pcm && pcm.length > 0) {
-      attempts.push({
-        body: pcm,
-        contentType: 'application/octet-stream',
-        query: `${baseQuery}&encoding=linear16&sample_rate=16000&channels=1${langParam}`,
-      })
-    }
-
+  if (pcm && pcm.length > 0) {
     attempts.push({
-      body: audioBuffer,
-      contentType: 'audio/wav',
-      query: `${baseQuery}${langParam}`,
+      body: pcm,
+      contentType: 'application/octet-stream',
+      query: `${baseQuery}&encoding=linear16&sample_rate=16000&channels=1${langParam}`,
     })
+  }
 
-    for (const attempt of attempts) {
-      const data = await callDeepgram(apiKey, attempt.body, attempt.contentType, attempt.query)
-      if (!data) continue
+  attempts.push({
+    body: audioBuffer,
+    contentType: 'audio/wav',
+    query: `${baseQuery}${langParam}`,
+  })
 
-      const results = parseDeepgramUtterances(data)
-      if (results.length > 0) {
-        return results
-      }
-
-      const fallbackTranscript =
-        data.results?.channels?.[0]?.alternatives?.[0]?.transcript?.trim() ?? ''
-      if (fallbackTranscript && !isLikelyHallucination(fallbackTranscript, 'system')) {
-        return [{ speaker: 'Speaker 1', text: normalizeTranscriptText(fallbackTranscript) }]
-      }
+  for (const attempt of attempts) {
+    const apiKey = await getDeepgramApiKey()
+    if (!apiKey) break
+    const data = await callDeepgram(apiKey, attempt.body, attempt.contentType, attempt.query)
+    if (!data) continue
+    const results = parseDeepgramUtterances(data)
+    if (results.length > 0) return results
+    const fallbackTranscript =
+      data.results?.channels?.[0]?.alternatives?.[0]?.transcript?.trim() ?? ''
+    if (fallbackTranscript && !isLikelyHallucination(fallbackTranscript, 'system')) {
+      return [{ speaker: 'Speaker 1', text: normalizeTranscriptText(fallbackTranscript) }]
     }
+  }
 
-    console.warn('Deepgram returned no usable diarized utterances for system audio chunk')
-    return null
+  const proxied = await proxyDiarize(audioBase64)
+  if (proxied && proxied.length > 0) return proxied
+
+  return null
+}
+
+export async function transcribeSystemWithDiarization(
+  audioBase64: string,
+): Promise<DiarizedUtterance[] | null> {
+  try {
+    const results = await diarizeWithDeepgram(audioBase64)
+    if (!results || results.length === 0) {
+      console.warn('Deepgram returned no usable diarized utterances for system audio chunk')
+    }
+    return results
   } catch (err) {
     console.error('Diarization error:', err)
     return null

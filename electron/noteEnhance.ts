@@ -3,9 +3,13 @@ import { languageLabel } from './languages'
 import { proxyMeetingChat } from './proxyClient'
 import type { StoredMeeting } from './meetingStore'
 import { updateMeeting } from './meetingStore'
+import { resolveSpeakerDisplay } from './transcriptUtils'
 
 function transcriptLines(meeting: StoredMeeting): string[] {
-  return meeting.transcript.map((entry) => `${entry.speaker}: ${entry.text}`)
+  const labels = meeting.speakerLabels ?? {}
+  return meeting.transcript.map(
+    (entry) => `${resolveSpeakerDisplay(entry.speaker, labels)}: ${entry.text}`,
+  )
 }
 
 function buildEnhancePrompt(meeting: StoredMeeting): string {
@@ -49,9 +53,15 @@ export async function enhanceMeetingNotes(meetingId: string): Promise<StoredMeet
   })
 
   if ('error' in result) {
+    const enhanceError =
+      result.error === 'network_error'
+        ? 'network_error'
+        : result.error === 'auth_expired' || result.error === 'not_authenticated'
+          ? 'Connect your account to generate your AI summary.'
+          : result.error
     return updateMeeting(meetingId, {
       status: 'error',
-      enhanceError: result.error,
+      enhanceError,
     })
   }
 

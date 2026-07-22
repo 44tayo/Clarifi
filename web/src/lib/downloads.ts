@@ -2,12 +2,12 @@ import type { CustomerPlatform } from '@/lib/platform'
 
 const GITHUB_REPO = 'Tayowill/clarificluely'
 
-export const CLARIFI_VERSION = '0.1.0'
-export const MAC_DMG_ARM64_FILENAME = 'Clarifi-0.1.0-arm64.dmg'
-export const MAC_DMG_X64_FILENAME = 'Clarifi-0.1.0-x64.dmg'
+export const CLARIFI_VERSION = '1.0.0'
+export const MAC_DMG_ARM64_FILENAME = 'Clarifi-1.0.0-arm64.dmg'
+export const MAC_DMG_X64_FILENAME = 'Clarifi-1.0.0-x64.dmg'
 /** @deprecated Use MAC_DMG_ARM64_FILENAME */
 export const MAC_DMG_FILENAME = MAC_DMG_ARM64_FILENAME
-export const WIN_EXE_FILENAME = 'Clarifi Setup 0.1.0.exe'
+export const WIN_EXE_FILENAME = 'Clarifi Setup 1.0.0.exe'
 export const MAC_QUARANTINE_COMMAND =
   'xattr -r -d com.apple.quarantine /Applications/Clarifi.app'
 

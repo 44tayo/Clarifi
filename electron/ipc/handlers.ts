@@ -20,6 +20,15 @@ import {
   fetchCalendarStatus,
 } from '../calendarClient'
 import {
+  acceptSharedInvite,
+  getSharedWithMeItem,
+  inviteToSharedMeeting,
+  listSharedWithMe,
+  publishMeetingShare,
+} from '../shareClient'
+import { proxyMeetingChat } from '../proxyClient'
+import { resolveSpeakerDisplay } from '../transcriptUtils'
+import {
   fetchDeviceProfileCached,
   getConnectPageUrl,
   getCalendarConnectUrl,
@@ -31,10 +40,15 @@ import {
   type DesktopAuthProvider,
 } from '../deviceAuth'
 import {
+  createFolder,
   createMeeting,
+  deleteFolder,
   deleteMeeting,
   getMeeting,
+  listFolders,
   listMeetings,
+  renameFolder,
+  setMeetingFolders,
   updateMeeting,
   type StoredMeeting,
 } from '../meetingStore'
@@ -428,6 +442,102 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
     return result
   })
 
+  ipcMain.handle('folders:list', () => listFolders())
+
+  ipcMain.handle('folders:create', (_event, name?: unknown) => {
+    const folder = createFolder(typeof name === 'string' ? name : 'Untitled folder')
+    broadcastMeetingsChanged()
+    return folder
+  })
+
+  ipcMain.handle('folders:rename', (_event, payload?: { id?: string; name?: string }) => {
+    if (!payload?.id || typeof payload.name !== 'string') return null
+    const folder = renameFolder(payload.id, payload.name)
+    if (folder) broadcastMeetingsChanged()
+    return folder
+  })
+
+  ipcMain.handle('folders:delete', (_event, id?: unknown) => {
+    if (typeof id !== 'string') return { ok: false }
+    const ok = deleteFolder(id)
+    if (ok) broadcastMeetingsChanged()
+    return { ok }
+  })
+
+  ipcMain.handle(
+    'meetings:set-folders',
+    (_event, payload?: { id?: string; folderIds?: string[] }) => {
+      if (!payload?.id || !Array.isArray(payload.folderIds)) return null
+      const folderIds = payload.folderIds.filter((value): value is string => typeof value === 'string')
+      const updated = setMeetingFolders(payload.id, folderIds)
+      if (updated) broadcastMeetingsChanged()
+      return updated
+    },
+  )
+
+  ipcMain.handle('share:publish', async (_event, payload?: { meetingId?: string }) => {
+    if (!payload?.meetingId) return { ok: false, error: 'meeting_required' }
+    return publishMeetingShare(payload.meetingId)
+  })
+
+  ipcMain.handle(
+    'share:invite',
+    async (_event, payload?: { communityId?: string; email?: string }) => {
+      if (!payload?.communityId || typeof payload.email !== 'string') {
+        return { ok: false, error: 'invalid_payload' }
+      }
+      return inviteToSharedMeeting(payload.communityId, payload.email)
+    },
+  )
+
+  ipcMain.handle('share:list-shared', async () => listSharedWithMe())
+
+  ipcMain.handle(
+    'share:get-item',
+    async (_event, payload?: { communityId?: string; itemId?: string }) => {
+      if (!payload?.communityId || !payload?.itemId) {
+        return { ok: false, error: 'invalid_payload' }
+      }
+      return getSharedWithMeItem(payload.communityId, payload.itemId)
+    },
+  )
+
+  ipcMain.handle('share:accept-invite', async (_event, payload?: { token?: string }) => {
+    if (!payload?.token || typeof payload.token !== 'string') {
+      return { ok: false, error: 'token_required' }
+    }
+    return acceptSharedInvite(payload.token)
+  })
+
+  ipcMain.handle(
+    'chat:send',
+    async (_event, payload?: { message?: string; meetingId?: string | null }) => {
+      const message = typeof payload?.message === 'string' ? payload.message.trim() : ''
+      if (!message) return { error: 'message_required' }
+
+      let transcriptLines: string[] = []
+      const meetingId = payload?.meetingId
+      if (typeof meetingId === 'string' && meetingId) {
+        const meeting = getMeeting(meetingId)
+        if (meeting) {
+          const labels = meeting.speakerLabels ?? {}
+          transcriptLines = meeting.transcript.map(
+            (entry) => `${resolveSpeakerDisplay(entry.speaker, labels)}: ${entry.text}`,
+          )
+          const contextBits = [
+            `Meeting title: ${meeting.title}`,
+            meeting.summary ? `Summary: ${meeting.summary}` : null,
+            meeting.userNotes?.trim() ? `User notes:\n${meeting.userNotes.trim()}` : null,
+          ].filter(Boolean)
+          const enriched = [...contextBits, '', message].join('\n')
+          return proxyMeetingChat({ message: enriched, transcriptLines })
+        }
+      }
+
+      return proxyMeetingChat({ message, transcriptLines })
+    },
+  )
+
   ipcMain.handle('error:report', (_event, payload?: { message?: string; stack?: string }) => {
     const message = payload?.message ?? 'renderer_error'
     console.error('Renderer error report:', message, payload?.stack)
@@ -577,6 +687,9 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
         : {}),
       ...(typeof payload?.skipMicPicker === 'boolean'
         ? { skipMicPicker: payload.skipMicPicker }
+        : {}),
+      ...(payload?.theme === 'light' || payload?.theme === 'dark' || payload?.theme === 'system'
+        ? { theme: payload.theme }
         : {}),
     }
     saveAudioPreferences(next)

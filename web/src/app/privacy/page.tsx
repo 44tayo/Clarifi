@@ -31,7 +31,7 @@ export const metadata = {
 export default function PrivacyPolicyPage() {
   return (
     <div className="legal-root">
-      <MarketingNav showBack />
+      <MarketingNav active="privacy" showBack />
 
       <div className="legal-layout">
         <main className="legal-main" data-reveal>

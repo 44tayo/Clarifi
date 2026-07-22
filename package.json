@@ -1,6 +1,6 @@
 {
   "name": "clarifi-desktop",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Clarifi — AI meeting notetaker for Mac",
   "author": {
     "name": "Tayo",
@@ -10,7 +10,7 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "electron:dev": "cross-env NODE_ENV=development ELECTRON_RUN_AS_NODE= vite",
+    "electron:dev": "node scripts/electron-dev.mjs",
     "electron:onboarding": "cross-env NODE_ENV=development FORCE_ONBOARDING=1 vite",
     "electron:dev-shell": "cross-env NODE_ENV=development CLARIFI_DEV_SHELL=1 vite",
     "build": "tsc --noEmit && vite build",
@@ -33,7 +33,8 @@
     "build:win": "npm run build:native:win && tsc --noEmit && vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --x64",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
@@ -45,6 +46,8 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@sentry/electron": "^6.11.0",
     "@types/node-fetch": "^2.6.13",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",

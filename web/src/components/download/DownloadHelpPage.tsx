@@ -124,24 +124,36 @@ function MacInstallGuide() {
           DMG.
         </p>
         <GuideScreenshot
-          src="/install/mac/step-1-dmg.png"
+          src="/install/step-1.svg"
           alt="Drag Clarifi into the Applications folder from the DMG installer window"
         />
       </GuideStep>
 
-      <GuideStep num={2} title={'Fix "Damaged" warning'}>
+      <GuideStep num={2} title={'Fix "can\'t be opened" on first launch'}>
         <p>
-          If macOS says Clarifi is <strong>damaged</strong> or <strong>can&apos;t be opened</strong>, click{' '}
-          <strong>Cancel</strong> or <strong>Done</strong> — do <strong>not</strong> move it to the Trash.
-          In Finder → Applications, <strong>right-click Clarifi → Open → Open</strong> the first time.
+          If macOS blocks Clarifi the first time, click <strong>Cancel</strong> or <strong>Done</strong>{' '}
+          — do <strong>not</strong> move it to the Trash. In Finder → Applications,{' '}
+          <strong>right-click Clarifi → Open → Open</strong> once to approve it.
         </p>
         <GuideScreenshot
-          src="/install/mac/step-2-warning.png"
-          alt='macOS security dialog showing "Clarifi" not opened because Apple could not verify the app'
+          src="/install/step-2.svg"
+          alt="macOS security dialog for opening Clarifi from Applications"
         />
       </GuideStep>
 
-      <GuideStep num={3} title="Run Terminal command or Open anyway from settings">
+      <GuideStep num={3} title="Sign in and pair your desktop">
+        <p>
+          Open Clarifi from Applications. During onboarding, choose <strong>Continue with Google</strong>{' '}
+          or <strong>Continue with Microsoft</strong> (or email). Complete sign-in in your browser — the
+          desktop app pairs automatically and unlocks AI summaries after each meeting.
+        </p>
+        <GuideScreenshot
+          src="/install/step-3.svg"
+          alt="Clarifi app in Applications folder ready to launch"
+        />
+      </GuideStep>
+
+      <GuideStep num={4} title="Terminal command for unsigned test builds only">
         <p className="dh-step-option-label">Option A — Terminal</p>
         <p>
           Open <strong>Terminal</strong> (search for it in Spotlight) and paste this command, then press
@@ -155,20 +167,12 @@ function MacInstallGuide() {
           Only needed for unsigned test builds. Signed and notarized Clarifi releases open normally
           after a one-time right-click → Open.
         </p>
-        <GuideScreenshot
-          src="/install/mac/step-3-terminal.png"
-          alt="Terminal window with the xattr quarantine removal command for Clarifi"
-        />
 
-        <p className="dh-step-option-label">Option B — System Settings</p>
+        <p className="dh-step-option-label">Or use System Settings</p>
         <p>
           Open <strong>System Settings → Privacy &amp; Security → Security</strong>, then click{' '}
-          <strong>Open Anyway</strong> next to Clarifi.
+          <strong>Open Anyway</strong> next to Clarifi if shown.
         </p>
-        <GuideScreenshot
-          src="/install/mac/step-3-settings.png"
-          alt="macOS Privacy and Security settings with Open Anyway button for Clarifi"
-        />
       </GuideStep>
     </>
   )
@@ -207,8 +211,7 @@ function WindowsInstallGuide() {
       <GuideStep num={3} title="Allow microphone access">
         <p style={{ marginBottom: 0 }}>
           When you start a live session, Windows may ask for <strong>microphone</strong> access — allow it
-          so Clarifi can transcribe and assist. Dictation on Windows inserts text via clipboard paste
-          (Ctrl+V).
+          so Clarifi can transcribe your meetings.
         </p>
       </GuideStep>
     </>

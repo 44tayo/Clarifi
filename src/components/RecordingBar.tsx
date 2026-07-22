@@ -43,7 +43,7 @@ export function RecordingBar({
         />
       </div>
       <div className="recording-bar-actions">
-        {recordingState === 'idle' && meeting.status !== 'live' ? (
+        {recordingState === 'idle' && meeting.status === 'draft' ? (
           <button type="button" className="btn btn-primary" onClick={onStart}>
             Start capture
           </button>

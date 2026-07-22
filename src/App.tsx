@@ -1,21 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { FREE_HISTORY_RETENTION_DAYS } from '../shared/entitlements'
+import { ChatView } from './components/ChatView'
+import { CommandPalette } from './components/CommandPalette'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { HomeView } from './components/HomeView'
 import { MeetingWorkspace } from './components/MeetingWorkspace'
+import { MeetingsListView } from './components/MeetingsListView'
 import { MicPickerModal } from './components/MicPickerModal'
 import { OfflineBanner } from './components/OfflineBanner'
 import { OnboardingFlow } from './components/OnboardingFlow'
 import { SettingsPanel } from './components/SettingsPanel'
+import { SharedWithMeView } from './components/SharedWithMeView'
 import { Sidebar } from './components/Sidebar'
 import { useAudioPreferences } from './hooks/useAudioPreferences'
 import { useAuth } from './hooks/useAuth'
 import { speakerHintsFromEvent, useCalendar } from './hooks/useCalendar'
+import { useFolders } from './hooks/useFolders'
 import { useMeetings } from './hooks/useMeetings'
 import { useRecording } from './hooks/useRecording'
+import { useSidebarWidth } from './hooks/useSidebarWidth'
 import { formatMicCaptureError, isMicPermissionError } from './lib/microphones'
+import { applyTheme } from './lib/theme'
 import type { CalendarEvent } from '../shared/calendar'
 import type { Meeting } from './types/meeting'
+import type { SidebarSelection } from './types/navigation'
 
 const FREE_HISTORY_RETENTION_MS = FREE_HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000
 
@@ -37,9 +46,20 @@ function App() {
   } = useCalendar(connection.paired)
   const { meetings, createMeeting, updateMeeting, deleteMeeting, enhanceMeeting, getMeeting } =
     useMeetings()
+  const {
+    folders,
+    createFolder,
+    renameFolder,
+    deleteFolder,
+    setMeetingFolders,
+  } = useFolders()
+  const { dragging: sidebarResizing, onResizePointerDown, resetWidth: resetSidebarWidth } =
+    useSidebarWidth()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [activeMeeting, setActiveMeeting] = useState<Meeting | null>(null)
+  const [nav, setNav] = useState<SidebarSelection>({ view: 'home' })
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [commandOpen, setCommandOpen] = useState(false)
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null)
   const [captureMeetingId, setCaptureMeetingId] = useState<string | null>(null)
   const [micPickerOpen, setMicPickerOpen] = useState(false)
@@ -52,6 +72,26 @@ function App() {
   useEffect(() => {
     captureMeetingIdRef.current = captureMeetingId
   }, [captureMeetingId])
+
+  useEffect(() => {
+    if (!selectedId) return
+    const off = window.electronAPI.on('meetings:changed', () => {
+      void getMeeting(selectedId).then((meeting) => {
+        if (meeting) setActiveMeeting(meeting)
+      })
+    })
+    return off
+  }, [selectedId, getMeeting])
+
+  useEffect(() => {
+    if (!prefs?.theme) return
+    applyTheme(prefs.theme)
+    if (prefs.theme !== 'system') return
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const onChange = () => applyTheme('system')
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [prefs?.theme])
 
   useEffect(() => {
     void window.electronAPI.invoke('onboarding:get').then((state) => {
@@ -88,6 +128,22 @@ function App() {
     })
     return off
   }, [getMeeting])
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const meta = event.metaKey || event.ctrlKey
+      if (!meta || event.key.toLowerCase() !== 'k') return
+      const target = event.target as HTMLElement | null
+      const tag = target?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || target?.isContentEditable) {
+        // Still allow ⌘K from fields — command palette is the search affordance
+      }
+      event.preventDefault()
+      setCommandOpen((open) => !open)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   const selectedFromList = useMemo(
     () => meetings.find((meeting) => meeting.id === selectedId) ?? null,
@@ -180,6 +236,11 @@ function App() {
     void refreshCalendar()
   }, [settingsOpen, connection.paired, refreshCalendar])
 
+  useEffect(() => {
+    if (nav.view !== 'home' || !connection.paired) return
+    void refreshCalendar()
+  }, [nav.view, connection.paired, refreshCalendar])
+
   const handleStartCapture = useCallback(
     (meetingId: string) => {
       void beginCapture(meetingId)
@@ -259,6 +320,52 @@ function App() {
     [getMeeting, connection.plan, openDashboard],
   )
 
+  const handleSelectView = useCallback((selection: SidebarSelection) => {
+    setNav(selection)
+    setSelectedId(null)
+    setActiveMeeting(null)
+  }, [])
+
+  const handleCommandNavigate = useCallback(
+    (actionId: string) => {
+      switch (actionId) {
+        case 'nav-home':
+          handleSelectView({ view: 'home' })
+          break
+        case 'nav-meetings':
+          handleSelectView({ view: 'meetings' })
+          break
+        case 'nav-chat':
+          handleSelectView({ view: 'chat' })
+          break
+        case 'nav-shared':
+          handleSelectView({ view: 'shared' })
+          break
+        case 'nav-settings':
+          setSettingsOpen(true)
+          break
+        case 'nav-new':
+          void handleNewMeeting()
+          break
+        default:
+          break
+      }
+    },
+    [handleNewMeeting, handleSelectView],
+  )
+
+  const filteredMeetings = useMemo(() => {
+    if (nav.view === 'folder' && nav.folderId) {
+      return meetings.filter((meeting) => (meeting.folderIds ?? []).includes(nav.folderId!))
+    }
+    return meetings
+  }, [meetings, nav])
+
+  const folderTitle =
+    nav.view === 'folder'
+      ? folders.find((folder) => folder.id === nav.folderId)?.name ?? 'Folder'
+      : 'Meetings'
+
   if (onboardingDone === null) {
     return <div className="app-shell" />
   }
@@ -279,24 +386,34 @@ function App() {
         <div className="app-titlebar-drag" aria-hidden="true" />
         <OfflineBanner />
         <Sidebar
-          meetings={meetings}
-          calendarEvents={calendarEvents}
-          calendarConnected={calendarStatus.connected}
-          calendarLoading={calendarLoading}
-          selectedId={selectedId}
+          selection={nav}
+          onSelectView={handleSelectView}
+          folders={folders}
+          onCreateFolder={(name) => void createFolder(name)}
+          onRenameFolder={(id, name) => void renameFolder(id, name)}
+          onDeleteFolder={(id) => void deleteFolder(id)}
           connection={connection}
-          onSelect={(id) => void handleSelect(id)}
           onNewMeeting={() => void handleNewMeeting()}
-          onStartCalendarEvent={(event) => void handleStartCalendarEvent(event)}
-          onConnectCalendar={(provider) => void openCalendarConnect(provider)}
           onConnect={() => void openConnect()}
           onOpenDashboard={() => void openDashboard()}
           onOpenSettings={() => setSettingsOpen(true)}
+          onOpenSearch={() => setCommandOpen(true)}
+          resizing={sidebarResizing}
+          onResizePointerDown={onResizePointerDown}
+          onResizeDoubleClick={resetSidebarWidth}
         />
 
         {settingsOpen ? (
           <SettingsPanel onClose={() => setSettingsOpen(false)} calendarEnabled={connection.paired} />
         ) : null}
+
+        <CommandPalette
+          open={commandOpen}
+          meetings={meetings}
+          onClose={() => setCommandOpen(false)}
+          onNavigate={handleCommandNavigate}
+          onOpenMeeting={(id) => void handleSelect(id)}
+        />
 
         <MicPickerModal
           open={micPickerOpen}
@@ -309,35 +426,81 @@ function App() {
         />
 
         <main className="workspace">
-          {!activeMeeting ? (
-            <div className="workspace-empty">
-              <div className="empty-card">
-                <h2>Your AI meeting notepad</h2>
-                <p>
-                  Take light notes during calls. Clarifi captures audio in the background and turns
-                  everything into a clean summary, decisions, and action items when you&apos;re done —
-                  no bot ever joins.
-                </p>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => void handleNewMeeting()}
-                >
-                  New meeting
-                </button>
-              </div>
-            </div>
-          ) : (
+          {activeMeeting ? (
             <MeetingWorkspace
               meeting={activeMeeting}
               connected={connection.paired}
+              plan={connection.plan}
               captureMeetingId={captureMeetingId}
               recording={recording}
+              folders={folders}
               onStartCapture={handleStartCapture}
               onUpdate={(patch) => void handleUpdate(patch)}
               onDelete={() => void handleDelete()}
               onEnhance={() => void handleEnhance()}
               onConnect={() => void openConnect()}
+              onOpenDashboard={() => void openDashboard()}
+              onSetFolders={(folderIds) => {
+                void setMeetingFolders(activeMeeting.id, folderIds).then(async () => {
+                  const refreshed = await getMeeting(activeMeeting.id)
+                  if (refreshed) setActiveMeeting(refreshed)
+                })
+              }}
+              onCreateFolder={async (name) => {
+                const folder = await createFolder(name)
+                if (folder) {
+                  const next = [...(activeMeeting.folderIds ?? []), folder.id]
+                  await setMeetingFolders(activeMeeting.id, next)
+                  const refreshed = await getMeeting(activeMeeting.id)
+                  if (refreshed) setActiveMeeting(refreshed)
+                }
+                return folder
+              }}
+            />
+          ) : nav.view === 'home' ? (
+            <HomeView
+              connection={connection}
+              calendarConnected={calendarStatus.connected}
+              calendarLoading={calendarLoading}
+              calendarEvents={calendarEvents}
+              meetings={meetings}
+              selectedId={selectedId}
+              onSelectMeeting={(id) => void handleSelect(id)}
+              onStartCalendarEvent={(event) => void handleStartCalendarEvent(event)}
+              onConnectCalendar={(provider) => void openCalendarConnect(provider)}
+              onConnectAccount={() => void openConnect()}
+              onOpenDashboard={() => void openDashboard()}
+              onNewMeeting={() => void handleNewMeeting()}
+              isMeetingLocked={(meeting) => isMeetingLocked(meeting, connection.plan)}
+            />
+          ) : nav.view === 'chat' ? (
+            <ChatView
+              meetings={meetings}
+              paired={connection.paired}
+              onConnect={() => void openConnect()}
+              onOpenMeeting={(id) => void handleSelect(id)}
+            />
+          ) : nav.view === 'shared' ? (
+            <SharedWithMeView
+              paired={connection.paired}
+              onConnect={() => void openConnect()}
+              onOpenDashboard={() => void openDashboard()}
+            />
+          ) : (
+            <MeetingsListView
+              title={folderTitle}
+              subtitle={
+                nav.view === 'folder'
+                  ? 'Meetings in this folder'
+                  : 'All of your meeting notes'
+              }
+              meetings={filteredMeetings}
+              selectedId={selectedId}
+              connection={connection}
+              onSelectMeeting={(id) => void handleSelect(id)}
+              onOpenDashboard={() => void openDashboard()}
+              onNewMeeting={() => void handleNewMeeting()}
+              isMeetingLocked={(meeting) => isMeetingLocked(meeting, connection.plan)}
             />
           )}
         </main>

@@ -31,7 +31,13 @@ export default async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
-  if (searchParams.get('code') && pathname !== '/auth/callback') {
+  // Supabase sometimes returns ?code= on Site URL (/). Forward those to the
+  // auth callback — but never steal dedicated OAuth callbacks (calendar, etc.).
+  if (
+    searchParams.get('code') &&
+    pathname !== '/auth/callback' &&
+    pathname !== '/api/calendar/callback'
+  ) {
     const authNext = request.cookies.get('clarifi_auth_next')?.value ?? null
     const target = authCallbackRedirectPath(searchParams, authNext)
     if (target) {

@@ -26,51 +26,82 @@ function encryptedFilePath(service: string): string {
   return path.join(app.getPath('userData'), `${service}.enc`)
 }
 
+function writeEncryptedFile(service: string, key: string): boolean {
+  try {
+    if (!safeStorage.isEncryptionAvailable()) return false
+    const encrypted = safeStorage.encryptString(key)
+    fs.writeFileSync(encryptedFilePath(service), encrypted)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function readEncryptedFile(service: string): string | null {
+  try {
+    if (!safeStorage.isEncryptionAvailable()) return null
+    const filePath = encryptedFilePath(service)
+    if (!fs.existsSync(filePath)) return null
+    const encrypted = fs.readFileSync(filePath)
+    return safeStorage.decryptString(encrypted)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Persist a secret to the macOS keychain (when available) and also to an
+ * encrypted file under userData. Dual-write keeps pairing alive across
+ * keytar/safeStorage availability changes between app launches.
+ */
 export async function saveKey(service: string, key: string): Promise<void> {
+  let stored = false
+
   try {
     const keytar = await loadKeytar()
     if (keytar) {
       await keytar.setPassword(KEYTAR_SERVICE, service, key)
-      return
+      stored = true
     }
   } catch {
-    // fall through to safeStorage
+    // continue to file backup
   }
 
-  try {
-    if (safeStorage.isEncryptionAvailable()) {
-      const encrypted = safeStorage.encryptString(key)
-      const filePath = encryptedFilePath(service)
-      fs.writeFileSync(filePath, encrypted)
-      return
-    }
-  } catch {
-    // fall through
+  if (writeEncryptedFile(service, key)) {
+    stored = true
   }
 
-  throw new Error('No secure storage available')
+  if (!stored) {
+    throw new Error('No secure storage available')
+  }
 }
 
 export async function getKey(service: string): Promise<string | null> {
   try {
     const keytar = await loadKeytar()
     if (keytar) {
-      return await keytar.getPassword(KEYTAR_SERVICE, service)
-    }
-  } catch {
-    // fall through to safeStorage
-  }
-
-  try {
-    if (safeStorage.isEncryptionAvailable()) {
-      const filePath = encryptedFilePath(service)
-      if (fs.existsSync(filePath)) {
-        const encrypted = fs.readFileSync(filePath)
-        return safeStorage.decryptString(Buffer.from(encrypted))
+      const fromKeytar = await keytar.getPassword(KEYTAR_SERVICE, service)
+      if (fromKeytar) {
+        // Keep encrypted file in sync so restarts still work if keytar flickers.
+        writeEncryptedFile(service, fromKeytar)
+        return fromKeytar
       }
     }
   } catch {
-    // fall through
+    // fall through to encrypted file
+  }
+
+  const fromFile = readEncryptedFile(service)
+  if (fromFile) {
+    try {
+      const keytar = await loadKeytar()
+      if (keytar) {
+        await keytar.setPassword(KEYTAR_SERVICE, service, fromFile)
+      }
+    } catch {
+      // file value is enough
+    }
+    return fromFile
   }
 
   return null
@@ -83,7 +114,7 @@ export async function deleteKey(service: string): Promise<void> {
       await keytar.deletePassword(KEYTAR_SERVICE, service)
     }
   } catch {
-    // fall through
+    // continue cleanup
   }
 
   try {
