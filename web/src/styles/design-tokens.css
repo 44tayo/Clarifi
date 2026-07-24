@@ -5,32 +5,32 @@
   --ds-blue: #2b6cff;
   --ds-blue-hover: #1a5ae8;
   --ds-hero-accent: #60b4ff;
-  --ds-navy: #1a1a2e;
-  --ds-charcoal: #1c1c2e;
+  --ds-navy: #17181c;
+  --ds-charcoal: #1f2025;
 
-  /* Neutrals */
-  --ds-muted: #6b7280;
-  --ds-muted-hero: #94a3b8;
-  --ds-lavender: #dde2ee;
-  --ds-lavender-soft: #eef1f8;
-  --ds-border: #e8ecf4;
+  /* Neutrals — warm editorial, matched to the desktop app */
+  --ds-muted: #5f6470;
+  --ds-muted-hero: #8e939e;
+  --ds-lavender: #e5e4e0;
+  --ds-lavender-soft: #f1f0ed;
+  --ds-border: #eae9e5;
 
   /* Surfaces */
-  --ds-card: #f7f8fc;
-  --ds-surface-feature: #f4f4f5;
-  --ds-surface-visual: #ececef;
-  --ds-surface-mock: #ffffff;
+  --ds-card: #f7f6f3;
+  --ds-surface-feature: #f5f4f1;
+  --ds-surface-visual: #efeeea;
+  --ds-surface-mock: #fdfdfc;
 
   /* Layout */
   --ds-content-max: 1100px;
   --ds-section-py: 5.5rem;
   --ds-section-px: 2rem;
 
-  /* Radii */
-  --ds-radius-button: 0.75rem;
-  --ds-radius-card: 1rem;
-  --ds-radius-visual: 0.75rem;
-  --ds-radius-mock: 0.65rem;
+  /* Radii — grounded, precise */
+  --ds-radius-button: 0.5rem;
+  --ds-radius-card: 0.875rem;
+  --ds-radius-visual: 0.625rem;
+  --ds-radius-mock: 0.5rem;
 
   /* Feature grid */
   --ds-feature-side-padding: 2.5cm;

@@ -17,7 +17,9 @@ import {
 } from '../audioPreferences'
 import {
   fetchCalendarEvents,
+  fetchCalendarOAuthUrl,
   fetchCalendarStatus,
+  disconnectCalendarProvider,
 } from '../calendarClient'
 import {
   acceptSharedInvite,
@@ -27,7 +29,9 @@ import {
   publishMeetingShare,
 } from '../shareClient'
 import { proxyMeetingChat } from '../proxyClient'
+import { packMeetingsForChat } from '../../shared/chatContext'
 import { resolveSpeakerDisplay } from '../transcriptUtils'
+import { pushMeetingToCloud, syncMeetingsWithCloud } from '../meetingSync'
 import {
   fetchDeviceProfileCached,
   getConnectPageUrl,
@@ -44,6 +48,7 @@ import {
   createMeeting,
   deleteFolder,
   deleteMeeting,
+  ensureDemoArtifactMeeting,
   getMeeting,
   listFolders,
   listMeetings,
@@ -257,6 +262,7 @@ async function runMeetingEnhance(meetingId: string): Promise<StoredMeeting | nul
   const enhanced = await enhanceMeetingNotes(meetingId)
   if (enhanced?.status === 'ready') {
     clearEnhanceRetry(meetingId)
+    void pushMeetingToCloud(meetingId)
   } else if (enhanced?.status === 'error' && enhanced.enhanceError === 'network_error') {
     queueEnhanceRetry(meetingId)
   }
@@ -378,16 +384,33 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
 
   ipcMain.handle('calendar:open-connect', async (_event, provider?: unknown) => {
     const selected = provider === 'microsoft' ? 'microsoft' : 'google'
-    const url = getCalendarConnectUrl(selected)
+    // Prefer a device-bound OAuth URL so calendar tokens save on the paired
+    // account forever — not whatever browser user happens to be signed in.
+    const bound = await fetchCalendarOAuthUrl(selected)
+    const url = bound.ok && bound.authUrl ? bound.authUrl : getCalendarConnectUrl(selected)
     if (isAllowedExternalUrl(url)) {
       await shell.openExternal(url)
     } else {
       console.warn('Blocked calendar:open-connect to disallowed scheme:', url)
     }
-    return { url, provider: selected }
+    return { url, provider: selected, boundToDevice: Boolean(bound.ok && bound.authUrl) }
   })
 
-  ipcMain.handle('meetings:list', () => listMeetings())
+  ipcMain.handle('calendar:disconnect', async (_event, provider?: unknown) => {
+    const selected = provider === 'microsoft' ? 'microsoft' : 'google'
+    return disconnectCalendarProvider(selected)
+  })
+
+  ipcMain.handle('meetings:list', () => {
+    ensureDemoArtifactMeeting()
+    return listMeetings()
+  })
+
+  ipcMain.handle('meetings:seed-demo-artifact', () => {
+    const result = ensureDemoArtifactMeeting()
+    broadcastMeetingsChanged()
+    return result
+  })
 
   ipcMain.handle('meetings:get', (_event, id: unknown) => {
     if (typeof id !== 'string') return null
@@ -414,6 +437,8 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
       title?: string
       userNotes?: string
       speakerLabels?: Record<string, string>
+      actionItems?: string[]
+      completedActionItems?: string[]
     }) => {
       if (!payload?.id) return null
       const patch: Partial<StoredMeeting> = {}
@@ -422,11 +447,28 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
       if (payload.speakerLabels && typeof payload.speakerLabels === 'object') {
         patch.speakerLabels = payload.speakerLabels
       }
+      if (Array.isArray(payload.actionItems)) {
+        patch.actionItems = payload.actionItems.filter((item) => typeof item === 'string')
+      }
+      if (Array.isArray(payload.completedActionItems)) {
+        patch.completedActionItems = payload.completedActionItems.filter(
+          (item) => typeof item === 'string',
+        )
+      }
       const updated = updateMeeting(payload.id, patch)
-      if (updated) broadcastMeetingsChanged()
+      if (updated) {
+        broadcastMeetingsChanged()
+        void pushMeetingToCloud(payload.id)
+      }
       return updated
     },
   )
+
+  ipcMain.handle('meetings:sync', async () => {
+    const result = await syncMeetingsWithCloud()
+    if (result.ok) broadcastMeetingsChanged()
+    return result
+  })
 
   ipcMain.handle('meetings:delete', (_event, id: unknown) => {
     if (typeof id !== 'string') return { ok: false }
@@ -511,9 +553,63 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
 
   ipcMain.handle(
     'chat:send',
-    async (_event, payload?: { message?: string; meetingId?: string | null }) => {
+    async (
+      _event,
+      payload?: {
+        message?: string
+        meetingId?: string | null
+        scope?: 'meeting' | 'all'
+        model?: string
+        effort?: 'low' | 'medium' | 'max'
+        images?: Array<{
+          imageBase64: string
+          mimeType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
+        }>
+      },
+    ) => {
       const message = typeof payload?.message === 'string' ? payload.message.trim() : ''
       if (!message) return { error: 'message_required' }
+
+      const model = typeof payload?.model === 'string' ? payload.model.trim() : undefined
+      const effort =
+        payload?.effort === 'low' || payload?.effort === 'max' || payload?.effort === 'medium'
+          ? payload.effort
+          : 'medium'
+      const images = Array.isArray(payload?.images)
+        ? payload.images.filter(
+            (image) =>
+              image &&
+              typeof image.imageBase64 === 'string' &&
+              image.imageBase64.length > 0 &&
+              typeof image.mimeType === 'string',
+          ).slice(0, 6)
+        : []
+
+      const scope = payload?.scope === 'all' ? 'all' : 'meeting'
+      if (scope === 'all') {
+        const packed = packMeetingsForChat(
+          listMeetings().map((meeting) => ({
+            id: meeting.id,
+            title: meeting.title,
+            summary: meeting.summary,
+            enhancedNotes: meeting.enhancedNotes,
+            userNotes: meeting.userNotes,
+            startedAt: meeting.startedAt,
+            createdAt: meeting.createdAt,
+          })),
+        )
+        if (!packed) {
+          return proxyMeetingChat({
+            message: `${message}\n\n(No local meetings available for context.)`,
+            transcriptLines: [],
+            model,
+            effort,
+            images,
+          })
+        }
+        const enriched = `${packed}\n\nUser question:\n${message}`
+        return proxyMeetingChat({ message: enriched, transcriptLines: [], model, effort, images })
+      }
 
       let transcriptLines: string[] = []
       const meetingId = payload?.meetingId
@@ -530,11 +626,17 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
             meeting.userNotes?.trim() ? `User notes:\n${meeting.userNotes.trim()}` : null,
           ].filter(Boolean)
           const enriched = [...contextBits, '', message].join('\n')
-          return proxyMeetingChat({ message: enriched, transcriptLines })
+          return proxyMeetingChat({
+            message: enriched,
+            transcriptLines,
+            model,
+            effort,
+            images,
+          })
         }
       }
 
-      return proxyMeetingChat({ message, transcriptLines })
+      return proxyMeetingChat({ message, transcriptLines, model, effort, images })
     },
   )
 
@@ -690,6 +792,9 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
         : {}),
       ...(payload?.theme === 'light' || payload?.theme === 'dark' || payload?.theme === 'system'
         ? { theme: payload.theme }
+        : {}),
+      ...(typeof payload?.meetingRemindersEnabled === 'boolean'
+        ? { meetingRemindersEnabled: payload.meetingRemindersEnabled }
         : {}),
     }
     saveAudioPreferences(next)

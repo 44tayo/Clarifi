@@ -52,3 +52,56 @@ export async function fetchCalendarEvents(): Promise<CalendarEventsResponse> {
   if (!ok || !data) return empty
   return data
 }
+
+/** OAuth URL bound to the paired Clarifi account (not the browser session). */
+export async function fetchCalendarOAuthUrl(
+  provider: 'google' | 'microsoft',
+): Promise<{ ok: boolean; authUrl?: string; error?: string }> {
+  const { ok, status, data } = await deviceGet<{
+    ok?: boolean
+    authUrl?: string
+    error?: string
+  }>(`/api/desktop/calendar/oauth-url?provider=${provider}`)
+
+  if (!ok || !data?.authUrl) {
+    return {
+      ok: false,
+      error: data?.error || (status === 401 ? 'unauthorized' : 'oauth_url_failed'),
+    }
+  }
+
+  return { ok: true, authUrl: data.authUrl }
+}
+
+export async function disconnectCalendarProvider(
+  provider: 'google' | 'microsoft',
+): Promise<{ ok: boolean; error?: string }> {
+  const baseUrl = getClarifiApiUrl()
+  const headers = await deviceHeaders()
+  if (!baseUrl || !headers) {
+    return { ok: false, error: 'unauthorized' }
+  }
+
+  try {
+    const response = await fetch(`${baseUrl}/api/desktop/calendar/disconnect`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider }),
+    })
+    let data: { ok?: boolean; error?: string } | null = null
+    try {
+      data = (await response.json()) as { ok?: boolean; error?: string }
+    } catch {
+      data = null
+    }
+    if (!response.ok || !data?.ok) {
+      return {
+        ok: false,
+        error: data?.error || (response.status === 401 ? 'unauthorized' : 'disconnect_failed'),
+      }
+    }
+    return { ok: true }
+  } catch {
+    return { ok: false, error: 'disconnect_failed' }
+  }
+}

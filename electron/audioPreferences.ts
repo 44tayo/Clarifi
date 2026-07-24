@@ -79,6 +79,10 @@ export function loadAudioPreferences(): AudioPreferences {
           ? parsed.skipMicPicker
           : DEFAULTS.skipMicPicker,
       theme: parseTheme(parsed.theme),
+      meetingRemindersEnabled:
+        typeof parsed.meetingRemindersEnabled === 'boolean'
+          ? parsed.meetingRemindersEnabled
+          : DEFAULTS.meetingRemindersEnabled,
     }
     return cached
   } catch {

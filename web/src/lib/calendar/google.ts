@@ -68,8 +68,6 @@ export function googleEventToCalendarEvent(item: GoogleEvent): CalendarEvent | n
   }
 
   const attendees = parseGoogleAttendees(item.attendees)
-  const participantCount = attendees.length > 0 ? attendees.length : 1
-  if (participantCount < 2) return null
 
   let meetingUrl: string | null = item.hangoutLink ?? null
   if (!meetingUrl && item.conferenceData?.entryPoints) {

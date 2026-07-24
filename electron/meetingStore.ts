@@ -18,6 +18,7 @@ export type StoredMeeting = {
   id: string
   title: string
   createdAt: number
+  updatedAt?: number
   startedAt?: number
   endedAt?: number
   status: MeetingStatus
@@ -32,6 +33,7 @@ export type StoredMeeting = {
   enhancedNotes?: string
   summary?: string
   actionItems?: string[]
+  completedActionItems?: string[]
   enhanceError?: string
 }
 
@@ -153,6 +155,7 @@ export function createMeeting(input?: CreateMeetingInput | string): StoredMeetin
     id: randomUUID(),
     title: options.title?.trim() || defaultTitle(options.scheduledStart ?? now),
     createdAt: now,
+    updatedAt: now,
     status: 'draft',
     userNotes: '',
     transcript: [],
@@ -176,9 +179,31 @@ export function updateMeeting(
   const meetings = readAll()
   const index = meetings.findIndex((m) => m.id === id)
   if (index < 0) return null
-  meetings[index] = { ...meetings[index]!, ...patch, id, createdAt: meetings[index]!.createdAt }
+  meetings[index] = {
+    ...meetings[index]!,
+    ...patch,
+    id,
+    createdAt: meetings[index]!.createdAt,
+    updatedAt: Date.now(),
+  }
   writeAll(meetings)
   return meetings[index]!
+}
+
+export function upsertMeetingSnapshot(meeting: StoredMeeting): StoredMeeting {
+  const meetings = readAll()
+  const index = meetings.findIndex((m) => m.id === meeting.id)
+  const next: StoredMeeting = {
+    ...meeting,
+    updatedAt: meeting.updatedAt ?? Date.now(),
+  }
+  if (index >= 0) {
+    meetings[index] = { ...next, createdAt: meetings[index]!.createdAt }
+  } else {
+    meetings.unshift(next)
+  }
+  writeAll(meetings)
+  return index >= 0 ? meetings[index]! : meetings[0]!
 }
 
 export function deleteMeeting(id: string): boolean {
@@ -244,3 +269,93 @@ function defaultTitle(at: number): string {
     minute: '2-digit',
   }).format(new Date(at))
 }
+
+/** Fixed-id sample artifact so Home always has one post-meeting example. */
+export const DEMO_ARTIFACT_MEETING_ID = 'demo-post-meeting-artifact'
+
+export function ensureDemoArtifactMeeting(): { meeting: StoredMeeting; created: boolean } {
+  const existed = Boolean(getMeeting(DEMO_ARTIFACT_MEETING_ID))
+
+  const startedAt = Date.now() - 2 * 60 * 60 * 1000
+  const endedAt = startedAt + 22 * 60 * 1000
+  const meeting: StoredMeeting = {
+    id: DEMO_ARTIFACT_MEETING_ID,
+    title: 'Clarifi Home & Coming up redesign',
+    createdAt: startedAt,
+    updatedAt: endedAt,
+    startedAt,
+    endedAt,
+    status: 'ready',
+    userNotes:
+      '- Prefer Coming up as a raised widget\n- Date chip in header: Coming up | Thu 23 Jul\n- Post-meeting should feel like Jamie tabs + Granola ask bar\n- Keep Clarifi blue only',
+    speakerLabels: {
+      'Speaker 1': 'Tayo',
+      'Speaker 2': 'Sam',
+    },
+    attendeeEmails: ['tayo@example.com', 'sam@clarifi.app'],
+    folderIds: [],
+    transcript: [
+      {
+        id: 't1',
+        text: 'Coming up feels flat — I want it back as a widget with Coming up and the date on one line.',
+        source: 'mic',
+        speaker: 'Speaker 1',
+        at: startedAt + 30_000,
+      },
+      {
+        id: 't2',
+        text: 'Got it. We can ship a card header and then build the post-meeting artifact with Summary, Transcript, Tasks, and My notes.',
+        source: 'system',
+        speaker: 'Speaker 2',
+        at: startedAt + 75_000,
+      },
+      {
+        id: 't3',
+        text: 'Also add Ask this meeting at the bottom and a follow-up email action — Clarifi blue, not purple or lime.',
+        source: 'mic',
+        speaker: 'Speaker 1',
+        at: startedAt + 140_000,
+      },
+      {
+        id: 't4',
+        text: 'Tasks should be a real checklist from action items. Speakers renameable in the transcript.',
+        source: 'system',
+        speaker: 'Speaker 2',
+        at: startedAt + 200_000,
+      },
+    ],
+    summary:
+      'Aligned Clarifi Home Coming up as a widget header and locked a post-meeting artifact IA: Summary, Transcript, Tasks, My notes, plus a sticky Ask bar.',
+    enhancedNotes: `## Summary
+Clarifi will treat the post-meeting note as a first-class artifact: four tabs, structured AI sections, checklist Tasks, and a meeting-scoped Ask bar with follow-up email.
+
+## Key points
+- Coming up widget header: Coming up | date
+- Tabs: Summary · Transcript · Tasks · My notes
+- Sticky Ask this meeting + Write follow-up email
+- Rename speakers from Transcript
+- Clarifi blue only — no Jamie purple or Granola lime
+
+## Decisions
+- Ship Tasks as a local checklist first (no assignees/due dates yet)
+- Defer audio Replay until recordings are stored
+- Folders cover organization; tags stay later
+
+## Action items
+- Rebuild MeetingWorkspace tabs and Summary section renderer
+- Add Tasks checklist with completedActionItems persistence
+- Wire MeetingAskBar to chat:send with meeting scope
+- Seed a demo artifact meeting for review`,
+    actionItems: [
+      'Rebuild MeetingWorkspace tabs and Summary section renderer',
+      'Add Tasks checklist with completedActionItems persistence',
+      'Wire MeetingAskBar to chat:send with meeting scope',
+      'Seed a demo artifact meeting for review',
+    ],
+    completedActionItems: ['Seed a demo artifact meeting for review'],
+  }
+
+  upsertMeetingSnapshot(meeting)
+  return { meeting, created: !existed }
+}
+

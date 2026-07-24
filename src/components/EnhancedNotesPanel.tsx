@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 
+import { formatBullets, parseEnhancedSections } from '../lib/parseEnhancedNotes'
 import type { Meeting } from '../types/meeting'
 
 type EnhancedNotesPanelProps = {
@@ -10,44 +11,54 @@ type EnhancedNotesPanelProps = {
 export function EnhancedNotesPanel({ meeting }: EnhancedNotesPanelProps) {
   const [copied, setCopied] = useState(false)
 
-  const body = useMemo(() => {
-    return meeting.enhancedNotes || meeting.summary || 'Enhanced notes will appear here.'
-  }, [meeting.enhancedNotes, meeting.summary])
+  const source = meeting.enhancedNotes || meeting.summary || ''
+  const sections = useMemo(() => parseEnhancedSections(source), [source])
 
   const copySummary = async () => {
-    const parts = [body]
-    if (meeting.actionItems && meeting.actionItems.length > 0) {
-      parts.push('', 'Action items:', ...meeting.actionItems.map((item) => `- ${item}`))
+    const parts: string[] = []
+    for (const section of sections) {
+      parts.push(`## ${section.title}`, section.body, '')
     }
-    await navigator.clipboard.writeText(parts.join('\n'))
+    if (meeting.actionItems && meeting.actionItems.length > 0) {
+      parts.push('## Action items', ...meeting.actionItems.map((item) => `- ${item}`))
+    }
+    await navigator.clipboard.writeText(parts.join('\n').trim() || 'No summary yet.')
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1600)
   }
 
   return (
-    <section className="enhanced-panel">
-      <div className="enhanced-panel-toolbar">
-        <button type="button" className="btn btn-secondary" onClick={() => void copySummary()}>
-          {copied ? 'Copied' : 'Copy summary'}
+    <section className="enhanced-panel artifact-summary-panel">
+      <div className="artifact-doc-toolbar">
+        <button type="button" className="artifact-doc-copy" onClick={() => void copySummary()}>
+          {copied ? 'Copied' : 'Copy'}
         </button>
       </div>
 
-      {meeting.actionItems && meeting.actionItems.length > 0 ? (
-        <div style={{ marginBottom: 16 }}>
-          <div className="pane-header" style={{ paddingLeft: 0 }}>
-            Action items
-          </div>
-          <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--ds-text-primary)' }}>
-            {meeting.actionItems.map((item) => (
-              <li key={item} style={{ marginBottom: 6 }}>
-                {item}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      <div className="enhanced-markdown">{body}</div>
+      {!source ? (
+        <p className="artifact-empty">Enhanced notes will appear here after the meeting.</p>
+      ) : (
+        <article className="artifact-summary-doc">
+          {sections.map((section) => {
+            const bullets = formatBullets(section.body)
+            const useList = bullets.length > 1 || /^[-*•]/.test(section.body.trim())
+            return (
+              <section key={section.id} className="artifact-summary-section">
+                <h3 className="artifact-summary-heading">{section.title}</h3>
+                {useList ? (
+                  <ul className="artifact-summary-list">
+                    {bullets.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="artifact-summary-body">{section.body}</p>
+                )}
+              </section>
+            )
+          })}
+        </article>
+      )}
     </section>
   )
 }

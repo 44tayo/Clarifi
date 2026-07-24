@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from 'crypto'
 import fetch from 'node-fetch'
 import { getClarifiApiUrl } from './keys'
-import { saveKey } from './store'
+import { getKey, saveKey } from './store'
 
 const DEVICE_ID_KEY = 'device_id'
 const DEVICE_SECRET_KEY = 'device_secret'
@@ -92,8 +92,12 @@ export async function exchangeAuthToken(
   const baseUrl = getClarifiApiUrl()
   if (!baseUrl) return { ok: false, error: 'api_url_missing' }
 
-  const deviceId = randomUUID()
-  const deviceSecret = randomBytes(32).toString('base64url')
+  // Reuse existing device credentials so re-connect updates the same
+  // desktop_devices row and keeps integrations tied to this machine/account.
+  const existingId = await getKey(DEVICE_ID_KEY)
+  const existingSecret = await getKey(DEVICE_SECRET_KEY)
+  const deviceId = existingId || randomUUID()
+  const deviceSecret = existingSecret || randomBytes(32).toString('base64url')
 
   try {
     const response = await fetch(`${baseUrl}/api/desktop/exchange`, {

@@ -21,6 +21,7 @@ type PrefsPatch = Partial<
     | 'transcriptionMode'
     | 'skipMicPicker'
     | 'theme'
+    | 'meetingRemindersEnabled'
   >
 >
 

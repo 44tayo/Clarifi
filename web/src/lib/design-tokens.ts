@@ -4,16 +4,16 @@ export const colors = {
   blue: '#2b6cff',
   blueHover: '#1a5ae8',
   heroAccent: '#60b4ff',
-  navy: '#1a1a2e',
-  charcoal: '#1c1c2e',
-  muted: '#6b7280',
-  mutedHero: '#94a3b8',
-  lavender: '#dde2ee',
-  lavenderSoft: '#eef1f8',
-  border: '#e8ecf4',
-  card: '#f7f8fc',
-  surfaceFeature: '#f4f4f5',
-  surfaceVisual: '#ececef',
+  navy: '#17181c',
+  charcoal: '#1f2025',
+  muted: '#5f6470',
+  mutedHero: '#8e939e',
+  lavender: '#e5e4e0',
+  lavenderSoft: '#f1f0ed',
+  border: '#eae9e5',
+  card: '#f7f6f3',
+  surfaceFeature: '#f5f4f1',
+  surfaceVisual: '#efeeea',
 } as const
 
 export const layout = {
@@ -23,10 +23,10 @@ export const layout = {
 } as const
 
 export const radii = {
-  button: '0.75rem',
-  card: '1rem',
-  visual: '0.75rem',
-  mock: '0.65rem',
+  button: '0.5rem',
+  card: '0.875rem',
+  visual: '0.625rem',
+  mock: '0.5rem',
 } as const
 
 /** Accent palette for feature mock chips, avatars, etc. */

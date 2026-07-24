@@ -1,4 +1,10 @@
 import {
+  maxTokensForEffort,
+  normalizeChatEffort,
+  resolveChatApiModel,
+  type ChatEffort,
+} from './chatOptions'
+import {
   CLARIFI_ENTERPRISE_SYSTEM_PROMPT,
   CLARIFI_GENERAL_SYSTEM_PROMPT,
   CLARIFI_SUGGESTIONS_SYSTEM_PROMPT,
@@ -11,9 +17,11 @@ export interface Suggestion {
   type: 'response' | 'question' | 'action'
 }
 
+export type ChatImageMime = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
+
 export interface ScreenContextImage {
   imageBase64: string
-  mimeType: 'image/png'
+  mimeType: ChatImageMime
 }
 
 export interface ChatRequest {
@@ -21,6 +29,9 @@ export interface ChatRequest {
   transcriptLines: string[]
   useScreenContext: boolean
   screenImage?: ScreenContextImage
+  images?: ScreenContextImage[]
+  model?: string
+  effort?: ChatEffort
 }
 
 export type ChatResult = { reply: string } | { error: string }
@@ -29,17 +40,29 @@ type AnthropicContentBlock =
   | { type: 'text'; text: string }
   | {
       type: 'image'
-      source: { type: 'base64'; media_type: 'image/png'; data: string }
+      source: { type: 'base64'; media_type: ChatImageMime; data: string }
     }
 
 function getAnthropicKey(): string | null {
   return process.env.ANTHROPIC_API_KEY?.trim() || null
 }
 
-export async function chatWithMeetingContext(request: ChatRequest): Promise<ChatResult> {
-  const { message, transcriptLines, useScreenContext, screenImage } = request
+function collectChatImages(request: ChatRequest): ScreenContextImage[] {
+  const images: ScreenContextImage[] = []
+  if (request.screenImage?.imageBase64) images.push(request.screenImage)
+  if (Array.isArray(request.images)) {
+    for (const image of request.images) {
+      if (image?.imageBase64 && image.mimeType) images.push(image)
+    }
+  }
+  return images.slice(0, 6)
+}
 
-  if (useScreenContext && !screenImage) {
+export async function chatWithMeetingContext(request: ChatRequest): Promise<ChatResult> {
+  const { message, transcriptLines, useScreenContext } = request
+  const images = collectChatImages(request)
+
+  if (useScreenContext && images.length === 0) {
     return { error: 'capture_failed' }
   }
 
@@ -52,31 +75,33 @@ export async function chatWithMeetingContext(request: ChatRequest): Promise<Chat
   const transcript =
     transcriptLines.length > 0 ? transcriptLines.join('\n') : '(no transcript yet)'
 
-  const screenStyleHint = screenImage
+  const hasImages = images.length > 0
+  const screenStyleHint = useScreenContext && hasImages
     ? '\n\nReply concisely using screen context reply style. No backticks. No em-dashes. Max 6 visible details bullets. Max 6 tab names. One summary sentence with **bold** key names only. Total response under 1200 characters for simple screen questions.'
     : ''
 
-  const userText = screenImage
+  const userText = hasImages
     ? `Live meeting transcript:\n${transcript}\n\nUser typed question:\n${message}${screenStyleHint}`
     : `Live meeting transcript:\n${transcript}\n\nUser question:\n${message}`
 
-  const systemPrompt = screenImage
+  const systemPrompt = useScreenContext && hasImages
     ? CLARIFI_ENTERPRISE_SYSTEM_PROMPT
     : CLARIFI_GENERAL_SYSTEM_PROMPT
 
-  const userContent: AnthropicContentBlock[] = screenImage
-    ? [
-        {
-          type: 'image',
-          source: {
-            type: 'base64',
-            media_type: screenImage.mimeType,
-            data: screenImage.imageBase64,
-          },
-        },
-        { type: 'text', text: userText },
-      ]
-    : [{ type: 'text', text: userText }]
+  const userContent: AnthropicContentBlock[] = [
+    ...images.map((image) => ({
+      type: 'image' as const,
+      source: {
+        type: 'base64' as const,
+        media_type: image.mimeType,
+        data: image.imageBase64,
+      },
+    })),
+    { type: 'text', text: userText },
+  ]
+
+  const model = resolveChatApiModel(request.model)
+  const maxTokens = maxTokensForEffort(normalizeChatEffort(request.effort))
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -87,8 +112,8 @@ export async function chatWithMeetingContext(request: ChatRequest): Promise<Chat
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: CHAT_MODEL,
-        max_tokens: 2048,
+        model,
+        max_tokens: maxTokens,
         system: systemPrompt,
         messages: [{ role: 'user', content: userContent }],
       }),

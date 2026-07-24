@@ -3,20 +3,24 @@ import fetch from 'node-fetch'
 import { getDeviceCredentials } from './deviceAuth'
 import { getClarifiApiUrl } from './keys'
 
+export type ChatImagePayload = {
+  imageBase64: string
+  mimeType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
+}
+
 export type ChatRequest = {
   message: string
   transcriptLines?: string[]
   useScreenContext?: boolean
+  screenImage?: ChatImagePayload
+  images?: ChatImagePayload[]
+  model?: string
+  effort?: 'low' | 'medium' | 'max'
 }
 
 export type ChatResult =
   | { reply: string }
   | { error: string }
-
-export type Suggestion = {
-  title: string
-  body: string
-}
 
 export async function isProxyConfigured(): Promise<boolean> {
   const creds = await getDeviceCredentials()
@@ -71,6 +75,10 @@ export async function proxyMeetingChat(request: ChatRequest): Promise<ChatResult
     message: request.message,
     transcriptLines: request.transcriptLines ?? [],
     useScreenContext: request.useScreenContext ?? false,
+    ...(request.screenImage ? { screenImage: request.screenImage } : {}),
+    ...(request.images?.length ? { images: request.images } : {}),
+    ...(request.model ? { model: request.model } : {}),
+    ...(request.effort ? { effort: request.effort } : {}),
   })
 
   if (status === 0) return { error: 'network_error' }
@@ -90,21 +98,6 @@ export async function proxyMeetingChat(request: ChatRequest): Promise<ChatResult
 /** @deprecated Use proxyMeetingChat */
 export async function proxyChat(request: ChatRequest): Promise<ChatResult> {
   return proxyMeetingChat(request)
-}
-
-export async function proxySuggest(
-  transcriptLines: string[],
-  playbook = '',
-): Promise<Suggestion[]> {
-  const { ok, status, data } = await proxyFetch('/api/llm/suggest', {
-    transcriptLines,
-    playbook,
-  })
-
-  if (status === 401 || status === 403 || status === 429 || !ok) return []
-
-  const result = data as { suggestions?: Suggestion[] }
-  return Array.isArray(result.suggestions) ? result.suggestions : []
 }
 
 export async function proxyTranscribe(

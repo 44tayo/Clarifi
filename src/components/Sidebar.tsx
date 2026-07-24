@@ -1,12 +1,19 @@
-import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
+import {
+  useMemo,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react'
 
 import { FREE_HISTORY_RETENTION_DAYS } from '../../shared/entitlements'
-import type { Folder, ConnectionStatus } from '../types/meeting'
+import type { Folder, ConnectionStatus, Meeting } from '../types/meeting'
 import type { SidebarSelection } from '../types/navigation'
 
 type SidebarProps = {
   selection: SidebarSelection
   onSelectView: (selection: SidebarSelection) => void
+  meetings: Meeting[]
+  onSelectMeeting: (id: string) => void
   folders: Folder[]
   onCreateFolder: (name: string) => void
   onRenameFolder: (id: string, name: string) => void
@@ -16,11 +23,20 @@ type SidebarProps = {
   onConnect: () => void
   onOpenDashboard: () => void
   onOpenSettings: () => void
-  onOpenSearch?: () => void
   resizing?: boolean
   onResizePointerDown?: (event: ReactPointerEvent<HTMLDivElement>) => void
   onResizeDoubleClick?: () => void
 }
+
+const CHAT_PLACEHOLDER_FOLDERS = ['Product', 'Research']
+const CHAT_PLACEHOLDER_THREADS = [
+  'Unclear Message Needs Clarification',
+  'Follow-up: GTM event support',
+  'Ask about last summary',
+]
+
+const MEETING_PLACEHOLDER_FOLDERS = ['Client calls', 'Internal']
+const MEETING_PLACEHOLDER_ITEMS = ['Weekly sync (placeholder)', 'Design review (placeholder)']
 
 function NavIcon({ children }: { children: ReactNode }) {
   return (
@@ -30,9 +46,82 @@ function NavIcon({ children }: { children: ReactNode }) {
   )
 }
 
+function Chevron({ open }: { open?: boolean }) {
+  return (
+    <span className={`sidebar-nav-chevron${open ? ' is-open' : ''}`} aria-hidden>
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path
+          d="M4.5 2.5 8 6 4.5 9.5"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
+  )
+}
+
+function accountInitial(email?: string) {
+  const trimmed = email?.trim()
+  if (!trimmed) return 'C'
+  return trimmed.charAt(0).toUpperCase()
+}
+
+type AccordionProps = {
+  label: string
+  active: boolean
+  icon: ReactNode
+  onOpenAll: () => void
+  onAdd?: () => void
+  addLabel?: string
+  children: ReactNode
+}
+
+function NavAccordion({ label, active, icon, onOpenAll, onAdd, addLabel, children }: AccordionProps) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className={`sidebar-nav-accordion${open ? ' is-open' : ''}${active ? ' is-active' : ''}`}>
+      <div className="sidebar-nav-accordion-trigger">
+        <button
+          type="button"
+          className={`sidebar-nav-item sidebar-nav-accordion-main${active ? ' is-active' : ''}`}
+          aria-expanded={open}
+          onClick={() => {
+            setOpen((prev) => !prev)
+            onOpenAll()
+          }}
+        >
+          <NavIcon>{icon}</NavIcon>
+          <span className="sidebar-nav-accordion-label">{label}</span>
+          <Chevron open={open} />
+        </button>
+        {onAdd ? (
+          <button
+            type="button"
+            className="sidebar-nav-accordion-add"
+            aria-label={addLabel ?? `New ${label}`}
+            title={addLabel ?? `New ${label}`}
+            onClick={(event) => {
+              event.stopPropagation()
+              onAdd()
+            }}
+          >
+            +
+          </button>
+        ) : null}
+      </div>
+      {open ? <div className="sidebar-nav-accordion-panel">{children}</div> : null}
+    </div>
+  )
+}
+
 export function Sidebar({
   selection,
   onSelectView,
+  meetings,
+  onSelectMeeting,
   folders,
   onCreateFolder,
   onRenameFolder,
@@ -42,7 +131,6 @@ export function Sidebar({
   onConnect,
   onOpenDashboard,
   onOpenSettings,
-  onOpenSearch,
   resizing = false,
   onResizePointerDown,
   onResizeDoubleClick,
@@ -53,6 +141,17 @@ export function Sidebar({
     }
     return selection.view === view
   }
+
+  const recentMeetings = useMemo(
+    () =>
+      [...meetings]
+        .sort((a, b) => (b.startedAt ?? b.createdAt) - (a.startedAt ?? a.createdAt))
+        .slice(0, 6),
+    [meetings],
+  )
+
+  const meetingFolderPlaceholders =
+    folders.length === 0 ? MEETING_PLACEHOLDER_FOLDERS : MEETING_PLACEHOLDER_FOLDERS.slice(0, 1)
 
   return (
     <aside className="sidebar">
@@ -70,21 +169,15 @@ export function Sidebar({
             className="sidebar-brand-mark"
             src={`${import.meta.env.BASE_URL}clarifi-logo.png`}
             alt=""
-            width={28}
-            height={28}
+            width={22}
+            height={22}
             draggable={false}
           />
           <span className="sidebar-brand-name">Clarifi</span>
         </div>
         <button type="button" className="sidebar-start-btn" onClick={onNewMeeting}>
-          Start meeting
+          New meeting
         </button>
-        {onOpenSearch ? (
-          <button type="button" className="sidebar-search-btn" onClick={onOpenSearch}>
-            <span>Search</span>
-            <kbd>⌘K</kbd>
-          </button>
-        ) : null}
       </div>
 
       <nav className="sidebar-nav" aria-label="Main">
@@ -94,77 +187,88 @@ export function Sidebar({
           onClick={() => onSelectView({ view: 'home' })}
         >
           <NavIcon>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" />
             </svg>
           </NavIcon>
           Home
         </button>
-        <button
-          type="button"
-          className={`sidebar-nav-item${isActive('chat') ? ' is-active' : ''}`}
-          onClick={() => onSelectView({ view: 'chat' })}
-        >
-          <NavIcon>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+
+        <NavAccordion
+          label="Chat"
+          active={isActive('chat')}
+          onOpenAll={() => onSelectView({ view: 'chat' })}
+          onAdd={() => onSelectView({ view: 'chat' })}
+          addLabel="New chat"
+          icon={
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v7A2.5 2.5 0 0 1 16.5 16H10l-4 3.5V16H7.5A2.5 2.5 0 0 1 5 13.5v-7Z" />
             </svg>
-          </NavIcon>
-          Chat
-        </button>
-        <button
-          type="button"
-          className={`sidebar-nav-item${isActive('meetings') ? ' is-active' : ''}`}
-          onClick={() => onSelectView({ view: 'meetings' })}
+          }
         >
-          <NavIcon>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+          <p className="sidebar-flyout-section">Folders</p>
+          {CHAT_PLACEHOLDER_FOLDERS.map((name) => (
+            <button
+              key={name}
+              type="button"
+              className="sidebar-flyout-item is-placeholder"
+              onClick={() => onSelectView({ view: 'chat' })}
+            >
+              <span className="sidebar-flyout-item-icon" aria-hidden>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M3.5 8.5A2.5 2.5 0 0 1 6 6h4l2 2h6a2.5 2.5 0 0 1 2.5 2.5v7A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5v-9Z" />
+                </svg>
+              </span>
+              {name}
+              <span className="sidebar-flyout-badge">Soon</span>
+            </button>
+          ))}
+          <p className="sidebar-flyout-section">Chats</p>
+          {CHAT_PLACEHOLDER_THREADS.map((title) => (
+            <button
+              key={title}
+              type="button"
+              className="sidebar-flyout-item"
+              onClick={() => onSelectView({ view: 'chat' })}
+            >
+              {title}
+            </button>
+          ))}
+        </NavAccordion>
+
+        <NavAccordion
+          label="Meetings"
+          active={isActive('meetings') || selection.view === 'folder'}
+          onOpenAll={() => onSelectView({ view: 'meetings' })}
+          onAdd={onNewMeeting}
+          addLabel="New meeting"
+          icon={
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <rect x="4" y="5" width="16" height="15" rx="2" />
               <path d="M8 3v4M16 3v4M4 10h16" />
             </svg>
-          </NavIcon>
-          Meetings
-        </button>
-        <button
-          type="button"
-          className={`sidebar-nav-item${isActive('shared') ? ' is-active' : ''}`}
-          onClick={() => onSelectView({ view: 'shared' })}
+          }
         >
-          <NavIcon>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="18" cy="5" r="2.5" />
-              <circle cx="6" cy="12" r="2.5" />
-              <circle cx="18" cy="19" r="2.5" />
-              <path d="M8.4 13.2 15.6 17.3M15.6 6.7 8.4 10.8" />
-            </svg>
-          </NavIcon>
-          Shared with me
-        </button>
-      </nav>
-
-      <div className="sidebar-section-label sidebar-section-label-row">
-        <span>Folders</span>
-        <button
-          type="button"
-          className="link-btn"
-          onClick={() => {
-            const name = window.prompt('Folder name', 'New folder')
-            if (name?.trim()) onCreateFolder(name.trim())
-          }}
-        >
-          Add folder
-        </button>
-      </div>
-
-      <div className="sidebar-folder-list">
-        {folders.length === 0 ? (
-          <p className="sidebar-calendar-empty">No folders yet</p>
-        ) : (
-          folders.map((folder) => (
-            <div key={folder.id} className="sidebar-folder-row">
+          <div className="sidebar-flyout-section-row">
+            <p className="sidebar-flyout-section">Folders</p>
+            <button
+              type="button"
+              className="sidebar-flyout-section-add"
+              aria-label="New folder"
+              title="New folder"
+              onClick={() => {
+                const name = window.prompt('Folder name', 'New folder')
+                if (name?.trim()) onCreateFolder(name.trim())
+              }}
+            >
+              +
+            </button>
+          </div>
+          {folders.map((folder) => (
+            <div key={folder.id} className="sidebar-flyout-folder-row">
               <button
                 type="button"
-                className={`sidebar-folder-item${isActive('folder', folder.id) ? ' is-active' : ''}`}
+                className={`sidebar-flyout-item${isActive('folder', folder.id) ? ' is-active' : ''}`}
                 onClick={() => onSelectView({ view: 'folder', folderId: folder.id })}
                 onDoubleClick={() => {
                   const name = window.prompt('Rename folder', folder.name)
@@ -174,16 +278,16 @@ export function Sidebar({
                 }}
                 title="Double-click to rename"
               >
-                <NavIcon>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+                <span className="sidebar-flyout-item-icon" aria-hidden>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M3.5 8.5A2.5 2.5 0 0 1 6 6h4l2 2h6a2.5 2.5 0 0 1 2.5 2.5v7A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5v-9Z" />
                   </svg>
-                </NavIcon>
+                </span>
                 {folder.name}
               </button>
               <button
                 type="button"
-                className="sidebar-folder-delete"
+                className="sidebar-flyout-folder-delete"
                 aria-label={`Delete ${folder.name}`}
                 onClick={() => {
                   if (window.confirm(`Delete folder “${folder.name}”? Meetings stay in Meetings.`)) {
@@ -197,38 +301,125 @@ export function Sidebar({
                 ×
               </button>
             </div>
-          ))
-        )}
-      </div>
+          ))}
+          {meetingFolderPlaceholders.map((name) => (
+            <button
+              key={name}
+              type="button"
+              className="sidebar-flyout-item is-placeholder"
+              onClick={() => onSelectView({ view: 'meetings' })}
+            >
+              <span className="sidebar-flyout-item-icon" aria-hidden>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M3.5 8.5A2.5 2.5 0 0 1 6 6h4l2 2h6a2.5 2.5 0 0 1 2.5 2.5v7A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5v-9Z" />
+                </svg>
+              </span>
+              {name}
+              <span className="sidebar-flyout-badge">Soon</span>
+            </button>
+          ))}
+
+          <p className="sidebar-flyout-section">Meetings</p>
+          {recentMeetings.map((meeting) => (
+            <button
+              key={meeting.id}
+              type="button"
+              className="sidebar-flyout-item"
+              onClick={() => onSelectMeeting(meeting.id)}
+            >
+              {meeting.title}
+            </button>
+          ))}
+          {recentMeetings.length === 0
+            ? MEETING_PLACEHOLDER_ITEMS.map((title) => (
+                <button
+                  key={title}
+                  type="button"
+                  className="sidebar-flyout-item is-placeholder"
+                  onClick={() => onSelectView({ view: 'meetings' })}
+                >
+                  {title}
+                </button>
+              ))
+            : null}
+          {recentMeetings.length > 0 && recentMeetings.length < 3
+            ? MEETING_PLACEHOLDER_ITEMS.slice(0, 1).map((title) => (
+                <button
+                  key={title}
+                  type="button"
+                  className="sidebar-flyout-item is-placeholder"
+                  onClick={() => onSelectView({ view: 'meetings' })}
+                >
+                  {title}
+                  <span className="sidebar-flyout-badge">Soon</span>
+                </button>
+              ))
+            : null}
+        </NavAccordion>
+
+        <button
+          type="button"
+          className={`sidebar-nav-item${isActive('shared') ? ' is-active' : ''}`}
+          onClick={() => onSelectView({ view: 'shared' })}
+        >
+          <NavIcon>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="18" cy="5" r="2.5" />
+              <circle cx="6" cy="12" r="2.5" />
+              <circle cx="18" cy="19" r="2.5" />
+              <path d="M8.4 13.2 15.6 17.3M15.6 6.7 8.4 10.8" />
+            </svg>
+          </NavIcon>
+          Shared with me
+        </button>
+      </nav>
 
       <div className="sidebar-footer">
         {connection.paired ? (
-          <div className="account-chip">
-            <span className="account-chip-label">Account</span>
-            <span className="account-chip-email">{connection.email ?? 'Connected'}</span>
-            {connection.planLabel ? (
-              <span className="account-chip-label">{connection.planLabel}</span>
-            ) : null}
-            {connection.plan !== 'pro' && connection.plan !== 'pro_plus' ? (
-              <span className="account-chip-label">
-                Free plan · {FREE_HISTORY_RETENTION_DAYS} days of history
+          <div className="account-chip account-chip-compact">
+            <span className="account-chip-avatar" aria-hidden>
+              {accountInitial(connection.email)}
+            </span>
+            <div className="account-chip-meta">
+              <span className="account-chip-email">{connection.email ?? 'Connected'}</span>
+              <span className="account-chip-plan">
+                {connection.planLabel ??
+                  (connection.plan !== 'pro' && connection.plan !== 'pro_plus'
+                    ? `Free · ${FREE_HISTORY_RETENTION_DAYS}d`
+                    : 'Plan')}
               </span>
-            ) : null}
-            <button type="button" className="link-btn" onClick={onOpenDashboard}>
-              Open dashboard
+            </div>
+            <button type="button" className="account-chip-icon-btn" onClick={onOpenSettings} aria-label="Settings">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 2.5v2.2M12 19.3v2.2M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6" />
+              </svg>
             </button>
           </div>
         ) : (
-          <div className="account-chip">
-            <span className="account-chip-label">Sign in to sync & enhance notes</span>
-            <button type="button" className="link-btn" onClick={onConnect}>
-              Connect account
+          <div className="account-chip account-chip-compact">
+            <span className="account-chip-avatar" aria-hidden>
+              ?
+            </span>
+            <div className="account-chip-meta">
+              <span className="account-chip-email">Not connected</span>
+              <button type="button" className="link-btn" onClick={onConnect}>
+                Connect account
+              </button>
+            </div>
+            <button type="button" className="account-chip-icon-btn" onClick={onOpenSettings} aria-label="Settings">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 2.5v2.2M12 19.3v2.2M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6" />
+              </svg>
             </button>
           </div>
         )}
-        <button type="button" className="link-btn sidebar-settings-btn" onClick={onOpenSettings}>
-          Settings
-        </button>
+        {connection.paired ? (
+          <button type="button" className="link-btn sidebar-dashboard-link" onClick={onOpenDashboard}>
+            Open dashboard
+          </button>
+        ) : null}
       </div>
     </aside>
   )

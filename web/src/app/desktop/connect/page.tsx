@@ -9,6 +9,8 @@ import {
 } from '@/components/ui/connect-flux-loader'
 import '@/components/auth/auth.css'
 
+const SESSION_TIMEOUT_MS = 4000
+
 export default function DesktopConnectPage() {
   const [ready, setReady] = useState(false)
   const [signedIn, setSignedIn] = useState(false)
@@ -20,15 +22,38 @@ export default function DesktopConnectPage() {
   const progress = useSimulatedProgress(isConnecting || isComplete, isComplete)
 
   useEffect(() => {
+    let cancelled = false
     const supabase = createClient()
     if (!supabase) {
       setReady(true)
       return
     }
-    void supabase.auth.getSession().then(({ data: { session } }) => {
-      setSignedIn(!!session?.user)
+
+    const timeout = window.setTimeout(() => {
+      if (cancelled) return
+      setSignedIn(false)
       setReady(true)
-    })
+    }, SESSION_TIMEOUT_MS)
+
+    void supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        if (cancelled) return
+        window.clearTimeout(timeout)
+        setSignedIn(!!session?.user)
+        setReady(true)
+      })
+      .catch(() => {
+        if (cancelled) return
+        window.clearTimeout(timeout)
+        setSignedIn(false)
+        setReady(true)
+      })
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeout)
+    }
   }, [])
 
   useEffect(() => {
@@ -40,7 +65,7 @@ export default function DesktopConnectPage() {
 
       try {
         const res = await fetch('/api/desktop/authorize', { method: 'POST' })
-        const data = await res.json()
+        const data = (await res.json()) as { deepLink?: string; error?: string }
         if (!res.ok || !data.deepLink) {
           setStatus('error')
           setError(data.error || 'Could not connect desktop')

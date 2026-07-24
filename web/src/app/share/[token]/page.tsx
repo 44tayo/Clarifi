@@ -92,6 +92,28 @@ export default async function SharedMeetingPage({ params }: PageProps) {
         </section>
       ) : null}
 
+      {Array.isArray(content.transcript) && content.transcript.length > 0 ? (
+        <section className="mt-8">
+          <h2 className="text-lg font-semibold text-[color:var(--ds-ink)]">Transcript</h2>
+          <ul className="mt-3 space-y-3">
+            {content.transcript.map((line, index) => {
+              const speaker =
+                typeof line?.speaker === 'string' && line.speaker.trim()
+                  ? line.speaker
+                  : 'Speaker'
+              const text = typeof line?.text === 'string' ? line.text : ''
+              if (!text.trim()) return null
+              return (
+                <li key={`${speaker}-${index}`} className="text-[15px] leading-relaxed">
+                  <span className="font-semibold text-[color:var(--ds-muted)]">{speaker}</span>
+                  <span className="text-[color:var(--ds-ink)]"> — {text}</span>
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      ) : null}
+
       <p className="mt-12 text-sm text-[color:var(--ds-muted)]">
         <Link href="/" className="text-[color:var(--ds-blue)]">
           Clarifi

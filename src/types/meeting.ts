@@ -35,6 +35,7 @@ export type Meeting = {
   enhancedNotes?: string
   summary?: string
   actionItems?: string[]
+  completedActionItems?: string[]
   enhanceError?: string
 }
 

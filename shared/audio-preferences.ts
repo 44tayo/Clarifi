@@ -17,6 +17,8 @@ export type AudioPreferences = {
   transcriptionMode: TranscriptionMode
   skipMicPicker: boolean
   theme: ThemePreference
+  /** Prompt before calendar events start (does not auto-record). */
+  meetingRemindersEnabled: boolean
 }
 
 export const DEFAULT_AUDIO_PREFERENCES: AudioPreferences = {
@@ -32,4 +34,5 @@ export const DEFAULT_AUDIO_PREFERENCES: AudioPreferences = {
   transcriptionMode: 'auto',
   skipMicPicker: false,
   theme: 'light',
+  meetingRemindersEnabled: true,
 }

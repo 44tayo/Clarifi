@@ -41,4 +41,13 @@ Onboarding Sign up / Login opens the website (Google / Microsoft / email) and pa
 
 ## Explicit non-goals for v1
 
-Team workspaces, People directory, referral program, calendar auto-start (recording begins automatically), Ask AI across all meetings, template library, iOS app.
+Team workspaces, People directory, referral program, template library, iOS app.
+
+## Shipped beyond MVP notepad
+
+- Calendar connect + start reminders (prompt-to-record, never silent auto-capture)
+- Ask AI on one meeting or across all local meetings
+- Cloud sync of notes (metadata, scratchpad, summary, transcript text — no audio)
+- Share / Shared with me (Pro+)
+- Folders on every plan
+

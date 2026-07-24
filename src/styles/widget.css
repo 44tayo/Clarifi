@@ -23,13 +23,13 @@ body,
 }
 
 .widget-root--dark {
-  --w-bg: #1a1a1c;
-  --w-bg-muted: #262629;
-  --w-text: #f1f5f9;
-  --w-text-secondary: #9aa1ac;
-  --w-border: rgba(255, 255, 255, 0.09);
-  --w-border-strong: rgba(255, 255, 255, 0.16);
-  --w-input-bg: #232326;
+  --w-bg: var(--ds-bg-paper);
+  --w-bg-muted: var(--ds-bg-muted);
+  --w-text: var(--ds-text-primary);
+  --w-text-secondary: var(--ds-text-secondary);
+  --w-border: var(--ds-border);
+  --w-border-strong: var(--ds-border-strong);
+  --w-input-bg: var(--ds-bg-inset);
 }
 
 /* Compact bar */

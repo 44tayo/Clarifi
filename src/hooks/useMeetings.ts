@@ -43,7 +43,13 @@ export function useMeetings() {
   )
 
   const updateMeeting = useCallback(
-    async (id: string, patch: { title?: string; userNotes?: string }) => {
+    async (id: string, patch: {
+      title?: string
+      userNotes?: string
+      speakerLabels?: Record<string, string>
+      actionItems?: string[]
+      completedActionItems?: string[]
+    }) => {
       const updated = (await window.electronAPI.invoke('meetings:update', {
         id,
         ...patch,

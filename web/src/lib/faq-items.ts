@@ -24,6 +24,14 @@ export const FAQ_ITEMS = [
     a: 'Transcription and notes support 100 languages, with auto-detection so you don\u2019t have to set anything. Works alongside Zoom, Meet, Teams, Slack, and any desktop app.',
   },
   {
+    q: 'Can I connect my calendar?',
+    a: 'Yes. Connect Google Calendar or Microsoft Outlook in Settings or on Home. Clarifi can show upcoming meetings and nudge you a couple of minutes before one starts — it never starts recording without you.',
+  },
+  {
+    q: 'Can I ask Clarifi about past meetings?',
+    a: 'Yes. Open Chat and choose This meeting or All meetings. Clarifi uses your local notes and summaries (and syncs them to your account when you are paired).',
+  },
+  {
     q: 'Can I talk to customer support?',
     a: 'Reach us anytime at tayowilliams23@gmail.com — we typically respond within 24 hours.',
   },

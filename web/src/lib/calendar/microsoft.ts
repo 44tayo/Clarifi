@@ -73,7 +73,6 @@ export function microsoftEventToCalendarEvent(
   }
 
   const attendees = parseMicrosoftAttendees(item.attendees, selfEmail)
-  if (attendees.length < 2) return null
 
   const meetingUrl = item.onlineMeeting?.joinUrl ?? item.onlineMeetingUrl ?? null
 

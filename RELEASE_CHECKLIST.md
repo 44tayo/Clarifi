@@ -38,7 +38,7 @@ Run this on a **clean Mac** that has never cloned the repo. Treat every failure 
 - [ ] `/trust` and `/privacy` load without sign-in
 - [ ] `/desktop/auth` loads without sign-in (OAuth kickoff)
 - [ ] Download help page shows install + pair steps (no broken images)
-- [ ] FAQ/pricing do not claim unshipped features (dictation, Ask AI, calendar)
+- [ ] FAQ/pricing do not claim unshipped features (dictation, templates, iOS). Calendar, Ask AI, and sharing may be claimed when live.
 
 ## Updates
 

@@ -44,7 +44,7 @@ function App() {
     openConnect: openCalendarConnect,
     refresh: refreshCalendar,
   } = useCalendar(connection.paired)
-  const { meetings, createMeeting, updateMeeting, deleteMeeting, enhanceMeeting, getMeeting } =
+  const { meetings, createMeeting, updateMeeting, deleteMeeting, enhanceMeeting, getMeeting, refresh } =
     useMeetings()
   const {
     folders,
@@ -66,12 +66,27 @@ function App() {
   const [micPickerError, setMicPickerError] = useState<string | null>(null)
   const [micPermissionDenied, setMicPermissionDenied] = useState(false)
   const captureMeetingIdRef = useRef<string | null>(null)
+  const demoOpenedRef = useRef(false)
 
   const recording = useRecording(captureMeetingId)
 
   useEffect(() => {
     captureMeetingIdRef.current = captureMeetingId
   }, [captureMeetingId])
+
+  useEffect(() => {
+    if (demoOpenedRef.current) return
+    demoOpenedRef.current = true
+    void (async () => {
+      const result = (await window.electronAPI.invoke('meetings:seed-demo-artifact')) as {
+        meeting?: Meeting
+      }
+      await refresh()
+      if (!result?.meeting) return
+      setSelectedId(result.meeting.id)
+      setActiveMeeting(result.meeting)
+    })()
+  }, [refresh])
 
   useEffect(() => {
     if (!selectedId) return
@@ -241,6 +256,15 @@ function App() {
     void refreshCalendar()
   }, [nav.view, connection.paired, refreshCalendar])
 
+  useEffect(() => {
+    const off = window.electronAPI.on('calendar:reminder-start', (payload) => {
+      const event = payload as CalendarEvent
+      if (!event?.id || !event.provider) return
+      void handleStartCalendarEvent(event)
+    })
+    return off
+  }, [handleStartCalendarEvent])
+
   const handleStartCapture = useCallback(
     (meetingId: string) => {
       void beginCapture(meetingId)
@@ -285,7 +309,13 @@ function App() {
   )
 
   const handleUpdate = useCallback(
-    async (patch: { title?: string; userNotes?: string }) => {
+    async (patch: {
+      title?: string
+      userNotes?: string
+      speakerLabels?: Record<string, string>
+      actionItems?: string[]
+      completedActionItems?: string[]
+    }) => {
       if (!activeMeeting) return
       const updated = await updateMeeting(activeMeeting.id, patch)
       if (updated) setActiveMeeting(updated)
@@ -388,6 +418,8 @@ function App() {
         <Sidebar
           selection={nav}
           onSelectView={handleSelectView}
+          meetings={meetings}
+          onSelectMeeting={(id) => void handleSelect(id)}
           folders={folders}
           onCreateFolder={(name) => void createFolder(name)}
           onRenameFolder={(id, name) => void renameFolder(id, name)}
@@ -397,7 +429,6 @@ function App() {
           onConnect={() => void openConnect()}
           onOpenDashboard={() => void openDashboard()}
           onOpenSettings={() => setSettingsOpen(true)}
-          onOpenSearch={() => setCommandOpen(true)}
           resizing={sidebarResizing}
           onResizePointerDown={onResizePointerDown}
           onResizeDoubleClick={resetSidebarWidth}
@@ -440,6 +471,7 @@ function App() {
               onEnhance={() => void handleEnhance()}
               onConnect={() => void openConnect()}
               onOpenDashboard={() => void openDashboard()}
+              onBackToMeetings={() => handleSelectView({ view: 'meetings' })}
               onSetFolders={(folderIds) => {
                 void setMeetingFolders(activeMeeting.id, folderIds).then(async () => {
                   const refreshed = await getMeeting(activeMeeting.id)
@@ -461,6 +493,7 @@ function App() {
             <HomeView
               connection={connection}
               calendarConnected={calendarStatus.connected}
+              calendarStatus={calendarStatus}
               calendarLoading={calendarLoading}
               calendarEvents={calendarEvents}
               meetings={meetings}
@@ -470,7 +503,8 @@ function App() {
               onConnectCalendar={(provider) => void openCalendarConnect(provider)}
               onConnectAccount={() => void openConnect()}
               onOpenDashboard={() => void openDashboard()}
-              onNewMeeting={() => void handleNewMeeting()}
+              onOpenChat={() => handleSelectView({ view: 'chat' })}
+              onOpenSettings={() => setSettingsOpen(true)}
               isMeetingLocked={(meeting) => isMeetingLocked(meeting, connection.plan)}
             />
           ) : nav.view === 'chat' ? (

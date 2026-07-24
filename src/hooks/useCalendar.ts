@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { CalendarEvent, CalendarStatus } from '../../shared/calendar'
 
-const POLL_MS = 5 * 60 * 1000
-const POST_CONNECT_POLL_MS = 8 * 1000
+const POLL_MS = 60 * 1000
+const POST_CONNECT_POLL_MS = 4 * 1000
 const POST_CONNECT_WINDOW_MS = 2 * 60 * 1000
 
 const EMPTY_STATUS: CalendarStatus = {
@@ -92,12 +92,21 @@ export function useCalendar(enabled: boolean) {
     [refresh],
   )
 
+  const disconnect = useCallback(
+    async (provider: 'google' | 'microsoft') => {
+      await window.electronAPI.invoke('calendar:disconnect', provider)
+      await refresh()
+    },
+    [refresh],
+  )
+
   return {
     status,
     events,
     loading,
     refresh,
     openConnect,
+    disconnect,
   }
 }
 

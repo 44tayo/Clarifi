@@ -1,3 +1,6 @@
+import type { ReactNode } from 'react'
+
+import type { CalendarConnectionInfo } from '../../shared/calendar'
 import {
   GoogleCalendarIcon,
   OutlookCalendarIcon,
@@ -6,17 +9,74 @@ import {
 type CalendarConnectModalProps = {
   open: boolean
   suggestedProvider?: 'google' | 'microsoft' | null
+  google?: CalendarConnectionInfo
+  microsoft?: CalendarConnectionInfo
   onClose: () => void
   onConnect: (provider: 'google' | 'microsoft') => void
+  onOpenSettings?: () => void
+}
+
+function ProviderRow({
+  name,
+  subConnect,
+  icon,
+  suggested,
+  connection,
+  onConnect,
+}: {
+  name: string
+  subConnect: string
+  icon: ReactNode
+  suggested?: boolean
+  connection?: CalendarConnectionInfo
+  onConnect: () => void
+}) {
+  const connected = Boolean(connection?.connected)
+  const email = connection?.accountEmail
+
+  return (
+    <div className={`calendar-connect-row${connected ? ' is-connected' : ''}`}>
+      <div className="calendar-connect-row-main">
+        <div className="calendar-connect-logo-wrap">{icon}</div>
+        <div className="calendar-connect-row-copy">
+          <div className="calendar-connect-row-title">
+            <strong>{name}</strong>
+            {connected ? (
+              <span className="calendar-connect-badge is-connected">Connected</span>
+            ) : suggested ? (
+              <span className="calendar-connect-badge">Suggested</span>
+            ) : null}
+          </div>
+          <span className="calendar-connect-row-sub">
+            {connected ? email ?? 'Linked to Clarifi' : subConnect}
+          </span>
+        </div>
+      </div>
+      {connected ? (
+        <button type="button" className="btn btn-secondary" onClick={onConnect}>
+          Reconnect
+        </button>
+      ) : (
+        <button type="button" className="btn btn-primary" onClick={onConnect}>
+          Connect
+        </button>
+      )}
+    </div>
+  )
 }
 
 export function CalendarConnectModal({
   open,
   suggestedProvider = 'google',
+  google,
+  microsoft,
   onClose,
   onConnect,
+  onOpenSettings,
 }: CalendarConnectModalProps) {
   if (!open) return null
+
+  const anyConnected = Boolean(google?.connected || microsoft?.connected)
 
   return (
     <div
@@ -31,65 +91,42 @@ export function CalendarConnectModal({
         role="presentation"
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 id="calendar-connect-title">Connect your calendar for better notes</h2>
-        <p className="calendar-connect-lead">
-          Connect Google Calendar or Outlook so Clarifi can identify speakers, detect your
-          meetings, and tailor each summary.
-        </p>
-
-        <div className="calendar-connect-rows">
-          <div className="calendar-connect-row">
-            <div className="calendar-connect-row-main">
-              <GoogleCalendarIcon size={40} className="calendar-connect-logo" />
-              <div>
-                <div className="calendar-connect-row-title">
-                  <strong>Google Calendar</strong>
-                  {suggestedProvider === 'google' ? (
-                    <span className="calendar-connect-badge">Suggested</span>
-                  ) : null}
-                </div>
-                <span className="calendar-connect-row-sub">Connect your Google account</span>
-              </div>
-            </div>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => onConnect('google')}
-            >
-              Connect
-            </button>
-          </div>
-
-          <div className="calendar-connect-row">
-            <div className="calendar-connect-row-main">
-              <OutlookCalendarIcon size={40} className="calendar-connect-logo" />
-              <div>
-                <div className="calendar-connect-row-title">
-                  <strong>Outlook Calendar</strong>
-                  {suggestedProvider === 'microsoft' ? (
-                    <span className="calendar-connect-badge">Suggested</span>
-                  ) : null}
-                </div>
-                <span className="calendar-connect-row-sub">Connect your Microsoft account</span>
-              </div>
-            </div>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => onConnect('microsoft')}
-            >
-              Connect
-            </button>
-          </div>
+        <div className="calendar-connect-hero">
+          <p className="calendar-connect-eyebrow">Calendars</p>
+          <h2 id="calendar-connect-title">
+            {anyConnected ? 'Your calendars' : 'Connect your calendar for better notes'}
+          </h2>
         </div>
 
-        <p className="calendar-connect-privacy">
-          Clarifi reads your calendar to personalise your notes. Your data is never sold or shared.
-        </p>
+        <div className="calendar-connect-rows">
+          <ProviderRow
+            name="Google Calendar"
+            subConnect="Connect your Google account"
+            suggested={suggestedProvider === 'google'}
+            connection={google}
+            icon={<GoogleCalendarIcon size={44} className="calendar-connect-logo" />}
+            onConnect={() => onConnect('google')}
+          />
+          <ProviderRow
+            name="Outlook Calendar"
+            subConnect="Connect your Microsoft account"
+            suggested={suggestedProvider === 'microsoft'}
+            connection={microsoft}
+            icon={<OutlookCalendarIcon size={44} className="calendar-connect-logo" />}
+            onConnect={() => onConnect('microsoft')}
+          />
+        </div>
 
-        <button type="button" className="link-btn calendar-connect-later" onClick={onClose}>
-          Connect later
-        </button>
+        <div className="calendar-connect-footer">
+          {onOpenSettings ? (
+            <button type="button" className="link-btn" onClick={onOpenSettings}>
+              Manage in Settings
+            </button>
+          ) : null}
+          <button type="button" className="link-btn calendar-connect-later" onClick={onClose}>
+            {anyConnected ? 'Done' : 'Connect later'}
+          </button>
+        </div>
       </div>
     </div>
   )

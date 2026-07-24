@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import type { ChatEffort } from '../../shared/chatOptions'
 import type { Meeting } from '../types/meeting'
+import { ChatPromptInput } from './ChatPromptInput'
 
 type ChatMessage = {
   id: string
@@ -23,7 +25,7 @@ function errorMessage(code: string): string {
     case 'not_authenticated':
       return 'Connect your account to chat with Clarifi.'
     case 'plan_required':
-      return 'Your plan does not include chat right now.'
+      return 'Your plan does not include this chat option. Upgrade to Pro for premium models.'
     case 'rate_limit':
       return 'Too many requests — wait a moment and try again.'
     case 'message_required':
@@ -35,6 +37,7 @@ function errorMessage(code: string): string {
 
 export function ChatView({ meetings, paired, onConnect, onOpenMeeting }: ChatViewProps) {
   const [meetingId, setMeetingId] = useState<string>('')
+  const [scope, setScope] = useState<'meeting' | 'all'>('meeting')
   const [draft, setDraft] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [sending, setSending] = useState(false)
@@ -53,44 +56,63 @@ export function ChatView({ meetings, paired, onConnect, onOpenMeeting }: ChatVie
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight })
   }, [messages, sending])
 
-  const send = useCallback(async () => {
-    const text = draft.trim()
-    if (!text || sending) return
-    if (!paired) {
-      setError('Connect your account to chat with Clarifi.')
-      return
-    }
-
-    const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: 'user', text }
-    setMessages((prev) => [...prev, userMsg])
-    setDraft('')
-    setSending(true)
-    setError(null)
-
-    try {
-      const result = (await window.electronAPI.invoke('chat:send', {
-        message: text,
-        meetingId: meetingId || null,
-      })) as { reply?: string; error?: string }
-
-      if (result.error) {
-        setError(errorMessage(result.error))
+  const send = useCallback(
+    async (payload: {
+      message: string
+      model: string
+      effort: ChatEffort
+      images: Array<{
+        imageBase64: string
+        mimeType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
+      }>
+    }) => {
+      const text = payload.message.trim()
+      if ((!text && payload.images.length === 0) || sending) return
+      if (!paired) {
+        setError('Connect your account to chat with Clarifi.')
         return
       }
-      if (!result.reply) {
+
+      const display =
+        payload.images.length > 0
+          ? `${text}${text ? '\n' : ''}[${payload.images.length} image${payload.images.length === 1 ? '' : 's'} attached]`
+          : text
+      const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: 'user', text: display }
+      setMessages((prev) => [...prev, userMsg])
+      setDraft('')
+      setSending(true)
+      setError(null)
+
+      try {
+        const result = (await window.electronAPI.invoke('chat:send', {
+          message: text,
+          meetingId: scope === 'meeting' ? meetingId || null : null,
+          scope,
+          model: payload.model,
+          effort: payload.effort,
+          images: payload.images,
+        })) as { reply?: string; error?: string }
+
+        if (result.error) {
+          setError(errorMessage(result.error))
+          return
+        }
+        if (!result.reply) {
+          setError(errorMessage('chat_failed'))
+          return
+        }
+        setMessages((prev) => [
+          ...prev,
+          { id: `a-${Date.now()}`, role: 'assistant', text: result.reply! },
+        ])
+      } catch {
         setError(errorMessage('chat_failed'))
-        return
+      } finally {
+        setSending(false)
       }
-      setMessages((prev) => [
-        ...prev,
-        { id: `a-${Date.now()}`, role: 'assistant', text: result.reply! },
-      ])
-    } catch {
-      setError(errorMessage('chat_failed'))
-    } finally {
-      setSending(false)
-    }
-  }, [draft, meetingId, paired, sending])
+    },
+    [meetingId, paired, scope, sending],
+  )
 
   return (
     <div className="chat-view">
@@ -98,24 +120,40 @@ export function ChatView({ meetings, paired, onConnect, onOpenMeeting }: ChatVie
         <div>
           <h1 className="home-view-title">Chat</h1>
           <p className="home-view-subtitle">
-            Ask about a meeting’s notes and transcript. Context stays on this device until you send.
+            Ask about one meeting or across all your local notes. Context stays on this device until
+            you send.
           </p>
         </div>
-        <label className="chat-meeting-picker">
-          <span className="chat-meeting-picker-label">Context</span>
-          <select
-            className="chat-meeting-select"
-            value={meetingId}
-            onChange={(event) => setMeetingId(event.target.value)}
-          >
-            <option value="">No meeting</option>
-            {recentMeetings.map((meeting) => (
-              <option key={meeting.id} value={meeting.id}>
-                {meeting.title || 'Untitled meeting'}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="chat-meeting-picker">
+          <label className="chat-meeting-picker">
+            <span className="chat-meeting-picker-label">Scope</span>
+            <select
+              className="chat-meeting-select"
+              value={scope}
+              onChange={(event) => setScope(event.target.value === 'all' ? 'all' : 'meeting')}
+            >
+              <option value="meeting">This meeting</option>
+              <option value="all">All meetings</option>
+            </select>
+          </label>
+          {scope === 'meeting' ? (
+            <label className="chat-meeting-picker">
+              <span className="chat-meeting-picker-label">Meeting</span>
+              <select
+                className="chat-meeting-select"
+                value={meetingId}
+                onChange={(event) => setMeetingId(event.target.value)}
+              >
+                <option value="">No meeting</option>
+                {recentMeetings.map((meeting) => (
+                  <option key={meeting.id} value={meeting.id}>
+                    {meeting.title || 'Untitled meeting'}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+        </div>
       </header>
 
       {!paired ? (
@@ -160,35 +198,16 @@ export function ChatView({ meetings, paired, onConnect, onOpenMeeting }: ChatVie
 
       {error ? <p className="chat-error">{error}</p> : null}
 
-      <form
-        className="chat-composer"
-        onSubmit={(event) => {
-          event.preventDefault()
-          void send()
-        }}
-      >
-        <textarea
-          className="chat-composer-input"
-          rows={2}
+      <div className="chat-composer">
+        <ChatPromptInput
           value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault()
-              void send()
-            }
-          }}
-          placeholder={paired ? 'Ask Clarifi…' : 'Connect to chat'}
-          disabled={!paired || sending}
+          onChange={setDraft}
+          onSubmit={(payload) => void send(payload)}
+          placeholder={paired ? 'Ask anything…' : 'Connect to chat'}
+          disabled={!paired}
+          sending={sending}
         />
-        <button
-          type="submit"
-          className="btn btn-primary"
-          disabled={!paired || sending || !draft.trim()}
-        >
-          Send
-        </button>
-      </form>
+      </div>
     </div>
   )
 }

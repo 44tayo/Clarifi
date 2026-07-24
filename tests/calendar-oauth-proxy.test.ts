@@ -31,4 +31,23 @@ describe('calendar oauth proxy routing', () => {
     expect(isPublicPath('/api/calendar/connect')).toBe(true)
     expect(isPublicPath('/desktop/calendar/success')).toBe(true)
   })
+
+  it('keeps desktop connect public so proxy can skip Supabase getUser', async () => {
+    const { isPublicPath } = await import('../web/src/lib/protected-routes')
+    expect(isPublicPath('/desktop/connect')).toBe(true)
+    expect(isPublicPath('/desktop/sign-in')).toBe(true)
+  })
+
+  it('keeps desktop calendar oauth-url public for device-bound connect', async () => {
+    const { isPublicPath } = await import('../web/src/lib/protected-routes')
+    expect(isPublicPath('/api/desktop/calendar/oauth-url')).toBe(true)
+  })
+
+  it('keeps desktop calendar disconnect and communities APIs device-auth reachable', async () => {
+    const { isPublicPath } = await import('../web/src/lib/protected-routes')
+    expect(isPublicPath('/api/desktop/calendar/disconnect')).toBe(true)
+    expect(isPublicPath('/api/communities')).toBe(true)
+    expect(isPublicPath('/api/communities/abc/invite')).toBe(true)
+    expect(isPublicPath('/api/desktop/meetings')).toBe(true)
+  })
 })

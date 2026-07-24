@@ -2,8 +2,8 @@
 
 import { LandingSectionHeader } from '@/components/marketing'
 
-import { GmailDictationMock } from './GmailDictationMock'
 import { LiveNotesMock } from './LiveNotesMock'
+import { RecordingWidgetMock } from './RecordingWidgetMock'
 
 export function HowItWorksSection() {
   return (
@@ -12,15 +12,14 @@ export function HowItWorksSection() {
       <div className="landing-two-col">
         <div className="landing-feature-card light">
           <p className="landing-card-title dark">
-            Hold Fn. Speak. Clarifi <span className="landing-pill-muted">dictates</span> where you&apos;re typing.
+            Keep a <span className="landing-pill-muted">floating notepad</span> while you talk.
           </p>
           <p className="landing-card-sub dark">
-            Hold <strong>Fn (Globe)</strong> or tap the bottom pill — ramble naturally and Clarifi strips
-            filler, polishes your words, and drops text right at your cursor. Works in Gmail, Slack,
-            Cursor, and anywhere you type.
+            Clarifi sits on top of Zoom, Meet, or Teams as a quiet pill — timer, pause, and scratchpad —
+            so you can jot a line without leaving the call.
           </p>
           <div className="landing-card-overlay landing-card-visual">
-            <GmailDictationMock />
+            <RecordingWidgetMock />
           </div>
         </div>
 

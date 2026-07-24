@@ -3,8 +3,8 @@ import { BrowserWindow, nativeTheme } from 'electron'
 import type { ThemePreference } from '../shared/audio-preferences'
 
 export const THEME_WINDOW_BG = {
-  light: '#f7f8fc',
-  dark: '#12141a',
+  light: '#fafaf8',
+  dark: '#1a1a1a',
 } as const
 
 export function resolveAppTheme(

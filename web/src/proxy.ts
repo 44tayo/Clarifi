@@ -16,6 +16,11 @@ function getSupabaseEnv() {
   return { url, key }
 }
 
+/** Paths that need session only to redirect already-signed-in users away. */
+function needsSignedInRedirect(pathname: string): boolean {
+  return pathname === '/sign-in' || pathname === '/sign-up'
+}
+
 export default async function proxy(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl
   const host = request.headers.get('host') ?? ''
@@ -57,6 +62,13 @@ export default async function proxy(request: NextRequest) {
     return NextResponse.redirect(confirm)
   }
 
+  const publicPath = isPublicPath(pathname)
+  // Public pages (except sign-in/up redirect) must not wait on Supabase —
+  // a hung getUser() freezes the whole site, including /desktop/connect.
+  if (publicPath && !needsSignedInRedirect(pathname)) {
+    return NextResponse.next({ request })
+  }
+
   let response = NextResponse.next({ request })
   const env = getSupabaseEnv()
 
@@ -78,11 +90,20 @@ export default async function proxy(request: NextRequest) {
       },
     })
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    let user: { id: string } | null = null
+    try {
+      const result = await Promise.race([
+        supabase.auth.getUser(),
+        new Promise<{ data: { user: null } }>((resolve) => {
+          setTimeout(() => resolve({ data: { user: null } }), 4000)
+        }),
+      ])
+      user = result.data.user
+    } catch {
+      user = null
+    }
 
-    if (pathname === '/sign-in' || pathname === '/sign-up') {
+    if (needsSignedInRedirect(pathname)) {
       if (user) {
         const next = resolveAuthNext(searchParams.get('next'), '/dashboard')
         const redirectResponse = NextResponse.redirect(new URL(next, request.url))
@@ -91,18 +112,17 @@ export default async function proxy(request: NextRequest) {
         })
         return redirectResponse
       }
+      return response
     }
 
-    if (!isPublicPath(pathname)) {
-      if (!user) {
-        const signIn = new URL('/sign-in', request.url)
-        signIn.searchParams.set('next', `${pathname}${request.nextUrl.search}`)
-        const redirectResponse = NextResponse.redirect(signIn)
-        response.cookies.getAll().forEach((cookie) => {
-          redirectResponse.cookies.set(cookie)
-        })
-        return redirectResponse
-      }
+    if (!user) {
+      const signIn = new URL('/sign-in', request.url)
+      signIn.searchParams.set('next', `${pathname}${request.nextUrl.search}`)
+      const redirectResponse = NextResponse.redirect(signIn)
+      response.cookies.getAll().forEach((cookie) => {
+        redirectResponse.cookies.set(cookie)
+      })
+      return redirectResponse
     }
   }
 

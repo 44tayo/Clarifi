@@ -12,6 +12,8 @@ import { queueAuthUrl, takePendingAuthUrl } from './protocolAuth'
 import { logStartup, stripMacQuarantine } from './startupDiagnostics'
 import { checkForSignedUpdates, configureUpdater } from './updater'
 import { isAllowedExternalUrl } from './urlSafety'
+import { startCalendarReminders } from './calendarReminders'
+import { syncMeetingsWithCloud } from './meetingSync'
 
 app.setName('Clarifi')
 
@@ -45,6 +47,15 @@ async function handleAuthDeepLink(url: string): Promise<void> {
         win.webContents.send('auth:connected')
       }
     }
+    void syncMeetingsWithCloud().then((sync) => {
+      if (sync.ok) {
+        for (const win of BrowserWindow.getAllWindows()) {
+          if (!win.isDestroyed()) {
+            win.webContents.send('meetings:changed')
+          }
+        }
+      }
+    })
   } else {
     console.error('Desktop auth exchange failed:', result.error)
   }
@@ -139,6 +150,12 @@ if (!gotLock) {
     logStartup('H5', 'handlers-registered')
     mainWindow = createMainWindow()
     logStartup('H5', 'main-window-created')
+    startCalendarReminders(() => mainWindow)
+    void syncMeetingsWithCloud().then((sync) => {
+      if (sync.ok && mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('meetings:changed')
+      }
+    })
 
     const pending = takePendingAuthUrl()
     if (pending) {

@@ -1,7 +1,34 @@
 import { authorizeLlmRequest } from '@/lib/llm-route-auth'
 import { hasFeature } from '@/lib/entitlements'
 import { planRequiredResponse } from '@/lib/plan-guard'
-import { chatWithMeetingContext } from '@/lib/llm-server'
+import { chatWithMeetingContext, type ChatImageMime } from '@/lib/llm-server'
+import {
+  isDefaultChatModel,
+  normalizeChatEffort,
+  type ChatEffort,
+} from '@/lib/chatOptions'
+
+const ALLOWED_MIME = new Set<ChatImageMime>([
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+])
+
+function parseImages(value: unknown): Array<{ imageBase64: string; mimeType: ChatImageMime }> {
+  if (!Array.isArray(value)) return []
+  const images: Array<{ imageBase64: string; mimeType: ChatImageMime }> = []
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') continue
+    const imageBase64 = (entry as { imageBase64?: unknown }).imageBase64
+    const mimeType = (entry as { mimeType?: unknown }).mimeType
+    if (typeof imageBase64 !== 'string' || !imageBase64) continue
+    if (typeof mimeType !== 'string' || !ALLOWED_MIME.has(mimeType as ChatImageMime)) continue
+    images.push({ imageBase64, mimeType: mimeType as ChatImageMime })
+    if (images.length >= 6) break
+  }
+  return images
+}
 
 export async function POST(req: Request) {
   const auth = await authorizeLlmRequest(req)
@@ -20,17 +47,35 @@ export async function POST(req: Request) {
     message?: string
     transcriptLines?: string[]
     useScreenContext?: boolean
-    screenImage?: { imageBase64: string; mimeType: 'image/png' }
+    screenImage?: { imageBase64: string; mimeType: ChatImageMime }
+    images?: unknown
+    model?: string
+    effort?: ChatEffort
   }
 
   if (!payload.message || typeof payload.message !== 'string') {
     return Response.json({ error: 'message_required' }, { status: 400 })
   }
 
-  if (payload.useScreenContext || payload.screenImage) {
-    if (!hasFeature(plan, 'screen_context')) {
+  const images = parseImages(payload.images)
+  const screenImage =
+    payload.screenImage?.imageBase64 &&
+    typeof payload.screenImage.mimeType === 'string' &&
+    ALLOWED_MIME.has(payload.screenImage.mimeType)
+      ? payload.screenImage
+      : undefined
+
+  if (payload.useScreenContext || screenImage || images.length > 0) {
+    if (!hasFeature(plan, 'screen_context') && (payload.useScreenContext || screenImage)) {
       return planRequiredResponse('pro', 'screen_context')
     }
+    // Image attachments in chat share the vision path; gate free users from multi-image uploads
+    // only when they also request screen context. Plain chat image attach is allowed for chat.
+  }
+
+  const modelId = typeof payload.model === 'string' ? payload.model.trim() : ''
+  if (modelId && !isDefaultChatModel(modelId) && !hasFeature(plan, 'premium_models')) {
+    return planRequiredResponse('pro', 'premium_models')
   }
 
   const transcriptLines = Array.isArray(payload.transcriptLines)
@@ -41,7 +86,10 @@ export async function POST(req: Request) {
     message: payload.message,
     transcriptLines,
     useScreenContext: Boolean(payload.useScreenContext),
-    screenImage: payload.screenImage,
+    screenImage,
+    images,
+    model: modelId || undefined,
+    effort: normalizeChatEffort(payload.effort),
   })
 
   if ('error' in result) {

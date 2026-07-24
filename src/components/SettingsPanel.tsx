@@ -2,13 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { enumerateMicrophones, type MicOption } from '../lib/microphones'
 import { DropdownSelect } from './ui/DropdownSelect'
-import {
-  DICTATION_OUTPUT_LANGUAGE_OPTIONS,
-  OUTPUT_LANGUAGE_OPTIONS,
-  SPOKEN_LANGUAGE_OPTIONS,
-} from '../lib/languages'
+import { OUTPUT_LANGUAGE_OPTIONS, SPOKEN_LANGUAGE_OPTIONS } from '../lib/languages'
 import { useAudioPreferences } from '../hooks/useAudioPreferences'
 import { useCalendar } from '../hooks/useCalendar'
+import { GoogleCalendarIcon, OutlookCalendarIcon } from './icons/CalendarBrandIcons'
 
 type SettingsPanelProps = {
   onClose: () => void
@@ -29,7 +26,8 @@ const THEME_OPTIONS = [
 
 export function SettingsPanel({ onClose, calendarEnabled = false }: SettingsPanelProps) {
   const { prefs, update } = useAudioPreferences()
-  const { status: calendarStatus, refresh: refreshCalendar, openConnect } = useCalendar(calendarEnabled)
+  const { status: calendarStatus, refresh: refreshCalendar, openConnect, disconnect } =
+    useCalendar(calendarEnabled)
   const [mics, setMics] = useState<MicOption[]>([])
 
   const micOptions = useMemo(
@@ -81,6 +79,21 @@ export function SettingsPanel({ onClose, calendarEnabled = false }: SettingsPane
               aria-label="Theme"
             />
           </div>
+          <label className="settings-field settings-checkbox-row">
+            <span>Meeting start reminders</span>
+            <input
+              type="checkbox"
+              checked={prefs?.meetingRemindersEnabled ?? true}
+              onChange={(event) =>
+                void update({ meetingRemindersEnabled: event.target.checked })
+              }
+              aria-label="Meeting start reminders"
+            />
+          </label>
+          <p className="settings-section-hint">
+            When a calendar event is about to start, Clarifi asks if you want to record — it never
+            starts capture without you.
+          </p>
         </div>
 
         <div className="settings-section">
@@ -165,75 +178,118 @@ export function SettingsPanel({ onClose, calendarEnabled = false }: SettingsPane
               aria-label="Notes and summary language"
             />
           </label>
-
-          <label className="settings-field">
-            <span>Voice dictation language</span>
-            <DropdownSelect
-              value={prefs?.dictationLanguage ?? 'auto'}
-              options={SPOKEN_LANGUAGE_OPTIONS.map((option) => ({
-                value: option.code,
-                label: option.label,
-              }))}
-              onChange={(dictationLanguage) => void update({ dictationLanguage })}
-              aria-label="Voice dictation language"
-            />
-          </label>
-
-          <label className="settings-field">
-            <span>Dictation output language</span>
-            <DropdownSelect
-              value={prefs?.dictationOutputLanguage ?? 'same'}
-              options={DICTATION_OUTPUT_LANGUAGE_OPTIONS.map((option) => ({
-                value: option.code,
-                label: option.label,
-              }))}
-              onChange={(dictationOutputLanguage) => void update({ dictationOutputLanguage })}
-              aria-label="Dictation output language"
-            />
-          </label>
         </div>
 
         <div className="settings-section">
-          <h3>Calendar</h3>
+          <h3>Calendars</h3>
           <p className="settings-section-hint">
             Connect Google Calendar or Microsoft Outlook to see upcoming meetings and pre-fill
-            titles from your schedule.
+            titles from your schedule. Disconnect anytime.
           </p>
 
           {!calendarEnabled ? (
             <p className="settings-calendar-note">Sign in to your Clarifi account to connect a calendar.</p>
           ) : (
             <>
-              <div className="settings-calendar-status">
-                <div className="settings-calendar-provider">
-                  <span>Google Calendar</span>
-                  <span className={calendarStatus.google.connected ? 'settings-calendar-on' : 'settings-calendar-off'}>
-                    {calendarStatus.google.connected
-                      ? calendarStatus.google.accountEmail ?? 'Connected'
-                      : 'Not connected'}
-                  </span>
+              <div className="settings-calendar-cards">
+                <div
+                  className={`settings-calendar-card${
+                    calendarStatus.google.connected ? ' is-connected' : ''
+                  }`}
+                >
+                  <div className="settings-calendar-card-main">
+                    <GoogleCalendarIcon size={40} className="settings-calendar-logo" />
+                    <div className="settings-calendar-card-copy">
+                      <div className="settings-calendar-card-title">
+                        <strong>Google Calendar</strong>
+                        <span
+                          className={
+                            calendarStatus.google.connected
+                              ? 'settings-calendar-on'
+                              : 'settings-calendar-off'
+                          }
+                        >
+                          {calendarStatus.google.connected ? 'Connected' : 'Not connected'}
+                        </span>
+                      </div>
+                      <span className="settings-calendar-card-sub">
+                        {calendarStatus.google.connected
+                          ? calendarStatus.google.accountEmail ?? 'Linked to Clarifi'
+                          : 'Connect your Google account'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="settings-calendar-card-actions">
+                    <button
+                      type="button"
+                      className={calendarStatus.google.connected ? 'btn btn-secondary' : 'btn btn-primary'}
+                      onClick={() => void openConnect('google')}
+                    >
+                      {calendarStatus.google.connected ? 'Reconnect' : 'Connect'}
+                    </button>
+                    {calendarStatus.google.connected ? (
+                      <button
+                        type="button"
+                        className="link-btn"
+                        onClick={() => void disconnect('google')}
+                      >
+                        Disconnect
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
-                <div className="settings-calendar-provider">
-                  <span>Microsoft Outlook</span>
-                  <span
-                    className={
-                      calendarStatus.microsoft.connected ? 'settings-calendar-on' : 'settings-calendar-off'
-                    }
-                  >
-                    {calendarStatus.microsoft.connected
-                      ? calendarStatus.microsoft.accountEmail ?? 'Connected'
-                      : 'Not connected'}
-                  </span>
+
+                <div
+                  className={`settings-calendar-card${
+                    calendarStatus.microsoft.connected ? ' is-connected' : ''
+                  }`}
+                >
+                  <div className="settings-calendar-card-main">
+                    <OutlookCalendarIcon size={40} className="settings-calendar-logo" />
+                    <div className="settings-calendar-card-copy">
+                      <div className="settings-calendar-card-title">
+                        <strong>Outlook Calendar</strong>
+                        <span
+                          className={
+                            calendarStatus.microsoft.connected
+                              ? 'settings-calendar-on'
+                              : 'settings-calendar-off'
+                          }
+                        >
+                          {calendarStatus.microsoft.connected ? 'Connected' : 'Not connected'}
+                        </span>
+                      </div>
+                      <span className="settings-calendar-card-sub">
+                        {calendarStatus.microsoft.connected
+                          ? calendarStatus.microsoft.accountEmail ?? 'Linked to Clarifi'
+                          : 'Connect your Microsoft account'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="settings-calendar-card-actions">
+                    <button
+                      type="button"
+                      className={
+                        calendarStatus.microsoft.connected ? 'btn btn-secondary' : 'btn btn-primary'
+                      }
+                      onClick={() => void openConnect('microsoft')}
+                    >
+                      {calendarStatus.microsoft.connected ? 'Reconnect' : 'Connect'}
+                    </button>
+                    {calendarStatus.microsoft.connected ? (
+                      <button
+                        type="button"
+                        className="link-btn"
+                        onClick={() => void disconnect('microsoft')}
+                      >
+                        Disconnect
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               </div>
 
               <div className="settings-calendar-actions">
-                <button type="button" className="link-btn" onClick={() => void openConnect('google')}>
-                  {calendarStatus.google.connected ? 'Reconnect Google' : 'Connect Google'}
-                </button>
-                <button type="button" className="link-btn" onClick={() => void openConnect('microsoft')}>
-                  {calendarStatus.microsoft.connected ? 'Reconnect Outlook' : 'Connect Outlook'}
-                </button>
                 <button type="button" className="link-btn" onClick={() => void refreshCalendar()}>
                   Refresh meetings
                 </button>

@@ -14,7 +14,7 @@ export type Feature =
   | 'folders'
 
 /** Core notetaking works on every plan, including free — Granola-style. */
-const FREE_FEATURES: Feature[] = ['ai_chat', 'ai_transcribe', 'voice_dictation']
+const FREE_FEATURES: Feature[] = ['ai_chat', 'ai_transcribe', 'voice_dictation', 'folders']
 
 const PRO_FEATURES: Feature[] = [
   ...FREE_FEATURES,
@@ -29,7 +29,6 @@ const PRO_PLUS_FEATURES: Feature[] = [
   ...PRO_FEATURES,
   'communities',
   'share_meetings',
-  'folders',
 ]
 
 /** Free plan keeps unlimited meetings but only surfaces the most recent
@@ -57,7 +56,7 @@ export function hasFeature(plan: Plan, feature: Feature): boolean {
 }
 
 export function upgradePlanForFeature(feature: Feature): 'pro' | 'pro_plus' {
-  if (feature === 'communities' || feature === 'share_meetings' || feature === 'folders') {
+  if (feature === 'communities' || feature === 'share_meetings') {
     return 'pro_plus'
   }
   return 'pro'

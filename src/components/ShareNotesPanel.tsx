@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import type { Meeting } from '../types/meeting'
 
@@ -23,33 +24,25 @@ export function ShareNotesPanel({ meeting, canShare, onClose, onUpgrade }: Share
   const [busy, setBusy] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [communityId, setCommunityId] = useState<string | null>(null)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
 
   const participants = useMemo(
     () => [...new Set((meeting.attendeeEmails ?? []).map((value) => value.trim()).filter(Boolean))],
     [meeting.attendeeEmails],
   )
 
-  if (!canShare) {
-    return (
-      <div className="share-overlay" role="dialog" aria-modal="true" aria-label="Share notes">
-        <div className="share-panel">
-          <div className="share-panel-header">
-            <h2>Share notes</h2>
-            <button type="button" className="link-btn" onClick={onClose}>
-              Close
-            </button>
-          </div>
-          <p className="share-upgrade-copy">
-            Sharing meetings, notes, and summaries is included with Pro+. Upgrade to publish a link
-            and invite people by email.
-          </p>
-          <button type="button" className="btn btn-primary" onClick={onUpgrade}>
-            Upgrade to Pro+
-          </button>
-        </div>
-      </div>
-    )
-  }
+  useEffect(() => {
+    document.body.classList.add('has-modal-open')
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onCloseRef.current()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.classList.remove('has-modal-open')
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [])
 
   async function publish(): Promise<PublishResult> {
     return (await window.electronAPI.invoke('share:publish', { meetingId: meeting.id })) as PublishResult
@@ -67,12 +60,42 @@ export function ShareNotesPanel({ meeting, canShare, onClose, onUpgrade }: Share
     return result
   }
 
-  return (
-    <div className="share-overlay" role="dialog" aria-modal="true" aria-label="Share notes">
-      <div className="share-panel">
+  const panel = !canShare ? (
+    <div
+      className="share-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Share notes"
+      onClick={onClose}
+    >
+      <div className="share-panel" onClick={(event) => event.stopPropagation()}>
         <div className="share-panel-header">
           <h2>Share notes</h2>
-          <button type="button" className="link-btn" onClick={onClose}>
+          <button type="button" className="share-close-btn" onClick={onClose}>
+            Close
+          </button>
+        </div>
+        <p className="share-upgrade-copy">
+          Sharing meetings, notes, and summaries is included with Pro+. Upgrade to publish a link and
+          invite people by email.
+        </p>
+        <button type="button" className="btn btn-primary" onClick={onUpgrade}>
+          Upgrade to Pro+
+        </button>
+      </div>
+    </div>
+  ) : (
+    <div
+      className="share-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Share notes"
+      onClick={onClose}
+    >
+      <div className="share-panel" onClick={(event) => event.stopPropagation()}>
+        <div className="share-panel-header">
+          <h2>Share notes</h2>
+          <button type="button" className="share-close-btn" onClick={onClose}>
             Close
           </button>
         </div>
@@ -180,4 +203,6 @@ export function ShareNotesPanel({ meeting, canShare, onClose, onUpgrade }: Share
       </div>
     </div>
   )
+
+  return createPortal(panel, document.body)
 }

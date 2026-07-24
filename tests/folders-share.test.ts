@@ -31,10 +31,11 @@ describe('folders assignment helpers', () => {
 })
 
 describe('share entitlements', () => {
-  it('gates share_meetings and folders to Pro+', () => {
+  it('gates share_meetings to Pro+ and keeps folders on every plan', () => {
     expect(hasFeature('free', 'share_meetings')).toBe(false)
     expect(hasFeature('pro', 'share_meetings')).toBe(false)
     expect(hasFeature('pro_plus', 'share_meetings')).toBe(true)
+    expect(hasFeature('free', 'folders')).toBe(true)
     expect(hasFeature('pro_plus', 'folders')).toBe(true)
     expect(upgradePlanForFeature('share_meetings')).toBe('pro_plus')
   })

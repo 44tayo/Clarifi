@@ -10,12 +10,15 @@ const INVOKE_CHANNELS = [
   'calendar:status',
   'calendar:events',
   'calendar:open-connect',
+  'calendar:disconnect',
   'meetings:list',
   'meetings:get',
   'meetings:create',
   'meetings:update',
   'meetings:delete',
   'meetings:enhance',
+  'meetings:sync',
+  'meetings:seed-demo-artifact',
   'folders:list',
   'folders:create',
   'folders:rename',
@@ -77,6 +80,7 @@ const ON_CHANNELS = [
   'audio:stopped',
   'audio:session-paused',
   'audio:session-resumed',
+  'calendar:reminder-start',
 ] as const
 
 type InvokeChannel = (typeof INVOKE_CHANNELS)[number]
