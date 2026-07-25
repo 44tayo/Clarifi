@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
-import type { Meeting } from '../types/meeting'
+import type { Meeting, MeetingAttendee, SpeakerIdentities } from '../types/meeting'
 
 export function useMeetings() {
   const [meetings, setMeetings] = useState<Meeting[]>([])
@@ -33,7 +33,9 @@ export function useMeetings() {
       calendarProvider?: 'google' | 'microsoft'
       scheduledStart?: number
       attendeeEmails?: string[]
+      attendees?: MeetingAttendee[]
       speakerLabels?: Record<string, string>
+      speakerIdentities?: SpeakerIdentities
     }) => {
       const meeting = (await window.electronAPI.invoke('meetings:create', input ?? {})) as Meeting
       await refresh()
@@ -43,13 +45,19 @@ export function useMeetings() {
   )
 
   const updateMeeting = useCallback(
-    async (id: string, patch: {
-      title?: string
-      userNotes?: string
-      speakerLabels?: Record<string, string>
-      actionItems?: string[]
-      completedActionItems?: string[]
-    }) => {
+    async (
+      id: string,
+      patch: {
+        title?: string
+        userNotes?: string
+        speakerLabels?: Record<string, string>
+        speakerIdentities?: SpeakerIdentities
+        attendees?: MeetingAttendee[]
+        attendeeEmails?: string[]
+        actionItems?: string[]
+        completedActionItems?: string[]
+      },
+    ) => {
       const updated = (await window.electronAPI.invoke('meetings:update', {
         id,
         ...patch,

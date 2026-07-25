@@ -1,7 +1,7 @@
 'use client'
 
 import { DesktopStage } from '@/components/landing/DesktopStage'
-import { RecordingWidgetMock } from '@/components/landing/RecordingWidgetMock'
+import { OverlayDemo } from '@/components/landing/OverlayDemo'
 import { VideoCallDemo } from '@/components/landing/VideoCallDemo'
 import './hero-sales-demo.css'
 
@@ -10,7 +10,18 @@ export function HeroSalesDemo() {
     <div className="hero-sales-demo">
       <div className="hero-sales-glow" aria-hidden />
       <div className="hero-sales-screen">
-        <DesktopStage clarifi={<RecordingWidgetMock />}>
+        <DesktopStage
+          clarifi={
+            <OverlayDemo
+              size="sm"
+              interactive={false}
+              defaultRecording
+              defaultFollow
+              defaultPanelMode="history"
+              defaultModeLabel="Meetings"
+            />
+          }
+        >
           <VideoCallDemo
             variant="window"
             layout="hero"

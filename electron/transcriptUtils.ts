@@ -6,6 +6,9 @@ export type TranscriptEntry = {
   source: TranscriptSource
   speaker: string
   at: number
+  /** Offset into the meeting system-audio recording (ms), when available. */
+  audioStartMs?: number
+  audioEndMs?: number
 }
 
 const HALLUCINATION_PATTERNS = [
@@ -79,6 +82,8 @@ export function normalizeTranscriptEntry(entry: Partial<TranscriptEntry> & {
     source: entry.source,
     speaker: normalizeSpeakerLabel(entry.speaker, entry.source),
     at: entry.at,
+    ...(typeof entry.audioStartMs === 'number' ? { audioStartMs: entry.audioStartMs } : {}),
+    ...(typeof entry.audioEndMs === 'number' ? { audioEndMs: entry.audioEndMs } : {}),
   }
 }
 
@@ -117,6 +122,7 @@ export function normalizeTranscriptText(text: string): string {
   return text.replace(/\s+/g, ' ').trim()
 }
 
+/** Tokens Whisper often invents from silence — still treated as junk when untrusted. */
 const FILLER_TOKENS = new Set([
   'i',
   'you',
@@ -143,20 +149,48 @@ const FILLER_TOKENS = new Set([
   'she',
 ])
 
+/**
+ * Real conversational acknowledgements Deepgram returns with filler_words=true.
+ * Trusted STT may emit these as single-token finals — keep them.
+ */
+const TRUSTED_SHORT_SPEECH = new Set([
+  'um',
+  'uh',
+  'ok',
+  'okay',
+  'yeah',
+  'so',
+  'yes',
+  'no',
+  'hi',
+  'hey',
+  'bye',
+  'hello',
+  'mm',
+  'mmhmm',
+  'mhm',
+])
+
 const SHORT_VALID_WORDS = new Set(['hi', 'hey', 'yes', 'no', 'ok', 'bye', 'hello'])
 
 function tokenizeForAnalysis(text: string): string[] {
   return normalizeForCompare(text).split(' ').filter(Boolean)
 }
 
-export function isRepetitiveGarbage(text: string): boolean {
+export function isRepetitiveGarbage(
+  text: string,
+  options?: { trusted?: boolean },
+): boolean {
   const tokens = tokenizeForAnalysis(text)
   if (tokens.length === 0) return true
+  const trusted = Boolean(options?.trusted)
 
   if (tokens.length === 1) {
-    const token = tokens[0]
-    if (FILLER_TOKENS.has(token)) return true
+    const token = tokens[0]!
+    // True garbage: elongated i/y runs (Whisper silence junk).
     if (/^i+$/i.test(token) || /^y+$/i.test(token)) return true
+    if (trusted && TRUSTED_SHORT_SPEECH.has(token)) return false
+    if (FILLER_TOKENS.has(token)) return true
     if (token.length <= 2 && !SHORT_VALID_WORDS.has(token)) return true
   }
 
@@ -214,14 +248,28 @@ export function isRepeatedPhraseHallucination(text: string): boolean {
   return /(i'?m going to be in my car\.?\s*){2,}/i.test(text)
 }
 
+export type HallucinationCheckOptions = {
+  /**
+   * Set when the text came directly from a confidence-gated STT engine (e.g.
+   * live/batch Deepgram) rather than Whisper. Whisper can invent junk text
+   * from silence/noise, so short fragments with no long word are treated as
+   * likely hallucinations by default. Deepgram doesn't hallucinate from
+   * silence the same way — it only emits words it actually detected — so
+   * trusted callers skip the short-fragment/no-real-word gating and rely on
+   * the pattern-list and repetition checks instead.
+   */
+  trusted?: boolean
+}
+
 export function isLikelyHallucination(
   text: string,
   source?: TranscriptSource,
+  options?: HallucinationCheckOptions,
 ): boolean {
   const normalized = normalizeTranscriptText(text)
   if (!normalized) return true
   if (normalized.length < 2) return true
-  if (isRepetitiveGarbage(normalized)) return true
+  if (isRepetitiveGarbage(normalized, { trusted: options?.trusted })) return true
   if (normalized.length <= 12 && HALLUCINATION_PATTERNS.some((p) => p.test(normalized))) {
     return true
   }
@@ -230,11 +278,14 @@ export function isLikelyHallucination(
   }
 
   const tokens = tokenizeForAnalysis(normalized)
-  const hasRealWord = tokens.some((token) => token.length >= 4)
-  if (normalized.length < 14 && !hasRealWord) return true
-  if (tokens.length >= 3 && !hasRealWord) return true
 
-  if (source === 'mic' && tokens.length === 1 && tokens[0].length <= 3) {
+  if (!options?.trusted) {
+    const hasRealWord = tokens.some((token) => token.length >= 4)
+    if (normalized.length < 14 && !hasRealWord) return true
+    if (tokens.length >= 3 && !hasRealWord) return true
+  }
+
+  if (!options?.trusted && source === 'mic' && tokens.length === 1 && tokens[0].length <= 3) {
     if (!SHORT_VALID_WORDS.has(tokens[0])) return true
   }
 

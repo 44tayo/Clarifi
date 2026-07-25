@@ -9,6 +9,9 @@ const INVOKE_CHANNELS = [
   'auth:open-legal',
   'calendar:status',
   'calendar:events',
+  'calendar:contacts-search',
+  'contacts:list-local',
+  'contacts:upsert',
   'calendar:open-connect',
   'calendar:disconnect',
   'meetings:list',
@@ -19,6 +22,7 @@ const INVOKE_CHANNELS = [
   'meetings:enhance',
   'meetings:sync',
   'meetings:seed-demo-artifact',
+  'meetings:speaker-snippet',
   'folders:list',
   'folders:create',
   'folders:rename',
@@ -36,6 +40,7 @@ const INVOKE_CHANNELS = [
   'audio:stop',
   'audio:status',
   'audio:chunk',
+  'audio:mic-pcm-chunk',
   'audio:session-transcript',
   'audio:get-preferences',
   'audio:set-preferences',
@@ -69,6 +74,7 @@ const SEND_CHANNELS = [] as const
 
 const ON_CHANNELS = [
   'transcript:update',
+  'transcript:interim',
   'transcription:activity',
   'auth:connected',
   'meetings:changed',

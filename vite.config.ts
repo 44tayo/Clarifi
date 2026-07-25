@@ -33,7 +33,15 @@ export default defineConfig(({ mode }) => {
             build: {
               outDir: 'dist-electron',
               rollupOptions: {
-                external: ['electron', 'keytar', 'form-data', 'node-fetch'],
+                external: [
+                  'electron',
+                  'keytar',
+                  'form-data',
+                  'node-fetch',
+                  'ws',
+                  'bufferutil',
+                  'utf-8-validate',
+                ],
                 output: {
                   inlineDynamicImports: true,
                 },

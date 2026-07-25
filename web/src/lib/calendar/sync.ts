@@ -10,7 +10,7 @@ import type { CalendarEvent, CalendarProvider, CalendarStatus } from './types'
 
 const UPCOMING_WINDOW_DAYS = 10
 
-async function getValidAccessToken(
+export async function getValidAccessToken(
   userId: string,
   provider: CalendarProvider,
 ): Promise<{ accessToken: string; accountEmail: string | null } | null> {

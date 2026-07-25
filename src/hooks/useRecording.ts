@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { acquireMicStream } from '../lib/microphones'
+import { startMicPcmCapture, type MicPcmCaptureHandle } from '../lib/micPcmCapture'
 import type { RecordingState, TranscriptEntry } from '../types/meeting'
+import type { MicSttEngine } from '../../shared/audio-preferences'
 
 function computeRms(analyser: AnalyserNode): number {
   const data = new Uint8Array(analyser.fftSize)
@@ -26,14 +28,19 @@ function stopStream(stream: MediaStream | null): void {
   stream?.getTracks().forEach((track) => track.stop())
 }
 
+export type LiveInterimEntry = { text: string; speaker: string }
+export type LiveInterimState = Partial<Record<'mic' | 'system', LiveInterimEntry>>
+
 export function useRecording(meetingId: string | null) {
   const [state, setState] = useState<RecordingState>('idle')
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([])
   const [activity, setActivity] = useState<string>('silent')
+  const [interim, setInterim] = useState<LiveInterimState>({})
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
+  const micPcmCaptureRef = useRef<MicPcmCaptureHandle | null>(null)
 
   useEffect(() => {
     void window.electronAPI.invoke('audio:status').then((status) => {
@@ -47,6 +54,8 @@ export function useRecording(meetingId: string | null) {
   const stopMicCapture = useCallback(() => {
     mediaRecorderRef.current?.stop()
     mediaRecorderRef.current = null
+    micPcmCaptureRef.current?.stop()
+    micPcmCaptureRef.current = null
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
     void audioContextRef.current?.close()
@@ -54,8 +63,17 @@ export function useRecording(meetingId: string | null) {
     analyserRef.current = null
   }, [])
 
-  const startRecorder = useCallback((stream: MediaStream) => {
+  const startRecorder = useCallback(async (stream: MediaStream, micSttEngine: MicSttEngine) => {
     streamRef.current = stream
+
+    if (micSttEngine === 'deepgram') {
+      // Live PCM path — no RMS analyser needed, bleed handling moves to
+      // text-similarity dedup on the main-process side instead.
+      micPcmCaptureRef.current = await startMicPcmCapture(stream, (base64) => {
+        void window.electronAPI.invoke('audio:mic-pcm-chunk', { base64 })
+      })
+      return
+    }
 
     const audioContext = new AudioContext()
     const source = audioContext.createMediaStreamSource(stream)
@@ -84,17 +102,27 @@ export function useRecording(meetingId: string | null) {
       })
     }
 
-    recorder.start(1000)
+    recorder.start(3000)
   }, [])
 
   const startMicCapture = useCallback(async () => {
     await window.electronAPI.invoke('permissions:request-microphone')
     const prefs = (await window.electronAPI.invoke('audio:get-preferences')) as {
       preferredMicrophoneId?: string
+      micSttEngine?: MicSttEngine
+    }
+    const status = (await window.electronAPI.invoke('audio:status')) as {
+      micEngine?: MicSttEngine
     }
     const deviceId = prefs.preferredMicrophoneId?.trim()
     const stream = await acquireMicStream(deviceId || undefined)
-    startRecorder(stream)
+    const engine: MicSttEngine =
+      status.micEngine === 'whisper' || status.micEngine === 'deepgram'
+        ? status.micEngine
+        : prefs.micSttEngine === 'whisper'
+          ? 'whisper'
+          : 'deepgram'
+    await startRecorder(stream, engine)
   }, [startRecorder])
 
   const stopMicCaptureRef = useRef(stopMicCapture)
@@ -107,6 +135,22 @@ export function useRecording(meetingId: string | null) {
       const data = payload as { full?: TranscriptEntry[] }
       if (Array.isArray(data.full)) setTranscript(data.full)
     })
+    const offInterim = window.electronAPI.on('transcript:interim', (payload) => {
+      const data = payload as {
+        source?: 'mic' | 'system'
+        update?: LiveInterimEntry | null
+      }
+      if (data.source !== 'mic' && data.source !== 'system') return
+      setInterim((prev) => {
+        if (!data.update) {
+          if (!(data.source! in prev)) return prev
+          const next = { ...prev }
+          delete next[data.source!]
+          return next
+        }
+        return { ...prev, [data.source!]: data.update }
+      })
+    })
     const offActivity = window.electronAPI.on('transcription:activity', (payload) => {
       const data = payload as { state?: string }
       if (data.state) setActivity(data.state)
@@ -114,16 +158,19 @@ export function useRecording(meetingId: string | null) {
     const offStopped = window.electronAPI.on('audio:stopped', () => {
       stopMicCaptureRef.current()
       setState('idle')
+      setInterim({})
     })
     const offSessionPaused = window.electronAPI.on('audio:session-paused', () => {
       stopMicCaptureRef.current()
       setState('paused')
+      setInterim({})
     })
     const offSessionResumed = window.electronAPI.on('audio:session-resumed', () => {
       void startMicCaptureRef.current().then(() => setState('recording'))
     })
     return () => {
       offTranscript()
+      offInterim()
       offActivity()
       offStopped()
       offSessionPaused()
@@ -136,20 +183,30 @@ export function useRecording(meetingId: string | null) {
       const id = overrideMeetingId ?? meetingId
       if (!id) return
       setTranscript([])
+      setInterim({})
 
       await window.electronAPI.invoke('permissions:request-microphone')
       const prefs = (await window.electronAPI.invoke('audio:get-preferences')) as {
         preferredMicrophoneId?: string
+        micSttEngine?: MicSttEngine
       }
       const deviceId = prefs.preferredMicrophoneId?.trim()
+      const preferredEngine: MicSttEngine =
+        prefs.micSttEngine === 'whisper' ? 'whisper' : 'deepgram'
 
       let sessionStarted = false
       let stream: MediaStream | null = null
       try {
         stream = await acquireMicStream(deviceId || undefined)
-        await window.electronAPI.invoke('audio:start', { meetingId: id })
+        const started = (await window.electronAPI.invoke('audio:start', { meetingId: id })) as {
+          micEngine?: MicSttEngine
+        }
         sessionStarted = true
-        startRecorder(stream)
+        const engine: MicSttEngine =
+          started?.micEngine === 'whisper' || started?.micEngine === 'deepgram'
+            ? started.micEngine
+            : preferredEngine
+        await startRecorder(stream, engine)
         stream = null
         setState('recording')
       } catch (error) {
@@ -171,10 +228,22 @@ export function useRecording(meetingId: string | null) {
   }, [stopMicCapture])
 
   const resume = useCallback(async () => {
-    await window.electronAPI.invoke('audio:resume')
-    await startMicCapture()
+    const result = (await window.electronAPI.invoke('audio:resume')) as {
+      micEngine?: MicSttEngine
+    }
+    await window.electronAPI.invoke('permissions:request-microphone')
+    const prefs = (await window.electronAPI.invoke('audio:get-preferences')) as {
+      preferredMicrophoneId?: string
+    }
+    const deviceId = prefs.preferredMicrophoneId?.trim()
+    const stream = await acquireMicStream(deviceId || undefined)
+    const engine: MicSttEngine =
+      result?.micEngine === 'whisper' || result?.micEngine === 'deepgram'
+        ? result.micEngine
+        : 'deepgram'
+    await startRecorder(stream, engine)
     setState('recording')
-  }, [startMicCapture])
+  }, [startRecorder])
 
   const stop = useCallback(async () => {
     stopMicCapture()
@@ -182,5 +251,5 @@ export function useRecording(meetingId: string | null) {
     setState('idle')
   }, [stopMicCapture])
 
-  return { state, transcript, activity, start, pause, resume, stop }
+  return { state, transcript, activity, interim, start, pause, resume, stop }
 }

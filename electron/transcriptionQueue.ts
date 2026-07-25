@@ -1,17 +1,14 @@
 import { randomUUID } from 'crypto'
 import { mergeWavBuffers } from './wavMerge'
-import { isAutoCallMode, isDualCallMode, isGroupCallMode, usesDiarization } from './audioPreferences'
 import { transcribeSystemWithDiarization } from './diarizeTranscribe'
 import { processAudioChunk, getIsPaused, wavHasSpeechEnergy, wavRms } from './audio'
 import {
   buildTranscriptionPrompt,
-  isDiarizedSpeakerLabel,
   isDuplicateAcrossStreams,
   isDuplicateOfRecent,
   isLikelyHallucination,
   isNearDuplicate,
   normalizeTranscriptText,
-  speakerLabel,
   type TranscriptEntry,
   type TranscriptSource,
 } from './transcriptUtils'
@@ -23,6 +20,8 @@ type QueuedChunk = {
   source: TranscriptSource
   enqueuedAt: number
   rms?: number
+  /** Millisecond offset into the meeting system recording when this chunk was appended. */
+  audioOffsetMs?: number
 }
 
 type TranscriptionQueueOptions = {
@@ -39,9 +38,8 @@ let activeSystemJobs = 0
 let draining = false
 let options: TranscriptionQueueOptions | null = null
 
-const SYSTEM_FIRST_WAIT_MS = 500
-const MAX_CONCURRENT_MIC = 2
-const MAX_CONCURRENT_SYSTEM = 2
+const MAX_CONCURRENT_MIC = 1
+const MAX_CONCURRENT_SYSTEM = 1
 const MIC_BLEED_WINDOW_MS = 25_000
 const ACTIVITY_SILENCE_MS = 6000
 
@@ -65,11 +63,16 @@ type SystemChunkWindow = {
 let recentSystemSpeech: SpeechWindow[] = []
 let recentMicSpeech: SpeechWindow[] = []
 let recentSystemChunks: SystemChunkWindow[] = []
-const SYSTEM_DIARIZE_BUFFER_MS = 4000
-const SYSTEM_DIARIZE_MIN_CHUNKS = 3
+const SYSTEM_DIARIZE_BUFFER_MS = 8000
+const SYSTEM_DIARIZE_MIN_CHUNKS = 5
 
 let systemDiarizeBuffer: QueuedChunk[] = []
 let systemDiarizeBufferStartedAt = 0
+/** Maps Deepgram's per-window speaker index → stable "Speaker N" for the session. */
+let diarizeSpeakerMap = new Map<number, string>()
+let nextDiarizeSpeakerNumber = 1
+/** Byte/time offset of the current diarize buffer within the meeting recording. */
+let systemDiarizeBufferAudioOffsetMs = 0
 
 const SYSTEM_CAPTURE_WARMUP_MS = 3000
 
@@ -91,6 +94,9 @@ export function clearTranscriptionQueue(): void {
   systemCaptureActiveSince = 0
   systemDiarizeBuffer = []
   systemDiarizeBufferStartedAt = 0
+  systemDiarizeBufferAudioOffsetMs = 0
+  diarizeSpeakerMap = new Map()
+  nextDiarizeSpeakerNumber = 1
   options?.onActivity?.('listening')
 }
 
@@ -118,11 +124,15 @@ export function enqueueTranscription(
   base64: string,
   source: TranscriptSource,
   rms?: number,
+  audioOffsetMs?: number,
 ): void {
   if (!base64 || !options || getIsPaused()) return
-  if (source === 'mic' && isGroupCallMode()) return
-  const chunk: QueuedChunk = { base64, source, enqueuedAt: Date.now(), rms }
+  const chunk: QueuedChunk = { base64, source, enqueuedAt: Date.now(), rms, audioOffsetMs }
   if (source === 'mic') {
+    // Cap backlog so we don't stampede Whisper when speech is continuous.
+    if (queueMic.length >= 3) {
+      queueMic.shift()
+    }
     queueMic.push(chunk)
     void drainMicQueue()
   } else {
@@ -150,15 +160,6 @@ export async function flushTranscriptionQueue(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
   draining = false
-}
-
-async function waitForSystemDrain(maxMs = SYSTEM_FIRST_WAIT_MS): Promise<void> {
-  if (maxMs <= 0) return
-  const deadline = Date.now() + maxMs
-  while (Date.now() < deadline) {
-    if (activeSystemJobs === 0 && queueSystem.length === 0) return
-    await new Promise((resolve) => setTimeout(resolve, 50))
-  }
 }
 
 function recordSystemSpeech(at: number, rms: number): void {
@@ -240,10 +241,6 @@ function resolveMicEntryTarget(chunk: QueuedChunk): {
   speaker: string
   source: TranscriptSource
 } | null {
-  if (!isDualCallMode() && !isAutoCallMode()) {
-    return { speaker: 'Me', source: 'mic' }
-  }
-
   const micRms = chunk.rms ?? 0
   const captureActive = isSystemCaptureSessionActive(chunk.enqueuedAt)
   const maxSystemRms = getMaxRecentSystemRms(chunk.enqueuedAt)
@@ -261,27 +258,12 @@ function resolveMicEntryTarget(chunk: QueuedChunk): {
 }
 
 function shouldSkipMicChunkBeforeTranscribe(chunk: QueuedChunk): boolean {
-  if (!isDualCallMode() && !isAutoCallMode()) return false
-
   const micRms = chunk.rms ?? 0
   const captureActive = isSystemCaptureSessionActive(chunk.enqueuedAt)
   const maxSystemRms = getMaxRecentSystemRms(chunk.enqueuedAt)
 
   if (!captureActive && !hasRecentSystemEnergy(chunk.enqueuedAt)) return false
   return !isClearlyUserMicSpeech(micRms, maxSystemRms, captureActive)
-}
-
-function micMatchesRecentThem(
-  transcript: string,
-  chunk: QueuedChunk,
-  entries: TranscriptEntry[],
-): boolean {
-  for (const entry of entries.slice(-24).reverse()) {
-    if (speakerLabel(entry) !== 'Them') continue
-    if (Math.abs(entry.at - chunk.enqueuedAt) > MIC_BLEED_WINDOW_MS) continue
-    if (isNearDuplicate(transcript, entry.text)) return true
-  }
-  return false
 }
 
 function hasRecentSpeech(): boolean {
@@ -300,18 +282,6 @@ function updateActivityState(): void {
     return
   }
   options.onActivity(hasRecentSpeech() ? 'listening' : 'silent')
-}
-
-function shouldSkipMicBleed(
-  transcript: string,
-  chunk: QueuedChunk,
-  entries: TranscriptEntry[],
-): boolean {
-  if (!isDualCallMode()) return false
-
-  if (micMatchesRecentThem(transcript, chunk, entries)) return true
-
-  return isDuplicateAcrossStreams(transcript, entries, chunk.enqueuedAt, 'mic')
 }
 
 function pruneMicBleedFromSession(systemEntry: TranscriptEntry): void {
@@ -367,17 +337,31 @@ async function drainSystemQueue(): Promise<void> {
   pumpSystemQueue()
 }
 
+function stableDiarizedSpeaker(deepgramIndex: number | undefined, fallbackLabel: string): string {
+  const index = typeof deepgramIndex === 'number' ? deepgramIndex : -1
+  if (index < 0) return fallbackLabel
+  const existing = diarizeSpeakerMap.get(index)
+  if (existing) return existing
+  const label = `Speaker ${nextDiarizeSpeakerNumber}`
+  nextDiarizeSpeakerNumber += 1
+  diarizeSpeakerMap.set(index, label)
+  return label
+}
+
 function emitEntry(
   chunk: QueuedChunk,
   text: string,
   speaker: string,
   source: TranscriptSource,
+  timing?: { audioStartMs?: number; audioEndMs?: number },
+  /** True when text came from Deepgram (confidence-gated) rather than Whisper. */
+  trusted = false,
 ): void {
   if (!options) return
 
   const entries = options.getEntries()
   const normalized = normalizeTranscriptText(text)
-  if (!normalized || isLikelyHallucination(normalized, source)) return
+  if (!normalized || isLikelyHallucination(normalized, source, { trusted })) return
   if (
     isDuplicateOfRecent(normalized, entries, 12_000, {
       speaker,
@@ -387,10 +371,7 @@ function emitEntry(
   ) {
     return
   }
-  const skipCrossStream =
-    isGroupCallMode() && source === 'system' && isDiarizedSpeakerLabel(speaker)
   if (
-    !skipCrossStream &&
     source !== 'mic' &&
     isDuplicateAcrossStreams(normalized, entries, chunk.enqueuedAt, source)
   ) {
@@ -403,9 +384,11 @@ function emitEntry(
     source,
     speaker,
     at: chunk.enqueuedAt,
+    ...(typeof timing?.audioStartMs === 'number' ? { audioStartMs: timing.audioStartMs } : {}),
+    ...(typeof timing?.audioEndMs === 'number' ? { audioEndMs: timing.audioEndMs } : {}),
   }
 
-  if (source === 'system' && isDualCallMode()) {
+  if (source === 'system') {
     pruneMicBleedFromSession(entry)
   }
 
@@ -422,7 +405,7 @@ function shouldProcessMicChunk(chunk: QueuedChunk): boolean {
 }
 
 async function processMicChunk(chunk: QueuedChunk): Promise<void> {
-  if (!options || isGroupCallMode()) return
+  if (!options) return
 
   if (!shouldProcessMicChunk(chunk)) {
     updateActivityState()
@@ -432,10 +415,6 @@ async function processMicChunk(chunk: QueuedChunk): Promise<void> {
   if (shouldSkipMicChunkBeforeTranscribe(chunk)) {
     updateActivityState()
     return
-  }
-
-  if (isDualCallMode()) {
-    await waitForSystemDrain()
   }
 
   const entries = options.getEntries()
@@ -455,29 +434,55 @@ async function processMicChunk(chunk: QueuedChunk): Promise<void> {
     return
   }
 
-  if (shouldSkipMicBleed(transcript, chunk, entries)) {
-    updateActivityState()
-    return
-  }
-
   emitEntry(chunk, transcript, target.speaker, target.source)
   updateActivityState()
 }
 
 async function flushSystemDiarizeBuffer(chunk: QueuedChunk): Promise<void> {
   if (!options || systemDiarizeBuffer.length === 0) return
+  const windowOffsetMs = systemDiarizeBufferAudioOffsetMs
   const buffers = systemDiarizeBuffer.map((item) => Buffer.from(item.base64, 'base64'))
   systemDiarizeBuffer = []
   systemDiarizeBufferStartedAt = 0
+  systemDiarizeBufferAudioOffsetMs = 0
   const merged = mergeWavBuffers(buffers)
   if (!merged) {
     updateActivityState()
     return
   }
-  const utterances = await transcribeSystemWithDiarization(merged.toString('base64'))
+  const mergedBase64 = merged.toString('base64')
+  const utterances = await transcribeSystemWithDiarization(mergedBase64)
   if (utterances && utterances.length > 0) {
-    for (const utterance of utterances) {
-      emitEntry(chunk, utterance.text, utterance.speaker, 'system')
+    const labels = utterances.map((u) => stableDiarizedSpeaker(u.deepgramIndex, u.speaker))
+    console.log(`Diarize OK: ${utterances.length} utterance(s) → ${[...new Set(labels)].join(', ')}`)
+    for (let i = 0; i < utterances.length; i += 1) {
+      const utterance = utterances[i]!
+      const speaker = labels[i]!
+      const audioStartMs =
+        typeof utterance.startSec === 'number'
+          ? Math.max(0, Math.round(windowOffsetMs + utterance.startSec * 1000))
+          : windowOffsetMs
+      const audioEndMs =
+        typeof utterance.endSec === 'number'
+          ? Math.max(audioStartMs, Math.round(windowOffsetMs + utterance.endSec * 1000))
+          : undefined
+      // Deepgram diarize API output — confidence-gated, not Whisper hallucination-prone.
+      emitEntry(chunk, utterance.text, speaker, 'system', { audioStartMs, audioEndMs }, true)
+    }
+  } else {
+    // Don't drop system speech when diarize fails — keep a single Speaker 1 line.
+    console.warn('Diarize empty; falling back to single-speaker STT as Speaker 1')
+    const transcript = await processAudioChunk(mergedBase64, {
+      source: 'system',
+      prompt: buildTranscriptionPrompt(options.getEntries(), 'system'),
+    })
+    if (transcript) {
+      const speaker = stableDiarizedSpeaker(0, 'Speaker 1')
+      // Whisper fallback — keep strict/untrusted hallucination checking.
+      emitEntry(chunk, transcript, speaker, 'system', {
+        audioStartMs: windowOffsetMs,
+        audioEndMs: windowOffsetMs + 4000,
+      })
     }
   }
   updateActivityState()
@@ -498,35 +503,19 @@ async function processSystemChunk(chunk: QueuedChunk): Promise<void> {
 
   recordSystemSpeech(chunk.enqueuedAt, rms)
 
-  if (usesDiarization()) {
-    if (systemDiarizeBuffer.length === 0) {
-      systemDiarizeBufferStartedAt = chunk.enqueuedAt
-    }
-    systemDiarizeBuffer.push(chunk)
-    const elapsed = chunk.enqueuedAt - systemDiarizeBufferStartedAt
-    if (
-      systemDiarizeBuffer.length >= SYSTEM_DIARIZE_MIN_CHUNKS ||
-      elapsed >= SYSTEM_DIARIZE_BUFFER_MS
-    ) {
-      await flushSystemDiarizeBuffer(chunk)
-    } else {
-      updateActivityState()
-    }
-    return
+  if (systemDiarizeBuffer.length === 0) {
+    systemDiarizeBufferStartedAt = chunk.enqueuedAt
+    systemDiarizeBufferAudioOffsetMs =
+      typeof chunk.audioOffsetMs === 'number' ? chunk.audioOffsetMs : 0
   }
-
-  const entries = options.getEntries()
-  const prompt = buildTranscriptionPrompt(entries, 'system')
-  const transcript = await processAudioChunk(chunk.base64, {
-    source: 'system',
-    prompt,
-  })
-
-  if (!transcript) {
+  systemDiarizeBuffer.push(chunk)
+  const elapsed = chunk.enqueuedAt - systemDiarizeBufferStartedAt
+  if (
+    systemDiarizeBuffer.length >= SYSTEM_DIARIZE_MIN_CHUNKS ||
+    elapsed >= SYSTEM_DIARIZE_BUFFER_MS
+  ) {
+    await flushSystemDiarizeBuffer(chunk)
+  } else {
     updateActivityState()
-    return
   }
-
-  emitEntry(chunk, transcript, 'Them', 'system')
-  updateActivityState()
 }

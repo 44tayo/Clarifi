@@ -75,6 +75,8 @@ export function buildCalendarAuthUrl(
       response_type: 'code',
       scope: [
         'https://www.googleapis.com/auth/calendar.readonly',
+        'https://www.googleapis.com/auth/contacts.readonly',
+        'https://www.googleapis.com/auth/contacts.other.readonly',
         'https://www.googleapis.com/auth/userinfo.email',
       ].join(' '),
       access_type: 'offline',
@@ -91,7 +93,9 @@ export function buildCalendarAuthUrl(
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: 'code',
-    scope: ['Calendars.Read', 'User.Read', 'offline_access'].join(' '),
+    scope: ['Calendars.Read', 'Contacts.Read', 'People.Read', 'User.Read', 'offline_access'].join(
+      ' ',
+    ),
     state,
     response_mode: 'query',
   })
@@ -225,7 +229,9 @@ export async function refreshCalendarAccessToken(
     client_id: clientId,
     client_secret: clientSecret,
     grant_type: 'refresh_token',
-    scope: ['Calendars.Read', 'User.Read', 'offline_access'].join(' '),
+    scope: ['Calendars.Read', 'Contacts.Read', 'People.Read', 'User.Read', 'offline_access'].join(
+      ' ',
+    ),
   })
 
   const response = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {

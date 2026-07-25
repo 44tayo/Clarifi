@@ -13,17 +13,19 @@ import { OnboardingFlow } from './components/OnboardingFlow'
 import { SettingsPanel } from './components/SettingsPanel'
 import { SharedWithMeView } from './components/SharedWithMeView'
 import { Sidebar } from './components/Sidebar'
+import { ToastProvider } from './components/ui/Toast'
 import { useAudioPreferences } from './hooks/useAudioPreferences'
 import { useAuth } from './hooks/useAuth'
-import { speakerHintsFromEvent, useCalendar } from './hooks/useCalendar'
+import { useCalendar } from './hooks/useCalendar'
 import { useFolders } from './hooks/useFolders'
 import { useMeetings } from './hooks/useMeetings'
 import { useRecording } from './hooks/useRecording'
 import { useSidebarWidth } from './hooks/useSidebarWidth'
 import { formatMicCaptureError, isMicPermissionError } from './lib/microphones'
 import { applyTheme } from './lib/theme'
+import { meetingAttendeesFromCalendar } from '../shared/speakers'
 import type { CalendarEvent } from '../shared/calendar'
-import type { Meeting } from './types/meeting'
+import type { Meeting, SpeakerIdentities } from './types/meeting'
 import type { SidebarSelection } from './types/navigation'
 
 const FREE_HISTORY_RETENTION_MS = FREE_HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000
@@ -44,7 +46,7 @@ function App() {
     openConnect: openCalendarConnect,
     refresh: refreshCalendar,
   } = useCalendar(connection.paired)
-  const { meetings, createMeeting, updateMeeting, deleteMeeting, enhanceMeeting, getMeeting, refresh } =
+  const { meetings, createMeeting, updateMeeting, deleteMeeting, enhanceMeeting, getMeeting } =
     useMeetings()
   const {
     folders,
@@ -65,28 +67,21 @@ function App() {
   const [micPickerOpen, setMicPickerOpen] = useState(false)
   const [micPickerError, setMicPickerError] = useState<string | null>(null)
   const [micPermissionDenied, setMicPermissionDenied] = useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [deletingMeeting, setDeletingMeeting] = useState(false)
+  const [meetingFocusMode, setMeetingFocusMode] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const captureMeetingIdRef = useRef<string | null>(null)
-  const demoOpenedRef = useRef(false)
+
+  useEffect(() => {
+    if (!activeMeeting) setMeetingFocusMode(false)
+  }, [activeMeeting])
 
   const recording = useRecording(captureMeetingId)
 
   useEffect(() => {
     captureMeetingIdRef.current = captureMeetingId
   }, [captureMeetingId])
-
-  useEffect(() => {
-    if (demoOpenedRef.current) return
-    demoOpenedRef.current = true
-    void (async () => {
-      const result = (await window.electronAPI.invoke('meetings:seed-demo-artifact')) as {
-        meeting?: Meeting
-      }
-      await refresh()
-      if (!result?.meeting) return
-      setSelectedId(result.meeting.id)
-      setActiveMeeting(result.meeting)
-    })()
-  }, [refresh])
 
   useEffect(() => {
     if (!selectedId) return
@@ -231,13 +226,16 @@ function App() {
         return
       }
 
+      const attendees = meetingAttendeesFromCalendar(event.attendees)
       const meeting = await createMeeting({
         title: event.title,
         calendarEventId: event.id,
         calendarProvider: event.provider,
         scheduledStart: new Date(event.startAt).getTime(),
-        attendeeEmails: event.attendees.map((person) => person.email),
-        speakerLabels: speakerHintsFromEvent(event),
+        attendees,
+        attendeeEmails: attendees.map((person) => person.email),
+        speakerLabels: {},
+        speakerIdentities: {},
       })
       setSelectedId(meeting.id)
       setActiveMeeting(meeting)
@@ -313,6 +311,7 @@ function App() {
       title?: string
       userNotes?: string
       speakerLabels?: Record<string, string>
+      speakerIdentities?: SpeakerIdentities
       actionItems?: string[]
       completedActionItems?: string[]
     }) => {
@@ -323,12 +322,36 @@ function App() {
     [activeMeeting, updateMeeting],
   )
 
-  const handleDelete = useCallback(async () => {
+  const requestDelete = useCallback(() => {
     if (!activeMeeting) return
-    await deleteMeeting(activeMeeting.id)
-    setSelectedId(null)
-    setActiveMeeting(null)
-  }, [activeMeeting, deleteMeeting])
+    setDeleteConfirmOpen(true)
+  }, [activeMeeting])
+
+  const confirmDelete = useCallback(async () => {
+    if (!activeMeeting || deletingMeeting) return
+    setDeletingMeeting(true)
+    try {
+      await deleteMeeting(activeMeeting.id)
+      setDeleteConfirmOpen(false)
+      setSelectedId(null)
+      setActiveMeeting(null)
+    } finally {
+      setDeletingMeeting(false)
+    }
+  }, [activeMeeting, deleteMeeting, deletingMeeting])
+
+  useEffect(() => {
+    if (!deleteConfirmOpen) return
+    document.body.classList.add('has-modal-open')
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setDeleteConfirmOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.classList.remove('has-modal-open')
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [deleteConfirmOpen])
 
   const handleEnhance = useCallback(async () => {
     if (!activeMeeting) return
@@ -354,6 +377,7 @@ function App() {
     setNav(selection)
     setSelectedId(null)
     setActiveMeeting(null)
+    setMeetingFocusMode(false)
   }, [])
 
   const handleCommandNavigate = useCallback(
@@ -402,37 +426,62 @@ function App() {
 
   if (!onboardingDone) {
     return (
-      <OnboardingFlow
-        paired={connection.paired}
-        onSignIn={(provider) => void openSignIn(provider)}
-        onComplete={() => setOnboardingDone(true)}
-      />
+      <ToastProvider>
+        <OnboardingFlow
+          paired={connection.paired}
+          onSignIn={(provider) => void openSignIn(provider)}
+          onComplete={() => setOnboardingDone(true)}
+        />
+      </ToastProvider>
     )
   }
 
   return (
+    <ToastProvider>
     <ErrorBoundary>
-      <div className="app-shell">
+      <div
+        className={`app-shell${meetingFocusMode && activeMeeting ? ' is-meeting-focus' : ''}${
+          sidebarCollapsed && !(meetingFocusMode && activeMeeting) ? ' is-sidebar-collapsed' : ''
+        }`}
+      >
         <div className="app-titlebar-drag" aria-hidden="true" />
         <OfflineBanner />
-        <Sidebar
-          selection={nav}
-          onSelectView={handleSelectView}
-          meetings={meetings}
-          onSelectMeeting={(id) => void handleSelect(id)}
-          folders={folders}
-          onCreateFolder={(name) => void createFolder(name)}
-          onRenameFolder={(id, name) => void renameFolder(id, name)}
-          onDeleteFolder={(id) => void deleteFolder(id)}
-          connection={connection}
-          onNewMeeting={() => void handleNewMeeting()}
-          onConnect={() => void openConnect()}
-          onOpenDashboard={() => void openDashboard()}
-          onOpenSettings={() => setSettingsOpen(true)}
-          resizing={sidebarResizing}
-          onResizePointerDown={onResizePointerDown}
-          onResizeDoubleClick={resetSidebarWidth}
-        />
+        {!meetingFocusMode || !activeMeeting ? (
+          sidebarCollapsed ? (
+            <button
+              type="button"
+              className="sidebar-expand-btn no-drag"
+              aria-label="Expand sidebar"
+              title="Expand sidebar"
+              onClick={() => setSidebarCollapsed(false)}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+                <path d="M9.5 4.5v15" />
+              </svg>
+            </button>
+          ) : (
+            <Sidebar
+              selection={nav}
+              onSelectView={handleSelectView}
+              meetings={meetings}
+              onSelectMeeting={(id) => void handleSelect(id)}
+              folders={folders}
+              onCreateFolder={(name) => void createFolder(name)}
+              onRenameFolder={(id, name) => void renameFolder(id, name)}
+              onDeleteFolder={(id) => void deleteFolder(id)}
+              connection={connection}
+              onNewMeeting={() => void handleNewMeeting()}
+              onConnect={() => void openConnect()}
+              onOpenDashboard={() => void openDashboard()}
+              onOpenSettings={() => setSettingsOpen(true)}
+              resizing={sidebarResizing}
+              onResizePointerDown={onResizePointerDown}
+              onResizeDoubleClick={resetSidebarWidth}
+              onCollapse={() => setSidebarCollapsed(true)}
+            />
+          )
+        ) : null}
 
         {settingsOpen ? (
           <SettingsPanel onClose={() => setSettingsOpen(false)} calendarEnabled={connection.paired} />
@@ -456,6 +505,46 @@ function App() {
           }
         />
 
+        {deleteConfirmOpen && activeMeeting ? (
+          <div
+            className="confirm-delete-backdrop"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setDeleteConfirmOpen(false)
+            }}
+          >
+            <div
+              className="confirm-delete-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="confirm-delete-title"
+            >
+              <h2 id="confirm-delete-title">
+                Delete “{activeMeeting.title?.trim() || 'Untitled'}”?
+              </h2>
+              <p>This can’t be undone.</p>
+              <div className="confirm-delete-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setDeleteConfirmOpen(false)}
+                  disabled={deletingMeeting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger confirm-delete-confirm"
+                  onClick={() => void confirmDelete()}
+                  disabled={deletingMeeting}
+                >
+                  {deletingMeeting ? 'Deleting…' : 'Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <main className="workspace">
           {activeMeeting ? (
             <MeetingWorkspace
@@ -465,13 +554,15 @@ function App() {
               captureMeetingId={captureMeetingId}
               recording={recording}
               folders={folders}
+              isMaximized={meetingFocusMode}
+              onToggleMaximize={() => setMeetingFocusMode((v) => !v)}
               onStartCapture={handleStartCapture}
               onUpdate={(patch) => void handleUpdate(patch)}
-              onDelete={() => void handleDelete()}
+              onDelete={requestDelete}
               onEnhance={() => void handleEnhance()}
               onConnect={() => void openConnect()}
               onOpenDashboard={() => void openDashboard()}
-              onBackToMeetings={() => handleSelectView({ view: 'meetings' })}
+              onBackHome={() => handleSelectView({ view: 'home' })}
               onSetFolders={(folderIds) => {
                 void setMeetingFolders(activeMeeting.id, folderIds).then(async () => {
                   const refreshed = await getMeeting(activeMeeting.id)
@@ -540,6 +631,7 @@ function App() {
         </main>
       </div>
     </ErrorBoundary>
+    </ToastProvider>
   )
 }
 

@@ -8,6 +8,12 @@ import { isLikelyHallucination, normalizeTranscriptText } from './transcriptUtil
 export type DiarizedUtterance = {
   speaker: string
   text: string
+  /** Seconds relative to the start of the submitted audio chunk. */
+  startSec?: number
+  /** Seconds relative to the start of the submitted audio chunk. */
+  endSec?: number
+  /** Raw Deepgram speaker index for session continuity mapping. */
+  deepgramIndex?: number
 }
 
 function formatSpeakerLabel(speakerIndex: number): string {
@@ -18,11 +24,20 @@ type DeepgramWord = {
   word?: string
   speaker?: number
   punctuated_word?: string
+  start?: number
+  end?: number
+}
+
+type DeepgramUtterance = {
+  speaker?: number
+  transcript?: string
+  start?: number
+  end?: number
 }
 
 type DeepgramResponse = {
   results?: {
-    utterances?: Array<{ speaker?: number; transcript?: string }>
+    utterances?: DeepgramUtterance[]
     channels?: Array<{
       alternatives?: Array<{
         transcript?: string
@@ -36,12 +51,17 @@ function pushUtterance(
   results: DiarizedUtterance[],
   speakerIndex: number,
   text: string,
+  startSec?: number,
+  endSec?: number,
 ): void {
   const normalized = normalizeTranscriptText(text)
   if (!normalized) return
   results.push({
     speaker: formatSpeakerLabel(speakerIndex),
     text: normalized,
+    startSec,
+    endSec,
+    deepgramIndex: speakerIndex,
   })
 }
 
@@ -56,7 +76,13 @@ function parseDeepgramUtterances(data: DeepgramResponse): DiarizedUtterance[] {
   const results: DiarizedUtterance[] = []
 
   for (const utterance of data.results?.utterances ?? []) {
-    pushUtterance(results, typeof utterance.speaker === 'number' ? utterance.speaker : 0, utterance.transcript ?? '')
+    pushUtterance(
+      results,
+      typeof utterance.speaker === 'number' ? utterance.speaker : 0,
+      utterance.transcript ?? '',
+      typeof utterance.start === 'number' ? utterance.start : undefined,
+      typeof utterance.end === 'number' ? utterance.end : undefined,
+    )
   }
   if (results.length > 0) return results
 
@@ -64,31 +90,77 @@ function parseDeepgramUtterances(data: DeepgramResponse): DiarizedUtterance[] {
   if (words.length > 0) {
     let speakerIndex = typeof words[0].speaker === 'number' ? words[0].speaker : 0
     let parts: string[] = []
+    let segmentStart = typeof words[0].start === 'number' ? words[0].start : undefined
+    let segmentEnd = typeof words[0].end === 'number' ? words[0].end : undefined
+
+    // Debounce single-word diarization flips — same rationale as the live
+    // path in deepgramLive.ts: don't fragment a short real utterance into
+    // its own island just because one word briefly flips speaker index.
+    let pendingIndex: number | null = null
+    let pendingTokens: string[] = []
+    let pendingStart: number | undefined
+    let pendingEnd: number | undefined
+
+    const foldPendingIntoCurrent = () => {
+      if (pendingTokens.length === 0) return
+      parts.push(...pendingTokens)
+      if (typeof pendingEnd === 'number') segmentEnd = pendingEnd
+      pendingIndex = null
+      pendingTokens = []
+      pendingStart = undefined
+      pendingEnd = undefined
+    }
+
+    const commitPending = () => {
+      pushUtterance(results, speakerIndex, parts.join(' '), segmentStart, segmentEnd)
+      parts = pendingTokens
+      speakerIndex = pendingIndex!
+      segmentStart = pendingStart
+      segmentEnd = pendingEnd
+      pendingIndex = null
+      pendingTokens = []
+      pendingStart = undefined
+      pendingEnd = undefined
+    }
 
     for (const word of words) {
       const nextSpeaker = typeof word.speaker === 'number' ? word.speaker : speakerIndex
       const token = word.punctuated_word ?? word.word ?? ''
       if (!token) continue
+      const wordStart = typeof word.start === 'number' ? word.start : undefined
+      const wordEnd = typeof word.end === 'number' ? word.end : undefined
 
-      if (nextSpeaker !== speakerIndex && parts.length > 0) {
-        pushUtterance(results, speakerIndex, parts.join(' '))
-        parts = []
-        speakerIndex = nextSpeaker
+      if (nextSpeaker === speakerIndex) {
+        foldPendingIntoCurrent()
+        parts.push(token)
+        if (typeof wordEnd === 'number') segmentEnd = wordEnd
+        continue
       }
 
-      parts.push(token)
-      speakerIndex = nextSpeaker
+      if (pendingIndex === nextSpeaker) {
+        pendingTokens.push(token)
+        pendingEnd = wordEnd
+        commitPending()
+        continue
+      }
+
+      foldPendingIntoCurrent()
+      pendingIndex = nextSpeaker
+      pendingTokens = [token]
+      pendingStart = wordStart
+      pendingEnd = wordEnd
     }
 
+    foldPendingIntoCurrent()
     if (parts.length > 0) {
-      pushUtterance(results, speakerIndex, parts.join(' '))
+      pushUtterance(results, speakerIndex, parts.join(' '), segmentStart, segmentEnd)
     }
     if (results.length > 0) return results
   }
 
   const transcript = data.results?.channels?.[0]?.alternatives?.[0]?.transcript ?? ''
   if (transcript) {
-    pushUtterance(results, 0, transcript)
+    pushUtterance(results, 0, transcript, 0)
   }
 
   return results
@@ -123,7 +195,7 @@ async function diarizeWithDeepgram(audioBase64: string): Promise<DiarizedUtteran
   const langParam =
     language && language !== 'auto' ? `&language=${language}` : '&detect_language=true'
   const baseQuery =
-    'model=nova-2&diarize=true&punctuate=true&utterances=true&smart_format=true&mip_opt_out=true'
+    'model=nova-3&diarize_model=latest&punctuate=true&utterances=true&smart_format=true&mip_opt_out=true&filler_words=true'
   const audioBuffer = Buffer.from(audioBase64, 'base64')
 
   const pcm = extractPcmFromWav(audioBuffer)
@@ -143,9 +215,11 @@ async function diarizeWithDeepgram(audioBase64: string): Promise<DiarizedUtteran
     query: `${baseQuery}${langParam}`,
   })
 
+  let hadApiKey = false
   for (const attempt of attempts) {
     const apiKey = await getDeepgramApiKey()
     if (!apiKey) break
+    hadApiKey = true
     const data = await callDeepgram(apiKey, attempt.body, attempt.contentType, attempt.query)
     if (!data) continue
     const results = parseDeepgramUtterances(data)
@@ -153,12 +227,31 @@ async function diarizeWithDeepgram(audioBase64: string): Promise<DiarizedUtteran
     const fallbackTranscript =
       data.results?.channels?.[0]?.alternatives?.[0]?.transcript?.trim() ?? ''
     if (fallbackTranscript && !isLikelyHallucination(fallbackTranscript, 'system')) {
-      return [{ speaker: 'Speaker 1', text: normalizeTranscriptText(fallbackTranscript) }]
+      return [
+        {
+          speaker: 'Speaker 1',
+          text: normalizeTranscriptText(fallbackTranscript),
+          startSec: 0,
+          deepgramIndex: 0,
+        },
+      ]
     }
   }
 
+  if (!hadApiKey) {
+    console.warn('Deepgram API key missing — trying cloud proxy diarize')
+  }
+
   const proxied = await proxyDiarize(audioBase64)
-  if (proxied && proxied.length > 0) return proxied
+  if (proxied && proxied.length > 0) {
+    return proxied.map((item, index) => ({
+      ...item,
+      deepgramIndex:
+        typeof item.deepgramIndex === 'number'
+          ? item.deepgramIndex
+          : Math.max(0, Number(String(item.speaker).match(/(\d+)/)?.[1] ?? index + 1) - 1),
+    }))
+  }
 
   return null
 }

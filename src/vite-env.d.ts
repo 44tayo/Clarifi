@@ -9,6 +9,9 @@ type ElectronInvoke =
   | 'auth:open-legal'
   | 'calendar:status'
   | 'calendar:events'
+  | 'calendar:contacts-search'
+  | 'contacts:list-local'
+  | 'contacts:upsert'
   | 'calendar:open-connect'
   | 'calendar:disconnect'
   | 'meetings:list'
@@ -19,6 +22,7 @@ type ElectronInvoke =
   | 'meetings:enhance'
   | 'meetings:sync'
   | 'meetings:seed-demo-artifact'
+  | 'meetings:speaker-snippet'
   | 'folders:list'
   | 'folders:create'
   | 'folders:rename'
@@ -36,6 +40,7 @@ type ElectronInvoke =
   | 'audio:stop'
   | 'audio:status'
   | 'audio:chunk'
+  | 'audio:mic-pcm-chunk'
   | 'audio:session-transcript'
   | 'audio:get-preferences'
   | 'audio:set-preferences'
@@ -66,6 +71,7 @@ type ElectronInvoke =
 
 type ElectronEvent =
   | 'transcript:update'
+  | 'transcript:interim'
   | 'transcription:activity'
   | 'auth:connected'
   | 'meetings:changed'

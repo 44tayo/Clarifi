@@ -3,6 +3,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { randomUUID } from 'crypto'
 
+import type { MeetingAttendee, SpeakerIdentities } from '../shared/speakers'
 import type { TranscriptEntry } from './transcriptUtils'
 
 export type MeetingStatus = 'draft' | 'live' | 'processing' | 'ready' | 'error'
@@ -25,24 +26,31 @@ export type StoredMeeting = {
   userNotes: string
   transcript: TranscriptEntry[]
   speakerLabels?: Record<string, string>
+  speakerIdentities?: SpeakerIdentities
   calendarEventId?: string
   calendarProvider?: 'google' | 'microsoft'
   scheduledStart?: number
   attendeeEmails?: string[]
+  attendees?: MeetingAttendee[]
   folderIds?: string[]
   enhancedNotes?: string
   summary?: string
   actionItems?: string[]
   completedActionItems?: string[]
   enhanceError?: string
+  /** Relative path under userData for local system-audio recording (snippet replay). */
+  recordingPath?: string
 }
 
 type StoreBlob = {
   meetings: StoredMeeting[]
   folders: StoredFolder[]
+  /** Meeting ids the user deleted — blocks demo reseed and cloud sync revive. */
+  deletedMeetingIds?: string[]
 }
 
 const MAX_MEETINGS = 100
+const MAX_DELETED_IDS = 2000
 
 function storePath(): string {
   return path.join(app.getPath('userData'), 'meetings.json.enc')
@@ -54,16 +62,19 @@ function legacyPlaintextPath(): string {
 
 function normalizeBlob(raw: unknown): StoreBlob {
   if (Array.isArray(raw)) {
-    return { meetings: raw as StoredMeeting[], folders: [] }
+    return { meetings: raw as StoredMeeting[], folders: [], deletedMeetingIds: [] }
   }
   if (raw && typeof raw === 'object') {
-    const obj = raw as { meetings?: unknown; folders?: unknown }
+    const obj = raw as { meetings?: unknown; folders?: unknown; deletedMeetingIds?: unknown }
     return {
       meetings: Array.isArray(obj.meetings) ? (obj.meetings as StoredMeeting[]) : [],
       folders: Array.isArray(obj.folders) ? (obj.folders as StoredFolder[]) : [],
+      deletedMeetingIds: Array.isArray(obj.deletedMeetingIds)
+        ? obj.deletedMeetingIds.filter((id): id is string => typeof id === 'string')
+        : [],
     }
   }
-  return { meetings: [], folders: [] }
+  return { meetings: [], folders: [], deletedMeetingIds: [] }
 }
 
 function readEncrypted(): StoreBlob | null {
@@ -108,6 +119,7 @@ function writeBlob(blob: StoreBlob): void {
   const payload: StoreBlob = {
     meetings: blob.meetings.slice(0, MAX_MEETINGS),
     folders: blob.folders,
+    deletedMeetingIds: (blob.deletedMeetingIds ?? []).slice(-MAX_DELETED_IDS),
   }
   const json = JSON.stringify(payload, null, 2)
 
@@ -143,7 +155,9 @@ export type CreateMeetingInput = {
   calendarProvider?: 'google' | 'microsoft'
   scheduledStart?: number
   attendeeEmails?: string[]
+  attendees?: MeetingAttendee[]
   speakerLabels?: Record<string, string>
+  speakerIdentities?: SpeakerIdentities
   folderIds?: string[]
 }
 
@@ -160,10 +174,12 @@ export function createMeeting(input?: CreateMeetingInput | string): StoredMeetin
     userNotes: '',
     transcript: [],
     speakerLabels: options.speakerLabels ?? {},
+    speakerIdentities: options.speakerIdentities ?? {},
     calendarEventId: options.calendarEventId,
     calendarProvider: options.calendarProvider,
     scheduledStart: options.scheduledStart,
     attendeeEmails: options.attendeeEmails,
+    attendees: options.attendees,
     folderIds: options.folderIds ?? [],
   }
   const meetings = readAll()
@@ -190,7 +206,11 @@ export function updateMeeting(
   return meetings[index]!
 }
 
-export function upsertMeetingSnapshot(meeting: StoredMeeting): StoredMeeting {
+export function upsertMeetingSnapshot(meeting: StoredMeeting): StoredMeeting | null {
+  // Never revive a meeting the user deleted — cloud sync and demo seed must respect tombstones.
+  if ((readBlob().deletedMeetingIds ?? []).includes(meeting.id)) {
+    return null
+  }
   const meetings = readAll()
   const index = meetings.findIndex((m) => m.id === meeting.id)
   const next: StoredMeeting = {
@@ -206,12 +226,54 @@ export function upsertMeetingSnapshot(meeting: StoredMeeting): StoredMeeting {
   return index >= 0 ? meetings[index]! : meetings[0]!
 }
 
+export function listDeletedMeetingIds(): string[] {
+  return [...(readBlob().deletedMeetingIds ?? [])]
+}
+
+export function rememberDeletedMeetingId(id: string): void {
+  const blob = readBlob()
+  const deleted = new Set(blob.deletedMeetingIds ?? [])
+  deleted.add(id)
+  writeBlob({ ...blob, deletedMeetingIds: [...deleted] })
+}
+
+export function forgetDeletedMeetingIds(ids: string[]): void {
+  if (ids.length === 0) return
+  const blob = readBlob()
+  const remove = new Set(ids)
+  writeBlob({
+    ...blob,
+    deletedMeetingIds: (blob.deletedMeetingIds ?? []).filter((id) => !remove.has(id)),
+  })
+}
+
+/** Drop any local copies that are still marked deleted (defense in depth). */
+export function purgeTombstonedLocalMeetings(): string[] {
+  const blob = readBlob()
+  const deleted = new Set(blob.deletedMeetingIds ?? [])
+  if (deleted.size === 0) return []
+  const kept: StoredMeeting[] = []
+  const removed: string[] = []
+  for (const meeting of blob.meetings) {
+    if (deleted.has(meeting.id)) removed.push(meeting.id)
+    else kept.push(meeting)
+  }
+  if (removed.length === 0) return []
+  writeBlob({ ...blob, meetings: kept })
+  return removed
+}
+
 export function deleteMeeting(id: string): boolean {
-  const meetings = readAll()
-  const next = meetings.filter((m) => m.id !== id)
-  if (next.length === meetings.length) return false
-  writeAll(next)
-  return true
+  const blob = readBlob()
+  const next = blob.meetings.filter((m) => m.id !== id)
+  const deleted = new Set(blob.deletedMeetingIds ?? [])
+  deleted.add(id)
+  writeBlob({
+    ...blob,
+    meetings: next,
+    deletedMeetingIds: [...deleted],
+  })
+  return next.length < blob.meetings.length
 }
 
 export function listFolders(): StoredFolder[] {
@@ -250,7 +312,7 @@ export function deleteFolder(id: string): boolean {
     ...meeting,
     folderIds: (meeting.folderIds ?? []).filter((folderId) => folderId !== id),
   }))
-  writeBlob({ meetings, folders: nextFolders })
+  writeBlob({ ...blob, meetings, folders: nextFolders })
   return true
 }
 
@@ -273,8 +335,12 @@ function defaultTitle(at: number): string {
 /** Fixed-id sample artifact so Home always has one post-meeting example. */
 export const DEMO_ARTIFACT_MEETING_ID = 'demo-post-meeting-artifact'
 
-export function ensureDemoArtifactMeeting(): { meeting: StoredMeeting; created: boolean } {
-  const existed = Boolean(getMeeting(DEMO_ARTIFACT_MEETING_ID))
+export function ensureDemoArtifactMeeting(): { meeting: StoredMeeting | null; created: boolean } {
+  const existing = getMeeting(DEMO_ARTIFACT_MEETING_ID)
+  if (existing) return { meeting: existing, created: false }
+  if (listDeletedMeetingIds().includes(DEMO_ARTIFACT_MEETING_ID)) {
+    return { meeting: null, created: false }
+  }
 
   const startedAt = Date.now() - 2 * 60 * 60 * 1000
   const endedAt = startedAt + 22 * 60 * 1000
@@ -292,6 +358,22 @@ export function ensureDemoArtifactMeeting(): { meeting: StoredMeeting; created: 
       'Speaker 1': 'Tayo',
       'Speaker 2': 'Sam',
     },
+    speakerIdentities: {
+      'Speaker 1': {
+        displayName: 'Tayo',
+        email: 'tayo@example.com',
+        source: 'calendar',
+      },
+      'Speaker 2': {
+        displayName: 'Sam',
+        email: 'sam@clarifi.app',
+        source: 'calendar',
+      },
+    },
+    attendees: [
+      { email: 'tayo@example.com', name: 'Tayo', self: true },
+      { email: 'sam@clarifi.app', name: 'Sam', self: false },
+    ],
     attendeeEmails: ['tayo@example.com', 'sam@clarifi.app'],
     folderIds: [],
     transcript: [
@@ -356,6 +438,6 @@ Clarifi will treat the post-meeting note as a first-class artifact: four tabs, s
   }
 
   upsertMeetingSnapshot(meeting)
-  return { meeting, created: !existed }
+  return { meeting, created: true }
 }
 

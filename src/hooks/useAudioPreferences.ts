@@ -2,11 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 
 import type {
   AudioPreferences,
+  MicSttEngine,
   ThemePreference,
-  TranscriptionMode,
 } from '../../shared/audio-preferences'
 
-export type { AudioPreferences, ThemePreference, TranscriptionMode }
+export type { AudioPreferences, MicSttEngine, ThemePreference }
 
 type PrefsPatch = Partial<
   Pick<
@@ -18,10 +18,10 @@ type PrefsPatch = Partial<
     | 'preferredMicrophoneId'
     | 'preferredMicrophoneLabel'
     | 'systemAudioCapture'
-    | 'transcriptionMode'
     | 'skipMicPicker'
     | 'theme'
     | 'meetingRemindersEnabled'
+    | 'micSttEngine'
   >
 >
 

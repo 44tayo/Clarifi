@@ -124,6 +124,9 @@ export async function proxyTranscribe(
 export type DiarizedUtterance = {
   speaker: string
   text: string
+  startSec?: number
+  endSec?: number
+  deepgramIndex?: number
 }
 
 export async function proxyDiarize(audioBase64: string): Promise<DiarizedUtterance[]> {

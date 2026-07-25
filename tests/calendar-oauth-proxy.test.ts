@@ -50,4 +50,9 @@ describe('calendar oauth proxy routing', () => {
     expect(isPublicPath('/api/communities/abc/invite')).toBe(true)
     expect(isPublicPath('/api/desktop/meetings')).toBe(true)
   })
+
+  it('keeps desktop calendar contacts search device-auth reachable', async () => {
+    const { isPublicPath } = await import('../web/src/lib/protected-routes')
+    expect(isPublicPath('/api/desktop/calendar/contacts')).toBe(true)
+  })
 })

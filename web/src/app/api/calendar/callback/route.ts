@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 
 import { consumeOAuthState, upsertCalendarConnection } from '@/lib/calendar/connections'
+import { invalidateContactDirectoryCache } from '@/lib/calendar/contacts'
 import { exchangeCalendarCode } from '@/lib/calendar/oauth'
 
 export async function GET(req: Request) {
@@ -32,5 +33,6 @@ export async function GET(req: Request) {
     redirect(`/desktop/calendar/connect?provider=${oauthState.provider}&error=save_failed`)
   }
 
+  invalidateContactDirectoryCache(oauthState.userId)
   redirect(`/desktop/calendar/success?provider=${oauthState.provider}`)
 }

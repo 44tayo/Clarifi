@@ -12,16 +12,15 @@ type SettingsPanelProps = {
   calendarEnabled?: boolean
 }
 
-const TRANSCRIPTION_MODE_OPTIONS = [
-  { value: 'auto', label: 'Auto — multi-speaker (recommended)' },
-  { value: 'dual', label: '1:1 — Me / Them' },
-  { value: 'group', label: 'Group — system audio only' },
-]
-
 const THEME_OPTIONS = [
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
   { value: 'system', label: 'System' },
+]
+
+const MIC_STT_ENGINE_OPTIONS = [
+  { value: 'deepgram', label: 'Deepgram live (recommended)' },
+  { value: 'whisper', label: 'Whisper (legacy fallback)' },
 ]
 
 export function SettingsPanel({ onClose, calendarEnabled = false }: SettingsPanelProps) {
@@ -122,20 +121,6 @@ export function SettingsPanel({ onClose, calendarEnabled = false }: SettingsPane
             Refresh microphone list
           </button>
 
-          <label className="settings-field">
-            <span>Transcription mode</span>
-            <DropdownSelect
-              value={prefs?.transcriptionMode ?? 'auto'}
-              options={TRANSCRIPTION_MODE_OPTIONS}
-              onChange={(transcriptionMode) =>
-                void update({
-                  transcriptionMode: transcriptionMode as 'auto' | 'dual' | 'group',
-                })
-              }
-              aria-label="Transcription mode"
-            />
-          </label>
-
           <label className="settings-field settings-checkbox-row">
             <span>Show microphone picker before each meeting</span>
             <input
@@ -144,6 +129,23 @@ export function SettingsPanel({ onClose, calendarEnabled = false }: SettingsPane
               onChange={(event) => void update({ skipMicPicker: !event.target.checked })}
             />
           </label>
+
+          <label className="settings-field">
+            <span>Mic transcription</span>
+            <DropdownSelect
+              value={prefs?.micSttEngine ?? 'deepgram'}
+              options={MIC_STT_ENGINE_OPTIONS}
+              onChange={(micSttEngine) =>
+                void update({ micSttEngine: micSttEngine as 'whisper' | 'deepgram' })
+              }
+              aria-label="Mic transcription engine"
+            />
+          </label>
+          <p className="settings-section-hint">
+            Deepgram live streams your mic word-by-word for near-instant captions — use headphones
+            for best accuracy. Whisper is a legacy fallback if live transcription has connectivity
+            issues.
+          </p>
         </div>
 
         <div className="settings-section">
@@ -183,8 +185,8 @@ export function SettingsPanel({ onClose, calendarEnabled = false }: SettingsPane
         <div className="settings-section">
           <h3>Calendars</h3>
           <p className="settings-section-hint">
-            Connect Google Calendar or Microsoft Outlook to see upcoming meetings and pre-fill
-            titles from your schedule. Disconnect anytime.
+            Connect Google Calendar or Microsoft Outlook to see upcoming meetings, pre-fill
+            titles, and search contacts when naming speakers. Disconnect anytime.
           </p>
 
           {!calendarEnabled ? (

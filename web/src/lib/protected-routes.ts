@@ -33,6 +33,7 @@ const PUBLIC_PREFIXES = [
   '/api/desktop/calendar/status',
   '/api/desktop/calendar/oauth-url',
   '/api/desktop/calendar/disconnect',
+  '/api/desktop/calendar/contacts',
   '/api/desktop/share',
   '/api/desktop/shared-with-me',
   '/api/desktop/meetings',

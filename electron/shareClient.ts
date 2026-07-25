@@ -1,4 +1,5 @@
 import fetch from 'node-fetch'
+import { shell } from 'electron'
 
 import { getDeviceCredentials } from './deviceAuth'
 import { getClarifiApiUrl } from './keys'
@@ -143,7 +144,7 @@ export async function publishMeetingShare(meetingId: string): Promise<SharePubli
 
   if (status === 0) return { ok: false, error: 'network_error' }
   if (status === 401) return { ok: false, error: 'not_authenticated' }
-  if (status === 403) return { ok: false, error: 'plan_required' }
+  if (status === 403) return { ok: false, error: data?.error === 'plan_required' ? 'plan_required' : (data?.error ?? 'plan_required') }
   if (!ok || !data?.shareUrl) {
     return { ok: false, error: data?.error ?? 'share_failed' }
   }
@@ -159,16 +160,48 @@ export async function publishMeetingShare(meetingId: string): Promise<SharePubli
 export async function inviteToSharedMeeting(
   communityId: string,
   email: string,
-): Promise<{ ok: boolean; error?: string }> {
-  const { ok, status, data } = await devicePost<{ error?: string }>(
-    `/api/desktop/share/invite`,
-    { communityId, email },
-  )
+  meetingId: string,
+): Promise<{
+  ok: boolean
+  error?: string
+  shareUrl?: string
+  delivery?: 'resend' | 'compose'
+}> {
+  const { ok, status, data } = await devicePost<{
+    error?: string
+    message?: string
+    shareUrl?: string
+    delivery?: 'resend' | 'compose'
+    email?: string
+    subject?: string
+    text?: string
+  }>(`/api/desktop/share/invite`, { communityId, email, meetingId })
   if (status === 0) return { ok: false, error: 'network_error' }
   if (status === 401) return { ok: false, error: 'not_authenticated' }
   if (status === 403) return { ok: false, error: 'plan_required' }
-  if (!ok) return { ok: false, error: data?.error ?? 'invite_failed' }
-  return { ok: true }
+  if (!ok) {
+    if (data?.error === 'email_delivery_failed' && data.message?.trim()) {
+      return { ok: false, error: data.message.trim() }
+    }
+    return { ok: false, error: data?.error ?? 'invite_failed' }
+  }
+
+  if (data?.delivery === 'compose' && data.email && data.subject && data.text) {
+    const mailto = `mailto:${encodeURIComponent(data.email)}?subject=${encodeURIComponent(
+      data.subject,
+    )}&body=${encodeURIComponent(data.text)}`
+    try {
+      await shell.openExternal(mailto)
+    } catch {
+      return { ok: false, error: 'email_not_configured' }
+    }
+  }
+
+  return {
+    ok: true,
+    shareUrl: data?.shareUrl,
+    delivery: data?.delivery === 'compose' ? 'compose' : 'resend',
+  }
 }
 
 export async function listSharedWithMe(): Promise<{

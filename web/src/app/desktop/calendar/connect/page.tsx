@@ -23,7 +23,7 @@ function DesktopCalendarConnectContent() {
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Connect your calendar</h1>
         <p className="mt-3 text-[15px] leading-relaxed text-[#6b7280]">
           Sync upcoming meetings so Clarifi can pre-fill titles, show a &ldquo;Coming up&rdquo; list,
-          and improve speaker labels from invitees.
+          and match speakers to invitees and your contacts (Gmail / Outlook).
         </p>
 
         {error ? (
@@ -50,7 +50,7 @@ function DesktopCalendarConnectContent() {
         {provider ? (
           <p className="mt-4 text-sm text-[#6b7280]">
             Selected: {PROVIDER_LABELS[provider]}. Sign in above if prompted, then authorize
-            calendar access.
+            calendar and contacts access.
           </p>
         ) : null}
 

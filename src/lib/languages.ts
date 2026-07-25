@@ -1,6 +1,6 @@
 /**
  * Mirrors electron/languages.ts — the ~99 languages Whisper large-v3 (Groq
- * transcription) and Deepgram nova-2 support. Kept as a separate copy since
+ * transcription) and Deepgram nova-3 support. Kept as a separate copy since
  * the renderer bundle doesn't import from the electron/ main-process source
  * tree.
  */

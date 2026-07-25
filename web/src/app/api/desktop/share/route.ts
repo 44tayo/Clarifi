@@ -29,6 +29,9 @@ export async function POST(req: Request) {
     if (code === 'plan_required') {
       return planRequiredResponse('pro_plus', 'share_meetings')
     }
+    if (code === 'storage_unavailable') {
+      return Response.json({ error: 'storage_unavailable' }, { status: 503 })
+    }
     console.error('[desktop/share]', err)
     return Response.json({ error: 'share_failed' }, { status: 500 })
   }

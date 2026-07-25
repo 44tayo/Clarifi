@@ -6,9 +6,20 @@ export type TranscriptEntry = {
   source: 'mic' | 'system'
   speaker: string
   at: number
+  audioStartMs?: number
+  audioEndMs?: number
 }
 
 export type SpeakerLabels = Record<string, string>
+
+export type {
+  MeetingAttendee,
+  SpeakerIdentities,
+  SpeakerIdentity,
+  SpeakerIdentitySource,
+} from '../../shared/speakers'
+
+import type { MeetingAttendee, SpeakerIdentities } from '../../shared/speakers'
 
 export type Folder = {
   id: string
@@ -27,16 +38,22 @@ export type Meeting = {
   userNotes: string
   transcript: TranscriptEntry[]
   speakerLabels?: SpeakerLabels
+  /** Rich identity map (name + optional email). speakerLabels stays in sync for legacy readers. */
+  speakerIdentities?: SpeakerIdentities
   calendarEventId?: string
   calendarProvider?: 'google' | 'microsoft'
   scheduledStart?: number
   attendeeEmails?: string[]
+  /** Structured calendar participants (preferred over emails-only). */
+  attendees?: MeetingAttendee[]
   folderIds?: string[]
   enhancedNotes?: string
   summary?: string
   actionItems?: string[]
   completedActionItems?: string[]
   enhanceError?: string
+  /** Relative path under userData for local system-audio recording (snippet replay). */
+  recordingPath?: string
 }
 
 export type ConnectionStatus = {

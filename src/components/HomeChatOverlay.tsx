@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { ChatEffort } from '../../shared/chatOptions'
 import { ChatPromptInput, type ChatPromptSubmit } from './ChatPromptInput'
+import { StatefulButton } from './ui/StatefulButton'
+import { useToast } from '../hooks/useToast'
 
 export type HomeChatMessage = {
   id: string
@@ -32,6 +34,7 @@ function errorMessage(code: string): string {
 }
 
 export function HomeChatOverlay({ paired, onConnect, onOpenChatView }: HomeChatOverlayProps) {
+  const { toast } = useToast()
   const [draft, setDraft] = useState('')
   const [messages, setMessages] = useState<HomeChatMessage[]>([])
   const [sending, setSending] = useState(false)
@@ -264,17 +267,38 @@ export function HomeChatOverlay({ paired, onConnect, onOpenChatView }: HomeChatO
                           >
                             Say more
                           </button>
-                          <button
-                            type="button"
+                          <StatefulButton
+                            variant="ghost"
+                            iconOnly
+                            idleLabel=""
+                            successLabel=""
+                            successDuration={1400}
                             className="home-chat-icon-btn"
                             aria-label="Copy reply"
-                            onClick={() => void navigator.clipboard.writeText(message.text)}
-                          >
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
-                              <rect x="5.5" y="5.5" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
-                              <path d="M3.5 10.5V3.5H10.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-                            </svg>
-                          </button>
+                            icon={
+                              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+                                <rect
+                                  x="5.5"
+                                  y="5.5"
+                                  width="7"
+                                  height="7"
+                                  rx="1.5"
+                                  stroke="currentColor"
+                                  strokeWidth="1.3"
+                                />
+                                <path
+                                  d="M3.5 10.5V3.5H10.5"
+                                  stroke="currentColor"
+                                  strokeWidth="1.3"
+                                  strokeLinecap="round"
+                                />
+                              </svg>
+                            }
+                            onClick={async () => {
+                              await navigator.clipboard.writeText(message.text)
+                              toast('Copied')
+                            }}
+                          />
                         </div>
                       ) : null}
                     </div>

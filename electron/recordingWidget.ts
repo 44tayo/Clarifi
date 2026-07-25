@@ -155,6 +155,15 @@ export function broadcastTranscriptToWidget(payload: {
   }
 }
 
+export function broadcastTranscriptInterimToWidget(payload: {
+  source: 'mic' | 'system'
+  update: { text: string; speaker: string } | null
+}): void {
+  if (widgetWindow && !widgetWindow.isDestroyed()) {
+    widgetWindow.webContents.send('transcript:interim', payload)
+  }
+}
+
 export function createOrShowWidget(): BrowserWindow {
   if (widgetWindow && !widgetWindow.isDestroyed()) {
     widgetWindow.show()

@@ -26,17 +26,8 @@ type SidebarProps = {
   resizing?: boolean
   onResizePointerDown?: (event: ReactPointerEvent<HTMLDivElement>) => void
   onResizeDoubleClick?: () => void
+  onCollapse?: () => void
 }
-
-const CHAT_PLACEHOLDER_FOLDERS = ['Product', 'Research']
-const CHAT_PLACEHOLDER_THREADS = [
-  'Unclear Message Needs Clarification',
-  'Follow-up: GTM event support',
-  'Ask about last summary',
-]
-
-const MEETING_PLACEHOLDER_FOLDERS = ['Client calls', 'Internal']
-const MEETING_PLACEHOLDER_ITEMS = ['Weekly sync (placeholder)', 'Design review (placeholder)']
 
 function NavIcon({ children }: { children: ReactNode }) {
   return (
@@ -134,6 +125,7 @@ export function Sidebar({
   resizing = false,
   onResizePointerDown,
   onResizeDoubleClick,
+  onCollapse,
 }: SidebarProps) {
   const isActive = (view: SidebarSelection['view'], folderId?: string) => {
     if (view === 'folder') {
@@ -150,9 +142,6 @@ export function Sidebar({
     [meetings],
   )
 
-  const meetingFolderPlaceholders =
-    folders.length === 0 ? MEETING_PLACEHOLDER_FOLDERS : MEETING_PLACEHOLDER_FOLDERS.slice(0, 1)
-
   return (
     <aside className="sidebar">
       <div
@@ -164,16 +153,32 @@ export function Sidebar({
         onDoubleClick={onResizeDoubleClick}
       />
       <div className="sidebar-header">
-        <div className="sidebar-brand">
-          <img
-            className="sidebar-brand-mark"
-            src={`${import.meta.env.BASE_URL}clarifi-logo.png`}
-            alt=""
-            width={22}
-            height={22}
-            draggable={false}
-          />
-          <span className="sidebar-brand-name">Clarifi</span>
+        <div className="sidebar-header-top">
+          <div className="sidebar-brand">
+            <img
+              className="sidebar-brand-mark"
+              src={`${import.meta.env.BASE_URL}clarifi-logo.png`}
+              alt=""
+              width={22}
+              height={22}
+              draggable={false}
+            />
+            <span className="sidebar-brand-name">Clarifi</span>
+          </div>
+          {onCollapse ? (
+            <button
+              type="button"
+              className="sidebar-collapse-btn no-drag"
+              aria-label="Collapse sidebar"
+              title="Collapse sidebar"
+              onClick={onCollapse}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+                <path d="M9.5 4.5v15" />
+              </svg>
+            </button>
+          ) : null}
         </div>
         <button type="button" className="sidebar-start-btn" onClick={onNewMeeting}>
           New meeting
@@ -206,34 +211,14 @@ export function Sidebar({
             </svg>
           }
         >
-          <p className="sidebar-flyout-section">Folders</p>
-          {CHAT_PLACEHOLDER_FOLDERS.map((name) => (
-            <button
-              key={name}
-              type="button"
-              className="sidebar-flyout-item is-placeholder"
-              onClick={() => onSelectView({ view: 'chat' })}
-            >
-              <span className="sidebar-flyout-item-icon" aria-hidden>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M3.5 8.5A2.5 2.5 0 0 1 6 6h4l2 2h6a2.5 2.5 0 0 1 2.5 2.5v7A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5v-9Z" />
-                </svg>
-              </span>
-              {name}
-              <span className="sidebar-flyout-badge">Soon</span>
-            </button>
-          ))}
-          <p className="sidebar-flyout-section">Chats</p>
-          {CHAT_PLACEHOLDER_THREADS.map((title) => (
-            <button
-              key={title}
-              type="button"
-              className="sidebar-flyout-item"
-              onClick={() => onSelectView({ view: 'chat' })}
-            >
-              {title}
-            </button>
-          ))}
+          <p className="sidebar-flyout-empty">Ask across your meetings</p>
+          <button
+            type="button"
+            className="sidebar-flyout-item"
+            onClick={() => onSelectView({ view: 'chat' })}
+          >
+            Open chat
+          </button>
         </NavAccordion>
 
         <NavAccordion
@@ -302,59 +287,22 @@ export function Sidebar({
               </button>
             </div>
           ))}
-          {meetingFolderPlaceholders.map((name) => (
-            <button
-              key={name}
-              type="button"
-              className="sidebar-flyout-item is-placeholder"
-              onClick={() => onSelectView({ view: 'meetings' })}
-            >
-              <span className="sidebar-flyout-item-icon" aria-hidden>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M3.5 8.5A2.5 2.5 0 0 1 6 6h4l2 2h6a2.5 2.5 0 0 1 2.5 2.5v7A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5v-9Z" />
-                </svg>
-              </span>
-              {name}
-              <span className="sidebar-flyout-badge">Soon</span>
-            </button>
-          ))}
 
           <p className="sidebar-flyout-section">Meetings</p>
-          {recentMeetings.map((meeting) => (
-            <button
-              key={meeting.id}
-              type="button"
-              className="sidebar-flyout-item"
-              onClick={() => onSelectMeeting(meeting.id)}
-            >
-              {meeting.title}
-            </button>
-          ))}
-          {recentMeetings.length === 0
-            ? MEETING_PLACEHOLDER_ITEMS.map((title) => (
-                <button
-                  key={title}
-                  type="button"
-                  className="sidebar-flyout-item is-placeholder"
-                  onClick={() => onSelectView({ view: 'meetings' })}
-                >
-                  {title}
-                </button>
-              ))
-            : null}
-          {recentMeetings.length > 0 && recentMeetings.length < 3
-            ? MEETING_PLACEHOLDER_ITEMS.slice(0, 1).map((title) => (
-                <button
-                  key={title}
-                  type="button"
-                  className="sidebar-flyout-item is-placeholder"
-                  onClick={() => onSelectView({ view: 'meetings' })}
-                >
-                  {title}
-                  <span className="sidebar-flyout-badge">Soon</span>
-                </button>
-              ))
-            : null}
+          {recentMeetings.length === 0 ? (
+            <p className="sidebar-flyout-empty">No meetings yet</p>
+          ) : (
+            recentMeetings.map((meeting) => (
+              <button
+                key={meeting.id}
+                type="button"
+                className="sidebar-flyout-item"
+                onClick={() => onSelectMeeting(meeting.id)}
+              >
+                {meeting.title}
+              </button>
+            ))
+          )}
         </NavAccordion>
 
         <button
@@ -371,6 +319,20 @@ export function Sidebar({
             </svg>
           </NavIcon>
           Shared with me
+        </button>
+
+        <button
+          type="button"
+          className="sidebar-nav-item"
+          onClick={onOpenSettings}
+        >
+          <NavIcon>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M12 2.5v2.2M12 19.3v2.2M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6" />
+            </svg>
+          </NavIcon>
+          Settings
         </button>
       </nav>
 
@@ -389,12 +351,6 @@ export function Sidebar({
                     : 'Plan')}
               </span>
             </div>
-            <button type="button" className="account-chip-icon-btn" onClick={onOpenSettings} aria-label="Settings">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M12 2.5v2.2M12 19.3v2.2M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6" />
-              </svg>
-            </button>
           </div>
         ) : (
           <div className="account-chip account-chip-compact">
@@ -407,12 +363,6 @@ export function Sidebar({
                 Connect account
               </button>
             </div>
-            <button type="button" className="account-chip-icon-btn" onClick={onOpenSettings} aria-label="Settings">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M12 2.5v2.2M12 19.3v2.2M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6" />
-              </svg>
-            </button>
           </div>
         )}
         {connection.paired ? (

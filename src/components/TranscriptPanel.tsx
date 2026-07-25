@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 
 import type { TranscriptEntry } from '../types/meeting'
 
+export type LiveInterimEntry = { text: string; speaker: string }
+
 type TranscriptPanelProps = {
   entries: TranscriptEntry[]
   activity: string
@@ -10,6 +12,8 @@ type TranscriptPanelProps = {
   startedAt?: number
   onRenameSpeaker?: (speakerKey: string, label: string) => void
   hideHeader?: boolean
+  /** In-progress (not yet finalized) caption lines, keyed by stream source. */
+  interim?: Partial<Record<'mic' | 'system', LiveInterimEntry>>
 }
 
 type TranscriptBlock = {
@@ -57,12 +61,19 @@ export function TranscriptPanel({
   startedAt,
   onRenameSpeaker,
   hideHeader = false,
+  interim,
 }: TranscriptPanelProps) {
   const [editing, setEditing] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const blocks = useMemo(() => groupBlocks(entries), [entries])
-  const uniqueSpeakers = [...new Set(entries.map((entry) => entry.speaker))]
   const origin = startedAt ?? entries[0]?.at ?? 0
+  const interimBlocks = useMemo(
+    () =>
+      (['mic', 'system'] as const)
+        .map((source) => interim?.[source])
+        .filter((value): value is LiveInterimEntry => Boolean(value?.text.trim())),
+    [interim],
+  )
 
   const startEdit = (speaker: string) => {
     if (!onRenameSpeaker) return
@@ -82,13 +93,10 @@ export function TranscriptPanel({
       {!hideHeader ? (
         <div className="pane-header">
           Transcript {live ? `· ${activity}` : ''}
-          {onRenameSpeaker && uniqueSpeakers.length > 0 ? (
-            <span className="transcript-rename-hint">Click a speaker to rename</span>
-          ) : null}
         </div>
       ) : null}
       <div className="transcript-scroll">
-        {entries.length === 0 ? (
+        {entries.length === 0 && interimBlocks.length === 0 ? (
           <p className="transcript-empty">
             {live
               ? 'Listening for speech from your mic and meeting audio…'
@@ -128,6 +136,7 @@ export function TranscriptPanel({
                         className={`transcript-speaker-btn${onRenameSpeaker ? ' is-editable' : ''}`}
                         onClick={() => startEdit(block.speaker)}
                         disabled={!onRenameSpeaker}
+                        title={onRenameSpeaker ? 'Rename speaker' : undefined}
                       >
                         {displaySpeaker(block.speaker, speakerLabels)}
                       </button>
@@ -140,6 +149,20 @@ export function TranscriptPanel({
                 </div>
               )
             })}
+            {interimBlocks.map((entry, index) => (
+              <div key={`interim-${index}-${entry.speaker}`} className="transcript-block is-interim">
+                <div className="transcript-block-head">
+                  <span className="transcript-speaker-btn" aria-disabled="true">
+                    {displaySpeaker(entry.speaker, speakerLabels)}
+                  </span>
+                  <span className="transcript-block-time transcript-live-badge">live</span>
+                </div>
+                <p className="transcript-block-body">
+                  {entry.text}
+                  <span className="transcript-live-cursor" aria-hidden="true" />
+                </p>
+              </div>
+            ))}
           </div>
         )}
       </div>

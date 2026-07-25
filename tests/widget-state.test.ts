@@ -75,9 +75,9 @@ describe('speaker labels', () => {
 })
 
 describe('audio preference defaults', () => {
-  it('defaults to auto mode and shows mic picker', async () => {
+  it('defaults to showing mic picker (multi-speaker is always on)', async () => {
     const { DEFAULT_AUDIO_PREFERENCES } = await import('../shared/audio-preferences')
-    expect(DEFAULT_AUDIO_PREFERENCES.transcriptionMode).toBe('auto')
     expect(DEFAULT_AUDIO_PREFERENCES.skipMicPicker).toBe(false)
+    expect('transcriptionMode' in DEFAULT_AUDIO_PREFERENCES).toBe(false)
   })
 })

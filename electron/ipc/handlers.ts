@@ -1,4 +1,5 @@
-import { BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { randomUUID } from 'crypto'
 
 import {
   getIsPaused,
@@ -11,15 +12,19 @@ import {
   wavRms,
 } from '../audio'
 import {
+  getMicSttEngine,
   loadAudioPreferences,
   saveAudioPreferences,
   type AudioPreferences,
 } from '../audioPreferences'
+import { applySpeakerIdentity } from '../../shared/speakers'
 import {
   fetchCalendarEvents,
   fetchCalendarOAuthUrl,
   fetchCalendarStatus,
   disconnectCalendarProvider,
+  invalidateCalendarContactsCache,
+  searchCalendarContacts,
 } from '../calendarClient'
 import {
   acceptSharedInvite,
@@ -31,7 +36,7 @@ import {
 import { proxyMeetingChat } from '../proxyClient'
 import { packMeetingsForChat } from '../../shared/chatContext'
 import { resolveSpeakerDisplay } from '../transcriptUtils'
-import { pushMeetingToCloud, syncMeetingsWithCloud } from '../meetingSync'
+import { pushMeetingToCloud, deleteMeetingFromCloud, syncMeetingsWithCloud } from '../meetingSync'
 import {
   fetchDeviceProfileCached,
   getConnectPageUrl,
@@ -48,7 +53,9 @@ import {
   createMeeting,
   deleteFolder,
   deleteMeeting,
+  DEMO_ARTIFACT_MEETING_ID,
   ensureDemoArtifactMeeting,
+  forgetDeletedMeetingIds,
   getMeeting,
   listFolders,
   listMeetings,
@@ -57,6 +64,13 @@ import {
   updateMeeting,
   type StoredMeeting,
 } from '../meetingStore'
+import {
+  appendSystemWavChunk,
+  deleteMeetingRecording,
+  getSpeakerSnippetBase64,
+  startMeetingRecording,
+  stopMeetingRecording,
+} from '../meetingRecording'
 import {
   clearEnhanceRetry,
   flushEnhanceRetryQueue,
@@ -77,6 +91,7 @@ import {
   requestMicrophoneAccess,
 } from '../permissions'
 import {
+  broadcastTranscriptInterimToWidget,
   broadcastTranscriptToWidget,
   closeWidget,
   createOrShowWidget,
@@ -102,6 +117,12 @@ import {
 } from '../transcriptionQueue'
 import { startSystemAudio, stopSystemAudio } from '../systemAudio'
 import {
+  listLocalSpeakerContacts,
+  upsertLocalSpeakerContact,
+} from '../speakerContacts'
+import {
+  isDuplicateAcrossStreams,
+  isDuplicateOfRecent,
   normalizeTranscriptEntry,
   type TranscriptEntry,
   type TranscriptSource,
@@ -109,7 +130,138 @@ import {
 
 let handlersRegistered = false
 let sessionTranscriptEntries: TranscriptEntry[] = []
-let onSystemAudioData: ((wavBuffer: Buffer) => void) | null = null
+let deepgramLive: DeepgramLiveSession | null = null
+let systemAudioLive = false
+let micDeepgramLive: DeepgramLiveSession | null = null
+/** Preserved across pause/resume so Speaker N labels do not renumber mid-meeting. */
+let systemSpeakerState: LiveSpeakerState | null = null
+/** Mic engine actually in use for the active session (may differ from prefs after failover). */
+let sessionMicEngine: 'deepgram' | 'whisper' = 'deepgram'
+
+function stopDeepgramLive(options?: { preserveSpeakerState?: boolean }): void {
+  if (deepgramLive && options?.preserveSpeakerState) {
+    systemSpeakerState = deepgramLive.getSpeakerState()
+  }
+  const hadSession = Boolean(deepgramLive)
+  deepgramLive?.stop()
+  deepgramLive = null
+  systemAudioLive = false
+  if (hadSession) broadcastTranscriptInterim('system', null)
+}
+
+function stopMicDeepgramLive(): void {
+  const hadSession = Boolean(micDeepgramLive)
+  micDeepgramLive?.stop()
+  micDeepgramLive = null
+  if (hadSession) broadcastTranscriptInterim('mic', null)
+}
+
+async function beginSystemAudioCapture(): Promise<boolean> {
+  stopDeepgramLive()
+
+  const session = new DeepgramLiveSession({
+    diarize: true,
+    source: 'system',
+    ...(systemSpeakerState ? { initialSpeakerState: systemSpeakerState } : {}),
+    onInterim: (update) => broadcastTranscriptInterim('system', update),
+    onFinal: (utterance) => {
+      broadcastTranscriptInterim('system', null)
+      systemSpeakerState = session.getSpeakerState()
+      pushLiveTranscriptEntry({
+        id: randomUUID(),
+        text: utterance.text,
+        source: 'system',
+        speaker: utterance.speaker,
+        at: Date.now(),
+        audioStartMs: utterance.streamOffsetMs,
+        audioEndMs: utterance.streamOffsetMs + Math.max(800, utterance.text.length * 40),
+      })
+      broadcastTranscriptionActivity('transcribing')
+    },
+    onError: (message) => {
+      console.error('Deepgram live session error:', message)
+    },
+  })
+
+  const liveOk = await session.start()
+  if (liveOk) {
+    deepgramLive = session
+    systemAudioLive = true
+    systemSpeakerState = session.getSpeakerState()
+    console.log('System STT: Deepgram live nova-3 (Speaker 1/2/…)')
+  } else {
+    session.stop()
+    console.warn('System STT: falling back to batch diarize queue (Deepgram live unavailable)')
+  }
+
+  const started = startSystemAudio({
+    flushIntervalMs: systemAudioLive ? 200 : 1000,
+    onPcm: systemAudioLive
+      ? (pcm) => {
+          deepgramLive?.sendPcm(pcm)
+        }
+      : undefined,
+    onWav: (wavBuffer) => {
+      const rms = wavRms(wavBuffer)
+      const hadEnergy = wavHasSpeechEnergy(wavBuffer)
+      noteSystemAudioEnergy(rms, hadEnergy)
+      const audioOffsetMs = appendSystemWavChunk(wavBuffer)
+      if (!systemAudioLive) {
+        enqueueAudioChunk(
+          wavBuffer.toString('base64'),
+          'system',
+          rms,
+          audioOffsetMs ?? undefined,
+        )
+      }
+    },
+  })
+
+  if (!started) {
+    stopDeepgramLive()
+    return false
+  }
+
+  markSystemCaptureActive()
+  return true
+}
+
+async function beginMicDeepgramCapture(): Promise<boolean> {
+  stopMicDeepgramLive()
+
+  const session = new DeepgramLiveSession({
+    diarize: false,
+    source: 'mic',
+    fixedSpeakerLabel: 'Me',
+    onInterim: (update) => broadcastTranscriptInterim('mic', update),
+    onFinal: (utterance) => {
+      broadcastTranscriptInterim('mic', null)
+      pushLiveTranscriptEntry({
+        id: randomUUID(),
+        text: utterance.text,
+        source: 'mic',
+        speaker: utterance.speaker,
+        at: Date.now(),
+        audioStartMs: utterance.streamOffsetMs,
+        audioEndMs: utterance.streamOffsetMs + Math.max(800, utterance.text.length * 40),
+      })
+      broadcastTranscriptionActivity('transcribing')
+    },
+    onError: (message) => {
+      console.error('Deepgram mic live session error:', message)
+    },
+  })
+
+  const liveOk = await session.start()
+  if (liveOk) {
+    micDeepgramLive = session
+    console.log('Mic STT: Deepgram live nova-3 (Me)')
+    return true
+  }
+  session.stop()
+  console.warn('Mic STT: Deepgram live unavailable — falling back to Whisper for this session')
+  return false
+}
 let activeMeetingId: string | null = null
 let resolveMainWindow: (() => BrowserWindow | null) | undefined
 
@@ -154,6 +306,55 @@ function pushTranscriptEntry(entry: TranscriptEntry): void {
   broadcastTranscript()
 }
 
+/**
+ * Broadcasts an in-progress (non-final) caption line for a live source, or
+ * `null` to clear it. Kept separate from `sessionTranscriptEntries` since
+ * interim text is transient and never persisted.
+ */
+function broadcastTranscriptInterim(
+  source: TranscriptSource,
+  update: { text: string; speaker: string } | null,
+): void {
+  const payload = { source, update }
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send('transcript:interim', payload)
+    }
+  }
+  broadcastTranscriptInterimToWidget(payload)
+}
+
+/**
+ * Live-STT entry point shared by the mic and system Deepgram sessions.
+ * Replaces RMS-based bleed filtering with post-transcription text-similarity
+ * dedup — if the same words show up on both streams within the window
+ * (acoustic leak), only the first one to arrive is kept.
+ */
+function pushLiveTranscriptEntry(entry: TranscriptEntry): void {
+  const normalized = normalizeTranscriptEntry(entry)
+  if (!normalized.text) return
+  if (
+    isDuplicateOfRecent(normalized.text, sessionTranscriptEntries, 12_000, {
+      speaker: normalized.speaker,
+      source: normalized.source,
+      at: normalized.at,
+    })
+  ) {
+    return
+  }
+  if (
+    isDuplicateAcrossStreams(
+      normalized.text,
+      sessionTranscriptEntries,
+      normalized.at,
+      normalized.source,
+    )
+  ) {
+    return
+  }
+  pushTranscriptEntry(normalized)
+}
+
 function pruneTranscriptEntries(entryIds: string[]): void {
   if (entryIds.length === 0) return
   const remove = new Set(entryIds)
@@ -180,14 +381,18 @@ function broadcastToAllWindows(channel: string): void {
 
 async function abortCaptureSession(): Promise<void> {
   stopSystemAudio()
+  stopDeepgramLive()
+  stopMicDeepgramLive()
+  systemSpeakerState = null
+  sessionMicEngine = 'deepgram'
   clearSystemCaptureActive()
   stopRecording()
-  onSystemAudioData = null
   setRecordingStartedAt(null)
   setWidgetPaused(false)
   closeWidget()
   clearTranscriptionQueue()
   sessionTranscriptEntries = []
+  stopMeetingRecording()
 
   const main = getMainWindow(resolveMainWindow)
   if (main) {
@@ -196,10 +401,12 @@ async function abortCaptureSession(): Promise<void> {
   }
 
   if (activeMeetingId) {
+    deleteMeetingRecording(activeMeetingId)
     updateMeeting(activeMeetingId, {
       status: 'draft',
       startedAt: undefined,
       transcript: [],
+      recordingPath: undefined,
     })
     broadcastMeetingsChanged()
     activeMeetingId = null
@@ -209,26 +416,38 @@ async function abortCaptureSession(): Promise<void> {
 function pauseCaptureSession(): void {
   pauseRecording()
   stopSystemAudio()
+  stopDeepgramLive({ preserveSpeakerState: true })
+  stopMicDeepgramLive()
   clearSystemCaptureActive()
   setWidgetPaused(true)
 }
 
 function resumeCaptureSession(): void {
   resumeRecording()
-  if (process.platform === 'darwin' && onSystemAudioData) {
-    if (startSystemAudio(onSystemAudioData)) {
-      markSystemCaptureActive()
-    }
+  if (process.platform === 'darwin') {
+    void beginSystemAudioCapture()
   }
   setWidgetPaused(false)
   createOrShowWidget()
 }
 
+async function ensureSessionMicDeepgram(): Promise<void> {
+  if (sessionMicEngine !== 'deepgram') return
+  if (micDeepgramLive?.isOpen) return
+  const ok = await beginMicDeepgramCapture()
+  if (!ok) {
+    sessionMicEngine = 'whisper'
+    console.warn('Mic STT: Deepgram unavailable — session mic engine set to Whisper')
+  }
+}
+
 async function finishRecordingSession(): Promise<StoredMeeting | null> {
   stopSystemAudio()
+  stopDeepgramLive()
+  stopMicDeepgramLive()
+  systemSpeakerState = null
   clearSystemCaptureActive()
   stopRecording()
-  onSystemAudioData = null
   setRecordingStartedAt(null)
   setWidgetPaused(false)
   closeWidget()
@@ -241,7 +460,8 @@ async function finishRecordingSession(): Promise<StoredMeeting | null> {
 
   await flushTranscriptionQueue()
   clearTranscriptionQueue()
-  const meeting = await finalizeActiveMeeting()
+  const recordingPath = stopMeetingRecording()
+  const meeting = await finalizeActiveMeeting(recordingPath)
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {
       win.webContents.send('audio:stopped')
@@ -254,8 +474,9 @@ function enqueueAudioChunk(
   base64: string,
   source: TranscriptSource,
   rms?: number,
+  audioOffsetMs?: number,
 ): void {
-  enqueueTranscription(base64, source, rms)
+  enqueueTranscription(base64, source, rms, audioOffsetMs)
 }
 
 async function runMeetingEnhance(meetingId: string): Promise<StoredMeeting | null> {
@@ -269,7 +490,7 @@ async function runMeetingEnhance(meetingId: string): Promise<StoredMeeting | nul
   return enhanced
 }
 
-async function finalizeActiveMeeting(): Promise<StoredMeeting | null> {
+async function finalizeActiveMeeting(recordingPath?: string | null): Promise<StoredMeeting | null> {
   if (!activeMeetingId) return null
   const meetingId = activeMeetingId
   activeMeetingId = null
@@ -278,6 +499,7 @@ async function finalizeActiveMeeting(): Promise<StoredMeeting | null> {
     status: 'processing',
     endedAt: Date.now(),
     transcript: [...sessionTranscriptEntries],
+    ...(recordingPath ? { recordingPath } : {}),
   })
   broadcastMeetingsChanged()
 
@@ -382,6 +604,29 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
 
   ipcMain.handle('calendar:events', async () => fetchCalendarEvents())
 
+  ipcMain.handle('calendar:contacts-search', async (_event, payload?: { query?: string }) => {
+    const query = typeof payload?.query === 'string' ? payload.query : ''
+    return searchCalendarContacts(query)
+  })
+
+  ipcMain.handle('contacts:list-local', () => ({
+    contacts: listLocalSpeakerContacts().map((c) => ({
+      displayName: c.displayName,
+      email: c.email,
+      source: 'manual' as const,
+    })),
+  }))
+
+  ipcMain.handle(
+    'contacts:upsert',
+    (_event, payload?: { displayName?: string; email?: string }) => {
+      const displayName = typeof payload?.displayName === 'string' ? payload.displayName : ''
+      const email = typeof payload?.email === 'string' ? payload.email : undefined
+      const saved = upsertLocalSpeakerContact({ displayName, email })
+      return { ok: Boolean(saved), contact: saved }
+    },
+  )
+
   ipcMain.handle('calendar:open-connect', async (_event, provider?: unknown) => {
     const selected = provider === 'microsoft' ? 'microsoft' : 'google'
     // Prefer a device-bound OAuth URL so calendar tokens save on the paired
@@ -398,15 +643,19 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
 
   ipcMain.handle('calendar:disconnect', async (_event, provider?: unknown) => {
     const selected = provider === 'microsoft' ? 'microsoft' : 'google'
+    invalidateCalendarContactsCache()
     return disconnectCalendarProvider(selected)
   })
 
   ipcMain.handle('meetings:list', () => {
-    ensureDemoArtifactMeeting()
     return listMeetings()
   })
 
   ipcMain.handle('meetings:seed-demo-artifact', () => {
+    if (app.isPackaged) {
+      return { ok: false, error: 'demo_disabled_in_production' }
+    }
+    forgetDeletedMeetingIds([DEMO_ARTIFACT_MEETING_ID])
     const result = ensureDemoArtifactMeeting()
     broadcastMeetingsChanged()
     return result
@@ -423,7 +672,9 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
     calendarProvider?: 'google' | 'microsoft'
     scheduledStart?: number
     attendeeEmails?: string[]
+    attendees?: StoredMeeting['attendees']
     speakerLabels?: Record<string, string>
+    speakerIdentities?: StoredMeeting['speakerIdentities']
   }) => {
     const meeting = createMeeting(payload)
     broadcastMeetingsChanged()
@@ -437,6 +688,9 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
       title?: string
       userNotes?: string
       speakerLabels?: Record<string, string>
+      speakerIdentities?: StoredMeeting['speakerIdentities']
+      attendees?: StoredMeeting['attendees']
+      attendeeEmails?: string[]
       actionItems?: string[]
       completedActionItems?: string[]
     }) => {
@@ -446,6 +700,15 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
       if (typeof payload.userNotes === 'string') patch.userNotes = payload.userNotes
       if (payload.speakerLabels && typeof payload.speakerLabels === 'object') {
         patch.speakerLabels = payload.speakerLabels
+      }
+      if (payload.speakerIdentities && typeof payload.speakerIdentities === 'object') {
+        patch.speakerIdentities = payload.speakerIdentities
+      }
+      if (Array.isArray(payload.attendees)) {
+        patch.attendees = payload.attendees
+      }
+      if (Array.isArray(payload.attendeeEmails)) {
+        patch.attendeeEmails = payload.attendeeEmails.filter((item) => typeof item === 'string')
       }
       if (Array.isArray(payload.actionItems)) {
         patch.actionItems = payload.actionItems.filter((item) => typeof item === 'string')
@@ -471,11 +734,53 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
   })
 
   ipcMain.handle('meetings:delete', (_event, id: unknown) => {
-    if (typeof id !== 'string') return { ok: false }
-    const ok = deleteMeeting(id)
-    if (ok) broadcastMeetingsChanged()
-    return { ok }
+    if (typeof id !== 'string' || !id) return { ok: false }
+    // Always tombstone + attempt cloud delete so sync cannot resurrect the note.
+    deleteMeeting(id)
+    deleteMeetingRecording(id)
+    broadcastMeetingsChanged()
+    void deleteMeetingFromCloud(id)
+    return { ok: true }
   })
+
+  ipcMain.handle(
+    'meetings:speaker-snippet',
+    (_event, payload?: { meetingId?: string; speaker?: string }) => {
+      const meetingId = payload?.meetingId
+      const speaker = payload?.speaker
+      if (!meetingId || !speaker) return { ok: false, error: 'missing_params' }
+
+      const meeting = getMeeting(meetingId)
+      const hasRecording = Boolean(meeting?.recordingPath) || meetingId === activeMeetingId
+      if (!meeting || !hasRecording) return { ok: false, error: 'no_recording' }
+
+      const transcript =
+        meetingId === activeMeetingId && sessionTranscriptEntries.length > 0
+          ? sessionTranscriptEntries
+          : meeting.transcript
+
+      const entry =
+        transcript.find(
+          (row) => row.speaker === speaker && typeof row.audioStartMs === 'number',
+        ) ?? transcript.find((row) => row.speaker === speaker)
+
+      if (!entry) return { ok: false, error: 'no_speaker' }
+
+      const startMs =
+        typeof entry.audioStartMs === 'number'
+          ? entry.audioStartMs
+          : Math.max(0, entry.at - (meeting.startedAt ?? entry.at))
+
+      const durationMs =
+        typeof entry.audioEndMs === 'number' && entry.audioEndMs > startMs
+          ? Math.min(4500, entry.audioEndMs - startMs + 400)
+          : 4500
+
+      const audioBase64 = getSpeakerSnippetBase64(meetingId, startMs, durationMs)
+      if (!audioBase64) return { ok: false, error: 'slice_failed' }
+      return { ok: true, audioBase64, mimeType: 'audio/wav' }
+    },
+  )
 
   ipcMain.handle('meetings:enhance', async (_event, id: unknown) => {
     if (typeof id !== 'string') return null
@@ -524,11 +829,15 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
 
   ipcMain.handle(
     'share:invite',
-    async (_event, payload?: { communityId?: string; email?: string }) => {
-      if (!payload?.communityId || typeof payload.email !== 'string') {
+    async (_event, payload?: { communityId?: string; email?: string; meetingId?: string }) => {
+      if (
+        !payload?.communityId ||
+        typeof payload.email !== 'string' ||
+        typeof payload.meetingId !== 'string'
+      ) {
         return { ok: false, error: 'invalid_payload' }
       }
-      return inviteToSharedMeeting(payload.communityId, payload.email)
+      return inviteToSharedMeeting(payload.communityId, payload.email, payload.meetingId)
     },
   )
 
@@ -659,13 +968,16 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
     async (_event, payload?: { meetingId?: string }) => {
       sessionTranscriptEntries = []
       clearTranscriptionQueue()
+      systemSpeakerState = null
 
       if (payload?.meetingId) {
         activeMeetingId = payload.meetingId
+        const recordingPath = startMeetingRecording(payload.meetingId)
         updateMeeting(payload.meetingId, {
           status: 'live',
           startedAt: Date.now(),
           transcript: [],
+          recordingPath,
         })
         broadcastMeetingsChanged()
       }
@@ -683,18 +995,19 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
       }
 
       startRecording(() => {
-        // Transcripts arrive via the transcription queue.
+        // Transcripts arrive via the transcription queue / Deepgram live.
       })
 
       if (process.platform === 'darwin') {
-        onSystemAudioData = (wavBuffer: Buffer) => {
-          const rms = wavRms(wavBuffer)
-          const hadEnergy = wavHasSpeechEnergy(wavBuffer)
-          noteSystemAudioEnergy(rms, hadEnergy)
-          enqueueAudioChunk(wavBuffer.toString('base64'), 'system', rms)
-        }
-        if (startSystemAudio(onSystemAudioData)) {
-          markSystemCaptureActive()
+        await beginSystemAudioCapture()
+      }
+
+      const preferDeepgram = getMicSttEngine() !== 'whisper'
+      sessionMicEngine = preferDeepgram ? 'deepgram' : 'whisper'
+      if (preferDeepgram) {
+        const liveOk = await beginMicDeepgramCapture()
+        if (!liveOk) {
+          sessionMicEngine = 'whisper'
         }
       }
 
@@ -709,18 +1022,23 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
         mainWin.hide()
       }
 
-      return { status: 'started', meetingId: activeMeetingId }
+      return {
+        status: 'started',
+        meetingId: activeMeetingId,
+        micEngine: sessionMicEngine,
+      }
     },
   )
 
   ipcMain.handle('audio:pause', () => {
     pauseCaptureSession()
-    return { status: 'paused', isPaused: getIsPaused() }
+    return { status: 'paused', isPaused: getIsPaused(), micEngine: sessionMicEngine }
   })
 
-  ipcMain.handle('audio:resume', () => {
+  ipcMain.handle('audio:resume', async () => {
     resumeCaptureSession()
-    return { status: 'resumed', isPaused: getIsPaused() }
+    await ensureSessionMicDeepgram()
+    return { status: 'resumed', isPaused: getIsPaused(), micEngine: sessionMicEngine }
   })
 
   ipcMain.handle('audio:stop', async (_event, payload?: { abort?: boolean }) => {
@@ -736,6 +1054,7 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
     isRecording: getIsRecording(),
     isPaused: getIsPaused(),
     meetingId: activeMeetingId,
+    micEngine: sessionMicEngine,
   }))
 
   ipcMain.handle(
@@ -750,6 +1069,17 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
           : undefined
       if (typeof base64 === 'string' && base64.length > 0) {
         enqueueAudioChunk(base64, source, rms)
+      }
+      return { status: 'queued' }
+    },
+  )
+
+  ipcMain.handle(
+    'audio:mic-pcm-chunk',
+    (_event, payload?: { base64?: string }) => {
+      const base64 = payload?.base64
+      if (typeof base64 === 'string' && base64.length > 0 && micDeepgramLive) {
+        micDeepgramLive.sendPcm(Buffer.from(base64, 'base64'))
       }
       return { status: 'queued' }
     },
@@ -782,11 +1112,6 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
       ...(payload?.systemAudioCapture === 'meeting' || payload?.systemAudioCapture === 'display'
         ? { systemAudioCapture: payload.systemAudioCapture }
         : {}),
-      ...(payload?.transcriptionMode === 'auto' ||
-      payload?.transcriptionMode === 'dual' ||
-      payload?.transcriptionMode === 'group'
-        ? { transcriptionMode: payload.transcriptionMode }
-        : {}),
       ...(typeof payload?.skipMicPicker === 'boolean'
         ? { skipMicPicker: payload.skipMicPicker }
         : {}),
@@ -795,6 +1120,9 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
         : {}),
       ...(typeof payload?.meetingRemindersEnabled === 'boolean'
         ? { meetingRemindersEnabled: payload.meetingRemindersEnabled }
+        : {}),
+      ...(payload?.micSttEngine === 'whisper' || payload?.micSttEngine === 'deepgram'
+        ? { micSttEngine: payload.micSttEngine }
         : {}),
     }
     saveAudioPreferences(next)
@@ -915,13 +1243,15 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
       if (!activeMeetingId || !payload?.speaker || !payload?.name) return { ok: false }
       const meeting = getMeeting(activeMeetingId)
       if (!meeting) return { ok: false }
-      const speakerLabels = {
-        ...(meeting.speakerLabels ?? {}),
-        [payload.speaker]: payload.name.trim(),
-      }
-      updateMeeting(activeMeetingId, { speakerLabels })
+      const next = applySpeakerIdentity(
+        meeting.speakerIdentities,
+        meeting.speakerLabels,
+        payload.speaker,
+        { displayName: payload.name, source: 'manual' },
+      )
+      updateMeeting(activeMeetingId, next)
       broadcastMeetingsChanged()
-      return { ok: true, speakerLabels }
+      return { ok: true, speakerLabels: next.speakerLabels }
     },
   )
 
@@ -936,9 +1266,10 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
     return { status: 'paused', isPaused: getIsPaused() }
   })
 
-  ipcMain.handle('widget:resume-recording', () => {
+  ipcMain.handle('widget:resume-recording', async () => {
     resumeCaptureSession()
+    await ensureSessionMicDeepgram()
     broadcastToAllWindows('audio:session-resumed')
-    return { status: 'resumed', isPaused: getIsPaused() }
+    return { status: 'resumed', isPaused: getIsPaused(), micEngine: sessionMicEngine }
   })
 }

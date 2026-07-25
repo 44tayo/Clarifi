@@ -1,8 +1,8 @@
-export type TranscriptionMode = 'auto' | 'dual' | 'group'
-
 export type ThemePreference = 'light' | 'dark' | 'system'
 
 export type SystemAudioCaptureMode = 'meeting' | 'display'
+
+export type MicSttEngine = 'whisper' | 'deepgram'
 
 export type AudioPreferences = {
   transcriptionLanguage: string
@@ -14,11 +14,12 @@ export type AudioPreferences = {
   preferredMicrophoneId: string
   preferredMicrophoneLabel: string
   systemAudioCapture: SystemAudioCaptureMode
-  transcriptionMode: TranscriptionMode
   skipMicPicker: boolean
   theme: ThemePreference
   /** Prompt before calendar events start (does not auto-record). */
   meetingRemindersEnabled: boolean
+  /** Mic transcription engine — 'deepgram' (live, low-latency, default) or 'whisper' (legacy fallback, 3s chunks). */
+  micSttEngine: MicSttEngine
 }
 
 export const DEFAULT_AUDIO_PREFERENCES: AudioPreferences = {
@@ -31,8 +32,8 @@ export const DEFAULT_AUDIO_PREFERENCES: AudioPreferences = {
   preferredMicrophoneId: '',
   preferredMicrophoneLabel: '',
   systemAudioCapture: 'meeting',
-  transcriptionMode: 'auto',
   skipMicPicker: false,
   theme: 'light',
   meetingRemindersEnabled: true,
+  micSttEngine: 'deepgram',
 }

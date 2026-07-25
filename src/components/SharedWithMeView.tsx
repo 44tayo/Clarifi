@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 
+import { useToast } from '../hooks/useToast'
+import { StatefulButton } from './ui/StatefulButton'
+
 type SharedInboxInvite = {
   kind: 'invite'
   id: string
@@ -91,7 +94,7 @@ export function SharedWithMeView({
   const [entries, setEntries] = useState<SharedInboxEntry[]>([])
   const [selected, setSelected] = useState<SharedItemDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
-  const [acceptingId, setAcceptingId] = useState<string | null>(null)
+  const { toast } = useToast()
 
   const refresh = useCallback(async () => {
     if (!paired) {
@@ -154,26 +157,19 @@ export function SharedWithMeView({
   }
 
   const acceptInvite = async (invite: SharedInboxInvite) => {
-    setAcceptingId(invite.id)
     setError(null)
-    try {
-      const result = (await window.electronAPI.invoke('share:accept-invite', {
-        token: invite.token,
-      })) as { ok?: boolean; error?: string }
-      if (!result.ok) {
-        if (result.error === 'plan_required') {
-          setPlanRequired(true)
-        } else {
-          setError('Could not accept that invite.')
-        }
-        return
+    const result = (await window.electronAPI.invoke('share:accept-invite', {
+      token: invite.token,
+    })) as { ok?: boolean; error?: string }
+    if (!result.ok) {
+      if (result.error === 'plan_required') {
+        setPlanRequired(true)
+        throw new Error('Upgrade required to accept invites')
       }
-      await refresh()
-    } catch {
-      setError('Could not accept that invite.')
-    } finally {
-      setAcceptingId(null)
+      throw new Error('Could not accept that invite.')
     }
+    await refresh()
+    toast('Invite accepted')
   }
 
   if (selected) {
@@ -298,14 +294,14 @@ export function SharedWithMeView({
                     Expires {formatWhen(entry.expiresAt)}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  disabled={acceptingId === entry.id}
-                  onClick={() => void acceptInvite(entry)}
-                >
-                  {acceptingId === entry.id ? 'Accepting…' : 'Accept'}
-                </button>
+                <StatefulButton
+                  variant="primary"
+                  idleLabel="Accept"
+                  loadingLabel="Accepting…"
+                  successLabel="Accepted"
+                  successDuration={1200}
+                  onClick={() => acceptInvite(entry)}
+                />
               </li>
             ) : (
               <li key={`item-${entry.id}`}>

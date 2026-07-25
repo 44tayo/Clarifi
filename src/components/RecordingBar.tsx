@@ -69,7 +69,7 @@ export function RecordingBar({
           </>
         ) : null}
         {recordingState === 'idle' && (meeting.status === 'draft' || meeting.status === 'ready' || meeting.status === 'error') ? (
-          <button type="button" className="btn btn-secondary" onClick={onDelete}>
+          <button type="button" className="btn btn-danger" onClick={onDelete}>
             Delete
           </button>
         ) : null}

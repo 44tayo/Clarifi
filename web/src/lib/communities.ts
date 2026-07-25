@@ -237,6 +237,7 @@ export async function inviteToCommunity(
   userId: string,
   communityId: string,
   email: string,
+  options?: { skipEmail?: boolean },
 ): Promise<{ inviteId: string; token: string }> {
   await requireProPlus(userId)
   await assertOwner(communityId, userId)
@@ -291,11 +292,13 @@ export async function inviteToCommunity(
     .eq('id', communityId)
     .single()
 
-  await sendCommunityInviteEmail({
-    email: normalizedEmail,
-    communityName: community?.name ?? 'Community',
-    token,
-  })
+  if (!options?.skipEmail) {
+    await sendCommunityInviteEmail({
+      email: normalizedEmail,
+      communityName: community?.name ?? 'Community',
+      token,
+    })
+  }
 
   return { inviteId: invite.id, token }
 }

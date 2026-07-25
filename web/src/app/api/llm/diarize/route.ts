@@ -2,7 +2,12 @@ import { authorizeLlmRequest } from '@/lib/llm-route-auth'
 
 const MAX_AUDIO_BYTES = 15 * 1024 * 1024
 
-type DeepgramUtterance = { speaker?: number; transcript?: string }
+type DeepgramUtterance = {
+  speaker?: number
+  transcript?: string
+  start?: number
+  end?: number
+}
 
 type DeepgramResponse = {
   results?: {
@@ -48,7 +53,7 @@ export async function POST(req: Request) {
       ? payload.language
       : null
   const langParam = language ? `&language=${encodeURIComponent(language)}` : '&detect_language=true'
-  const query = `model=nova-2&diarize=true&punctuate=true&utterances=true&smart_format=true&mip_opt_out=true${langParam}`
+  const query = `model=nova-3&diarize_model=latest&punctuate=true&utterances=true&smart_format=true&mip_opt_out=true${langParam}`
 
   const audioBuffer = Buffer.from(payload.audioBase64, 'base64')
   const response = await fetch(`https://api.deepgram.com/v1/listen?${query}`, {
@@ -71,6 +76,9 @@ export async function POST(req: Request) {
     .map((item) => ({
       speaker: formatSpeaker(typeof item.speaker === 'number' ? item.speaker : 0),
       text: item.transcript?.trim() ?? '',
+      startSec: typeof item.start === 'number' ? item.start : undefined,
+      endSec: typeof item.end === 'number' ? item.end : undefined,
+      deepgramIndex: typeof item.speaker === 'number' ? item.speaker : 0,
     }))
     .filter((item) => item.text.length > 0)
 
@@ -80,7 +88,9 @@ export async function POST(req: Request) {
 
   const fallback = data.results?.channels?.[0]?.alternatives?.[0]?.transcript?.trim() ?? ''
   if (fallback) {
-    return Response.json({ utterances: [{ speaker: 'Speaker 1', text: fallback }] })
+    return Response.json({
+      utterances: [{ speaker: 'Speaker 1', text: fallback, startSec: 0, deepgramIndex: 0 }],
+    })
   }
 
   return Response.json({ utterances: [] })

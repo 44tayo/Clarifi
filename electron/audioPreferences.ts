@@ -4,14 +4,14 @@ import * as path from 'path'
 import { languageLabel } from './languages'
 import type {
   AudioPreferences,
+  MicSttEngine,
   SystemAudioCaptureMode,
   ThemePreference,
-  TranscriptionMode,
 } from '../shared/audio-preferences'
 import { DEFAULT_AUDIO_PREFERENCES } from '../shared/audio-preferences'
 import { applyNativeTheme } from './theme'
 
-export type { AudioPreferences, SystemAudioCaptureMode, ThemePreference, TranscriptionMode }
+export type { AudioPreferences, MicSttEngine, SystemAudioCaptureMode, ThemePreference }
 
 const PREFS_FILE = 'audio-preferences.json'
 
@@ -22,22 +22,24 @@ function parseTheme(value: unknown): ThemePreference {
   return 'light'
 }
 
+function parseMicSttEngine(value: unknown): MicSttEngine {
+  return value === 'whisper' ? 'whisper' : 'deepgram'
+}
+
 function prefsPath(): string {
   return path.join(app.getPath('userData'), PREFS_FILE)
 }
 
 let cached: AudioPreferences | null = null
 
-function parseTranscriptionMode(value: unknown): TranscriptionMode {
-  if (value === 'dual' || value === 'group' || value === 'auto') return value
-  return 'auto'
-}
-
 export function loadAudioPreferences(): AudioPreferences {
   if (cached) return cached
   try {
     const raw = fs.readFileSync(prefsPath(), 'utf-8')
-    const parsed = JSON.parse(raw) as Partial<AudioPreferences>
+    const parsed = JSON.parse(raw) as Partial<AudioPreferences> & {
+      /** Legacy field — ignored; meetings always use multi-speaker diarization. */
+      transcriptionMode?: unknown
+    }
     cached = {
       transcriptionLanguage:
         typeof parsed.transcriptionLanguage === 'string'
@@ -73,7 +75,6 @@ export function loadAudioPreferences(): AudioPreferences {
           : DEFAULTS.preferredMicrophoneLabel,
       systemAudioCapture:
         parsed.systemAudioCapture === 'display' ? 'display' : 'meeting',
-      transcriptionMode: parseTranscriptionMode(parsed.transcriptionMode),
       skipMicPicker:
         typeof parsed.skipMicPicker === 'boolean'
           ? parsed.skipMicPicker
@@ -83,6 +84,7 @@ export function loadAudioPreferences(): AudioPreferences {
         typeof parsed.meetingRemindersEnabled === 'boolean'
           ? parsed.meetingRemindersEnabled
           : DEFAULTS.meetingRemindersEnabled,
+      micSttEngine: parseMicSttEngine(parsed.micSttEngine),
     }
     return cached
   } catch {
@@ -123,25 +125,13 @@ export function getSystemAudioCaptureMode(): SystemAudioCaptureMode {
   return loadAudioPreferences().systemAudioCapture
 }
 
-export function getTranscriptionMode(): TranscriptionMode {
-  return loadAudioPreferences().transcriptionMode
+export function getMicSttEngine(): MicSttEngine {
+  return loadAudioPreferences().micSttEngine
 }
 
-export function isGroupCallMode(): boolean {
-  return getTranscriptionMode() === 'group'
-}
-
-export function isDualCallMode(): boolean {
-  return getTranscriptionMode() === 'dual'
-}
-
-export function isAutoCallMode(): boolean {
-  return getTranscriptionMode() === 'auto'
-}
-
+/** Meetings always use mic → Me + system → Speaker N (Jamie/Granola-style). */
 export function usesDiarization(): boolean {
-  const mode = getTranscriptionMode()
-  return mode === 'group' || mode === 'auto'
+  return true
 }
 
 export function getOutputLanguage(): string {

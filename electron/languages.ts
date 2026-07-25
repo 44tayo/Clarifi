@@ -1,6 +1,6 @@
 /**
  * Languages supported by Whisper large-v3 (used by Groq for transcription)
- * and Deepgram nova-2 diarization. This is the same ~99-language set Whisper
+ * and Deepgram nova-3 diarization. This is the same ~99-language set Whisper
  * itself documents support for — used both for the transcription/dictation
  * "spoken language" picker and the notes/dictation "output language" picker
  * (the latter is limited only by the LLM's own language fluency, which

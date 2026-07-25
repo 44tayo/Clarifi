@@ -1,9 +1,12 @@
 import fetch from 'node-fetch'
 
+import type { MeetingAttendee, SpeakerIdentities } from '../shared/speakers'
 import type { StoredMeeting } from './meetingStore'
 import {
   getMeeting,
+  listDeletedMeetingIds,
   listMeetings,
+  purgeTombstonedLocalMeetings,
   upsertMeetingSnapshot,
 } from './meetingStore'
 import { getDeviceCredentials } from './deviceAuth'
@@ -20,10 +23,12 @@ export type SyncableMeeting = {
   userNotes: string
   transcript: StoredMeeting['transcript']
   speakerLabels?: Record<string, string>
+  speakerIdentities?: SpeakerIdentities
   calendarEventId?: string
   calendarProvider?: 'google' | 'microsoft'
   scheduledStart?: number
   attendeeEmails?: string[]
+  attendees?: MeetingAttendee[]
   folderIds?: string[]
   enhancedNotes?: string
   summary?: string
@@ -48,10 +53,12 @@ export function toSyncable(meeting: StoredMeeting): SyncableMeeting {
     userNotes: meeting.userNotes,
     transcript: meeting.transcript,
     speakerLabels: meeting.speakerLabels,
+    speakerIdentities: meeting.speakerIdentities,
     calendarEventId: meeting.calendarEventId,
     calendarProvider: meeting.calendarProvider,
     scheduledStart: meeting.scheduledStart,
     attendeeEmails: meeting.attendeeEmails,
+    attendees: meeting.attendees,
     folderIds: meeting.folderIds,
     enhancedNotes: meeting.enhancedNotes,
     summary: meeting.summary,
@@ -71,10 +78,12 @@ function fromSyncable(remote: SyncableMeeting): StoredMeeting {
     userNotes: remote.userNotes,
     transcript: remote.transcript ?? [],
     speakerLabels: remote.speakerLabels,
+    speakerIdentities: remote.speakerIdentities,
     calendarEventId: remote.calendarEventId,
     calendarProvider: remote.calendarProvider,
     scheduledStart: remote.scheduledStart,
     attendeeEmails: remote.attendeeEmails,
+    attendees: remote.attendees,
     folderIds: remote.folderIds,
     enhancedNotes: remote.enhancedNotes,
     summary: remote.summary,
@@ -82,18 +91,25 @@ function fromSyncable(remote: SyncableMeeting): StoredMeeting {
   }
 }
 
-/** Last-write-wins merge by updatedAt. */
+/** Last-write-wins merge by updatedAt. Respects local deletions so notes stay gone. */
 export function mergeMeetingsLww(
   local: SyncableMeeting[],
   remote: SyncableMeeting[],
-): { toPush: SyncableMeeting[]; toPull: SyncableMeeting[] } {
+  deletedIds: Iterable<string> = [],
+): { toPush: SyncableMeeting[]; toPull: SyncableMeeting[]; toDeleteRemote: string[] } {
+  const deleted = new Set(deletedIds)
   const localById = new Map(local.map((m) => [m.id, m]))
   const remoteById = new Map(remote.map((m) => [m.id, m]))
   const toPush: SyncableMeeting[] = []
   const toPull: SyncableMeeting[] = []
+  const toDeleteRemote: string[] = []
 
-  const ids = new Set([...localById.keys(), ...remoteById.keys()])
+  const ids = new Set([...localById.keys(), ...remoteById.keys(), ...deleted])
   for (const id of ids) {
+    if (deleted.has(id)) {
+      if (remoteById.has(id)) toDeleteRemote.push(id)
+      continue
+    }
     const l = localById.get(id)
     const r = remoteById.get(id)
     if (l && !r) {
@@ -110,7 +126,7 @@ export function mergeMeetingsLww(
     }
   }
 
-  return { toPush, toPull }
+  return { toPush, toPull, toDeleteRemote }
 }
 
 async function deviceHeaders(): Promise<Record<string, string> | null> {
@@ -126,7 +142,9 @@ async function deviceHeaders(): Promise<Record<string, string> | null> {
 export async function pushMeetingsToCloud(
   meetings: StoredMeeting[],
 ): Promise<{ ok: boolean; error?: string }> {
-  if (meetings.length === 0) return { ok: true }
+  const deleted = new Set(listDeletedMeetingIds())
+  const payload = meetings.filter((meeting) => !deleted.has(meeting.id))
+  if (payload.length === 0) return { ok: true }
   const baseUrl = getClarifiApiUrl()
   const headers = await deviceHeaders()
   if (!baseUrl || !headers) return { ok: false, error: 'unauthorized' }
@@ -135,7 +153,7 @@ export async function pushMeetingsToCloud(
     const response = await fetch(`${baseUrl}/api/desktop/meetings`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ meetings: meetings.map(toSyncable) }),
+      body: JSON.stringify({ meetings: payload.map(toSyncable) }),
     })
     if (!response.ok) {
       const data = (await response.json().catch(() => null)) as { error?: string } | null
@@ -153,6 +171,37 @@ export async function pushMeetingToCloud(
   const meeting = getMeeting(meetingId)
   if (!meeting) return { ok: false, error: 'not_found' }
   return pushMeetingsToCloud([meeting])
+}
+
+export async function deleteMeetingsFromCloud(
+  meetingIds: string[],
+): Promise<{ ok: boolean; error?: string }> {
+  const ids = meetingIds.filter((id) => typeof id === 'string' && id.length > 0)
+  if (ids.length === 0) return { ok: true }
+  const baseUrl = getClarifiApiUrl()
+  const headers = await deviceHeaders()
+  if (!baseUrl || !headers) return { ok: false, error: 'unauthorized' }
+
+  try {
+    const response = await fetch(`${baseUrl}/api/desktop/meetings`, {
+      method: 'DELETE',
+      headers,
+      body: JSON.stringify({ ids }),
+    })
+    if (!response.ok) {
+      const data = (await response.json().catch(() => null)) as { error?: string } | null
+      return { ok: false, error: data?.error || 'delete_failed' }
+    }
+    return { ok: true }
+  } catch {
+    return { ok: false, error: 'network_error' }
+  }
+}
+
+export async function deleteMeetingFromCloud(
+  meetingId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  return deleteMeetingsFromCloud([meetingId])
 }
 
 export async function pullMeetingsFromCloud(): Promise<{
@@ -182,20 +231,29 @@ export async function pullMeetingsFromCloud(): Promise<{
 
 let syncInFlight = false
 
-/** Pull remote + push local winners (last-write-wins by updatedAt). */
+/** Pull remote + push local winners (last-write-wins by updatedAt).
+ * Deleted meeting ids are permanent tombstones — never pulled back, never forgotten. */
 export async function syncMeetingsWithCloud(): Promise<{ ok: boolean; error?: string }> {
   if (syncInFlight) return { ok: true }
   syncInFlight = true
   try {
+    purgeTombstonedLocalMeetings()
+
     const pulled = await pullMeetingsFromCloud()
     if (!pulled.ok) return { ok: false, error: pulled.error }
 
     const local = listMeetings().map(toSyncable)
     const remote = pulled.meetings ?? []
-    const { toPush, toPull } = mergeMeetingsLww(local, remote)
+    const deletedIds = listDeletedMeetingIds()
+    const { toPush, toPull, toDeleteRemote } = mergeMeetingsLww(local, remote, deletedIds)
 
     for (const meeting of toPull) {
       upsertMeetingSnapshot(fromSyncable(meeting))
+    }
+
+    // Keep tombstones forever. Re-delete from cloud whenever a deleted id still appears remote.
+    if (toDeleteRemote.length > 0) {
+      await deleteMeetingsFromCloud(toDeleteRemote)
     }
 
     if (toPush.length > 0) {
@@ -204,6 +262,9 @@ export async function syncMeetingsWithCloud(): Promise<{ ok: boolean; error?: st
       )
       if (!push.ok) return push
     }
+
+    // Belt-and-suspenders: anything tombstoned that slipped into local during pull.
+    purgeTombstonedLocalMeetings()
 
     return { ok: true }
   } finally {

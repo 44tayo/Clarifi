@@ -64,7 +64,7 @@ export function HeroBackgroundPaths({ className }: { className?: string }) {
       aria-hidden
     >
       <Image
-        src="/images/hero-sky.jpg"
+        src="/images/hero-notto-sky.jpg"
         alt=""
         fill
         priority

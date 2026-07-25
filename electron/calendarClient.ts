@@ -73,6 +73,132 @@ export async function fetchCalendarOAuthUrl(
   return { ok: true, authUrl: data.authUrl }
 }
 
+type ContactsSearchResult = {
+  connected: boolean
+  contacts: Array<{ displayName: string; email?: string; source: string }>
+  needsReconnect: boolean
+}
+
+const DIRECTORY_TTL_MS = 10 * 60 * 1000
+const EMPTY_TTL_MS = 30 * 1000
+const QUERY_TTL_MS = 2 * 60 * 1000
+
+let directoryCache: { expiresAt: number; result: ContactsSearchResult } | null = null
+let directoryInFlight: Promise<ContactsSearchResult> | null = null
+const queryCache = new Map<string, { expiresAt: number; result: ContactsSearchResult }>()
+const queryInFlight = new Map<string, Promise<ContactsSearchResult>>()
+
+function filterLocalContacts(
+  contacts: ContactsSearchResult['contacts'],
+  query: string,
+): ContactsSearchResult['contacts'] {
+  const q = query.trim().toLowerCase()
+  if (!q) return contacts.slice(0, 600)
+  return contacts
+    .filter((person) => {
+      const name = person.displayName.toLowerCase()
+      const email = person.email?.toLowerCase() ?? ''
+      return name.includes(q) || email.includes(q)
+    })
+    .slice(0, 40)
+}
+
+async function fetchContactsFromApi(query: string): Promise<ContactsSearchResult> {
+  const empty: ContactsSearchResult = {
+    connected: false,
+    contacts: [],
+    needsReconnect: false,
+  }
+  const q = encodeURIComponent(query.trim())
+  const { ok, data } = await deviceGet<{
+    connected?: boolean
+    contacts?: Array<{ displayName: string; email?: string; source: string }>
+    needsReconnect?: boolean
+  }>(`/api/desktop/calendar/contacts?q=${q}`)
+  if (!ok || !data) return empty
+  return {
+    connected: Boolean(data.connected),
+    contacts: Array.isArray(data.contacts) ? data.contacts : [],
+    needsReconnect: Boolean(data.needsReconnect),
+  }
+}
+
+export function invalidateCalendarContactsCache(): void {
+  directoryCache = null
+  directoryInFlight = null
+  queryCache.clear()
+  queryInFlight.clear()
+}
+
+async function getDirectory(): Promise<ContactsSearchResult> {
+  const now = Date.now()
+  if (directoryCache && directoryCache.expiresAt > now) {
+    return directoryCache.result
+  }
+
+  if (!directoryInFlight) {
+    directoryInFlight = fetchContactsFromApi('')
+      .then((result) => {
+        // Network failures stay uncached so the next open retries.
+        if (!result.connected && result.contacts.length === 0 && !result.needsReconnect) {
+          return result
+        }
+        const ttl = result.contacts.length === 0 ? EMPTY_TTL_MS : DIRECTORY_TTL_MS
+        directoryCache = { expiresAt: Date.now() + ttl, result }
+        return result
+      })
+      .finally(() => {
+        directoryInFlight = null
+      })
+  }
+
+  return directoryInFlight
+}
+
+export async function searchCalendarContacts(query: string): Promise<ContactsSearchResult> {
+  const q = query.trim()
+
+  if (!q) {
+    return getDirectory()
+  }
+
+  const key = q.toLowerCase()
+  const cached = queryCache.get(key)
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.result
+  }
+
+  // Show local directory matches immediately while live search runs on the API.
+  const directory = await getDirectory()
+  const localHits = filterLocalContacts(directory.contacts, q)
+
+  let inFlight = queryInFlight.get(key)
+  if (!inFlight) {
+    inFlight = fetchContactsFromApi(q)
+      .then((result) => {
+        const ttl = result.contacts.length === 0 ? EMPTY_TTL_MS : QUERY_TTL_MS
+        queryCache.set(key, { expiresAt: Date.now() + ttl, result })
+        return result
+      })
+      .finally(() => {
+        queryInFlight.delete(key)
+      })
+    queryInFlight.set(key, inFlight)
+  }
+
+  const live = await inFlight
+  if (live.contacts.length > 0 || live.needsReconnect) {
+    return live
+  }
+
+  // Fall back to local directory filter if live search returned nothing.
+  return {
+    connected: directory.connected || live.connected,
+    contacts: localHits,
+    needsReconnect: directory.needsReconnect || live.needsReconnect,
+  }
+}
+
 export async function disconnectCalendarProvider(
   provider: 'google' | 'microsoft',
 ): Promise<{ ok: boolean; error?: string }> {

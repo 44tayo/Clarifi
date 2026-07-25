@@ -11,10 +11,12 @@ export type CloudMeetingPayload = {
   userNotes: string
   transcript: unknown[]
   speakerLabels?: Record<string, string>
+  speakerIdentities?: Record<string, { displayName: string; email?: string; source: string }>
   calendarEventId?: string
   calendarProvider?: string
   scheduledStart?: number
   attendeeEmails?: string[]
+  attendees?: Array<{ email: string; name: string | null; self?: boolean }>
   folderIds?: string[]
   enhancedNotes?: string
   summary?: string
@@ -42,6 +44,10 @@ function rowToMeeting(row: Record<string, unknown>): CloudMeetingPayload {
       row.speaker_labels && typeof row.speaker_labels === 'object'
         ? (row.speaker_labels as Record<string, string>)
         : {},
+    speakerIdentities:
+      row.speaker_identities && typeof row.speaker_identities === 'object'
+        ? (row.speaker_identities as CloudMeetingPayload['speakerIdentities'])
+        : {},
     calendarEventId:
       typeof row.calendar_event_id === 'string' ? row.calendar_event_id : undefined,
     calendarProvider:
@@ -50,6 +56,9 @@ function rowToMeeting(row: Record<string, unknown>): CloudMeetingPayload {
       row.scheduled_start_ms != null ? Number(row.scheduled_start_ms) : undefined,
     attendeeEmails: Array.isArray(row.attendee_emails)
       ? (row.attendee_emails as string[])
+      : [],
+    attendees: Array.isArray(row.attendees)
+      ? (row.attendees as CloudMeetingPayload['attendees'])
       : [],
     folderIds: Array.isArray(row.folder_ids) ? (row.folder_ids as string[]) : [],
     enhancedNotes: typeof row.enhanced_notes === 'string' ? row.enhanced_notes : undefined,
@@ -71,10 +80,12 @@ function meetingToRow(userId: string, meeting: CloudMeetingPayload) {
     user_notes: meeting.userNotes ?? '',
     transcript: meeting.transcript ?? [],
     speaker_labels: meeting.speakerLabels ?? {},
+    speaker_identities: meeting.speakerIdentities ?? {},
     calendar_event_id: meeting.calendarEventId ?? null,
     calendar_provider: meeting.calendarProvider ?? null,
     scheduled_start_ms: meeting.scheduledStart ?? null,
     attendee_emails: meeting.attendeeEmails ?? [],
+    attendees: meeting.attendees ?? [],
     folder_ids: meeting.folderIds ?? [],
     enhanced_notes: meeting.enhancedNotes ?? null,
     summary: meeting.summary ?? null,
@@ -106,4 +117,16 @@ export async function upsertCloudMeetings(
   })
   if (error) throw error
   return rows.length
+}
+
+export async function deleteCloudMeetings(userId: string, meetingIds: string[]): Promise<number> {
+  const ids = meetingIds.filter((id) => typeof id === 'string' && id.length > 0)
+  if (ids.length === 0) return 0
+  const { error, count } = await admin()
+    .from('user_meetings')
+    .delete({ count: 'exact' })
+    .eq('user_id', userId)
+    .in('meeting_id', ids)
+  if (error) throw error
+  return count ?? ids.length
 }

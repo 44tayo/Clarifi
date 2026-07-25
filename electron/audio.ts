@@ -90,6 +90,30 @@ export type TranscribeOptions = {
 export const MIN_WEBM_BYTES = 1_200
 const MIN_WAV_BYTES = 12_800
 const SYSTEM_SPEECH_RMS_MIN = 0.004
+const MIN_WHISPER_GAP_MS = 3200
+const WHISPER_MAX_RETRIES = 2
+
+let lastWhisperRequestAt = 0
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function waitForWhisperSlot(): Promise<void> {
+  const now = Date.now()
+  const waitMs = lastWhisperRequestAt + MIN_WHISPER_GAP_MS - now
+  if (waitMs > 0) await sleep(waitMs)
+  lastWhisperRequestAt = Date.now()
+}
+
+function parseRetryAfterMs(errorBody: string, status: number): number | null {
+  if (status !== 429) return null
+  const retryMatch = errorBody.match(/try again in\s+(\d+(?:\.\d+)?)\s*s/i)
+  if (retryMatch?.[1]) {
+    return Math.min(15_000, Math.ceil(Number(retryMatch[1]) * 1000) + 250)
+  }
+  return 3500
+}
 
 export function wavRms(buffer: Buffer): number {
   if (buffer.length < 48 || buffer.toString('ascii', 0, 4) !== 'RIFF') {
@@ -144,6 +168,7 @@ async function transcribeAudioBuffer(
     const groqKey = await getCachedGroqKey()
     if (!groqKey) {
       if (await getCachedProxyConfigured()) {
+        await waitForWhisperSlot()
         const transcript = await proxyTranscribe(
           audioBase64,
           format,
@@ -158,40 +183,54 @@ async function transcribeAudioBuffer(
       return null
     }
 
-    const formData = new FormData()
-    formData.append('file', audioBuffer, {
-      filename: `audio.${extension}`,
-      contentType,
-    })
-    formData.append('model', options.model ?? 'whisper-large-v3-turbo')
-    if (language && language !== 'auto') {
-      formData.append('language', language)
-    }
-    if (prompt) {
-      formData.append('prompt', prompt)
-    }
-    formData.append('temperature', '0')
+    for (let attempt = 0; attempt <= WHISPER_MAX_RETRIES; attempt += 1) {
+      await waitForWhisperSlot()
 
-    const response = await fetch(`${getGroqApiBaseUrl()}/openai/v1/audio/transcriptions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${groqKey}`,
-        ...formData.getHeaders(),
-      },
-      body: formData,
-      agent: groqKeepAliveAgent,
-    })
+      const formData = new FormData()
+      formData.append('file', audioBuffer, {
+        filename: `audio.${extension}`,
+        contentType,
+      })
+      formData.append('model', options.model ?? 'whisper-large-v3-turbo')
+      if (language && language !== 'auto') {
+        formData.append('language', language)
+      }
+      if (prompt) {
+        formData.append('prompt', prompt)
+      }
+      formData.append('temperature', '0')
 
-    if (!response.ok) {
+      const response = await fetch(`${getGroqApiBaseUrl()}/openai/v1/audio/transcriptions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${groqKey}`,
+          ...formData.getHeaders(),
+        },
+        body: formData,
+        agent: groqKeepAliveAgent,
+      })
+
+      if (response.ok) {
+        const data = (await response.json()) as { text: string }
+        const transcript = data.text?.trim()
+        console.log('Transcript:', transcript)
+        return transcript || null
+      }
+
       const err = await response.text()
+      const retryAfter = parseRetryAfterMs(err, response.status)
+      if (retryAfter != null && attempt < WHISPER_MAX_RETRIES) {
+        console.warn(`Whisper rate-limited; retrying in ${retryAfter}ms (attempt ${attempt + 1})`)
+        await sleep(retryAfter)
+        lastWhisperRequestAt = 0
+        continue
+      }
+
       console.error('Whisper error:', err)
       return null
     }
 
-    const data = (await response.json()) as { text: string }
-    const transcript = data.text?.trim()
-    console.log('Transcript:', transcript)
-    return transcript || null
+    return null
   } catch (err) {
     console.error('Audio processing error:', err)
     return null

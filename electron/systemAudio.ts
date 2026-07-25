@@ -6,19 +6,31 @@ import { getSystemAudioCaptureMode } from './audioPreferences'
 
 let helperProcess: ChildProcess | null = null
 let audioBuffer: Buffer[] = []
-let onDataCallback: ((buffer: Buffer) => void) | null = null
+let onWavCallback: ((buffer: Buffer) => void) | null = null
+let onPcmCallback: ((pcm: Buffer) => void) | null = null
 let flushTimer: NodeJS.Timeout | null = null
 let silenceCheckTimer: NodeJS.Timeout | null = null
 let hadSpeechInBuffer = false
 let lastSpeechAt = 0
+let flushIntervalMs = 1000
 
-const FLUSH_INTERVAL_MS = 1000
-const FLUSH_MIN_PCM_BYTES = 12_800
+const FLUSH_MIN_PCM_BYTES_BATCH = 12_800
+/** ~200ms of mono 16-bit @ 16 kHz */
+const FLUSH_MIN_PCM_BYTES_STREAM = 6400
 const SILENCE_FLUSH_MS = 500
 const SILENCE_RMS = 0.004
-const SAMPLE_RATE = 16000
+export const SYSTEM_AUDIO_SAMPLE_RATE = 16000
 const CHANNELS = 1
 const BIT_DEPTH = 16
+
+export type SystemAudioHandlers = {
+  /** Called with WAV frames (legacy / recording / batch STT). */
+  onWav?: (wavBuffer: Buffer) => void
+  /** Called with raw PCM frames for live streaming STT. */
+  onPcm?: (pcm: Buffer) => void
+  /** Flush cadence. Use ~200 for Deepgram live; ~1000 for batch. */
+  flushIntervalMs?: number
+}
 
 function pcmRms(pcm: Buffer): number {
   if (pcm.length < 4) return 0
@@ -31,15 +43,26 @@ function pcmRms(pcm: Buffer): number {
   return Math.sqrt(sumSquares / sampleCount)
 }
 
+function minFlushBytes(): number {
+  return onPcmCallback ? FLUSH_MIN_PCM_BYTES_STREAM : FLUSH_MIN_PCM_BYTES_BATCH
+}
+
 function flushBuffer(force = false): void {
-  if (audioBuffer.length === 0 || !onDataCallback) return
+  if (audioBuffer.length === 0) return
+  if (!onWavCallback && !onPcmCallback) return
 
   const combined = Buffer.concat(audioBuffer)
-  if (!force && combined.length < FLUSH_MIN_PCM_BYTES) return
+  if (!force && combined.length < minFlushBytes()) return
 
   audioBuffer = []
   hadSpeechInBuffer = false
-  onDataCallback(addWavHeader(combined, SAMPLE_RATE, CHANNELS, BIT_DEPTH))
+
+  if (onPcmCallback) {
+    onPcmCallback(combined)
+  }
+  if (onWavCallback) {
+    onWavCallback(addWavHeader(combined, SYSTEM_AUDIO_SAMPLE_RATE, CHANNELS, BIT_DEPTH))
+  }
 }
 
 function notePcmEnergy(pcm: Buffer): void {
@@ -53,12 +76,14 @@ function notePcmEnergy(pcm: Buffer): void {
 function maybeFlushOnSilence(): void {
   if (!hadSpeechInBuffer || audioBuffer.length === 0) return
   const combined = Buffer.concat(audioBuffer)
-  if (combined.length < FLUSH_MIN_PCM_BYTES) return
+  if (combined.length < minFlushBytes()) return
   if (Date.now() - lastSpeechAt < SILENCE_FLUSH_MS) return
   flushBuffer(true)
 }
 
-export function startSystemAudio(onData: (buffer: Buffer) => void): boolean {
+export function startSystemAudio(
+  onDataOrHandlers: ((buffer: Buffer) => void) | SystemAudioHandlers,
+): boolean {
   if (process.platform !== 'darwin') return false
 
   const helperPath = app.isPackaged
@@ -70,7 +95,16 @@ export function startSystemAudio(onData: (buffer: Buffer) => void): boolean {
     return false
   }
 
-  onDataCallback = onData
+  if (typeof onDataOrHandlers === 'function') {
+    onWavCallback = onDataOrHandlers
+    onPcmCallback = null
+    flushIntervalMs = 1000
+  } else {
+    onWavCallback = onDataOrHandlers.onWav ?? null
+    onPcmCallback = onDataOrHandlers.onPcm ?? null
+    flushIntervalMs = onDataOrHandlers.flushIntervalMs ?? (onPcmCallback ? 200 : 1000)
+  }
+
   hadSpeechInBuffer = false
   lastSpeechAt = 0
   const captureMode = getSystemAudioCaptureMode()
@@ -95,9 +129,9 @@ export function startSystemAudio(onData: (buffer: Buffer) => void): boolean {
 
   flushTimer = setInterval(() => {
     flushBuffer(true)
-  }, FLUSH_INTERVAL_MS)
+  }, flushIntervalMs)
 
-  silenceCheckTimer = setInterval(maybeFlushOnSilence, 200)
+  silenceCheckTimer = setInterval(maybeFlushOnSilence, 100)
 
   return true
 }
@@ -111,14 +145,17 @@ export function stopSystemAudio(): void {
     clearInterval(silenceCheckTimer)
     silenceCheckTimer = null
   }
+  flushBuffer(true)
   if (helperProcess) {
     helperProcess.kill()
     helperProcess = null
   }
   audioBuffer = []
-  onDataCallback = null
+  onWavCallback = null
+  onPcmCallback = null
   hadSpeechInBuffer = false
   lastSpeechAt = 0
+  flushIntervalMs = 1000
 }
 
 function addWavHeader(

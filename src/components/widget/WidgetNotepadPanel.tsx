@@ -6,6 +6,7 @@ import { AudioSessionWaveform } from './AudioSessionWaveform'
 import { ClarifiLogoMark } from './ClarifiLogoMark'
 
 export type WidgetPanel = 'notepad' | 'transcript'
+export type WidgetLiveInterim = { text: string; speaker: string }
 
 type WidgetNotepadPanelProps = {
   title: string
@@ -17,6 +18,7 @@ type WidgetNotepadPanelProps = {
   notes: string
   transcript: TranscriptEntry[]
   speakerLabels: Record<string, string>
+  interim?: Partial<Record<'mic' | 'system', WidgetLiveInterim>>
   onPanelChange: (panel: WidgetPanel) => void
   onNotesChange: (notes: string) => void
   onCollapse: () => void
@@ -101,6 +103,7 @@ export function WidgetNotepadPanel({
   notes,
   transcript,
   speakerLabels,
+  interim,
   onPanelChange,
   onNotesChange,
   onCollapse,
@@ -122,6 +125,14 @@ export function WidgetNotepadPanel({
   )
 
   const blocks = useMemo(() => groupTranscript(transcript), [transcript])
+
+  const interimEntries = useMemo(
+    () =>
+      (['mic', 'system'] as const)
+        .map((source) => interim?.[source])
+        .filter((value): value is WidgetLiveInterim => Boolean(value?.text.trim())),
+    [interim],
+  )
 
   const uniqueSpeakers = useMemo(() => {
     const seen = new Set<string>()
@@ -161,7 +172,7 @@ export function WidgetNotepadPanel({
     const el = transcriptScrollRef.current
     if (!el) return
     el.scrollTop = el.scrollHeight
-  }, [transcript, panel])
+  }, [transcript, interimEntries, panel])
 
   const showWave = recording && !paused && activity !== 'silent'
 
@@ -239,7 +250,7 @@ export function WidgetNotepadPanel({
               ref={transcriptScrollRef}
               onScroll={handleTranscriptScroll}
             >
-              {blocks.length === 0 ? (
+              {blocks.length === 0 && interimEntries.length === 0 ? (
                 <div className="widget-transcript-empty">
                   <AudioSessionWaveform active={showWave} size="md" />
                   <p className="widget-empty">
@@ -297,6 +308,32 @@ export function WidgetNotepadPanel({
                   </article>
                 ))
               )}
+              {interimEntries.map((entry, index) => (
+                <article
+                  key={`interim-${index}-${entry.speaker}`}
+                  className="widget-transcript-block is-interim"
+                >
+                  <header className="widget-transcript-block-header">
+                    <span
+                      className="widget-speaker-avatar"
+                      style={{ background: speakerColor(entry.speaker) }}
+                      aria-hidden
+                    >
+                      {displayName(entry.speaker).slice(0, 1).toUpperCase()}
+                    </span>
+                    <span className="widget-speaker-name" aria-disabled="true">
+                      {displayName(entry.speaker)}
+                    </span>
+                    <span className="widget-transcript-live-badge">live</span>
+                  </header>
+                  <div className="widget-transcript-block-body">
+                    <p className="widget-transcript-line">
+                      {entry.text}
+                      <span className="transcript-live-cursor" aria-hidden="true" />
+                    </p>
+                  </div>
+                </article>
+              ))}
             </div>
           </div>
         )}
