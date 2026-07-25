@@ -13,7 +13,7 @@ export type Feature =
   | 'share_meetings'
   | 'folders'
 
-/** Core notetaking works on every plan, including free — Granola-style. */
+/** Core notetaking works during trial and on paid plans. */
 const FREE_FEATURES: Feature[] = ['ai_chat', 'ai_transcribe', 'voice_dictation', 'folders']
 
 const PRO_FEATURES: Feature[] = [
@@ -31,9 +31,9 @@ const PRO_PLUS_FEATURES: Feature[] = [
   'share_meetings',
 ]
 
-/** Free plan keeps unlimited meetings but only surfaces the most recent
- * window of note history — matches Granola's free-tier shape. Paid plans
- * keep full history forever. */
+/** Unpaid / post-trial accounts may retain only a short recent window of
+ * note history. Pro and Pro+ (including the 30-day free trial) keep full
+ * history. */
 export const FREE_HISTORY_RETENTION_DAYS = 30
 
 export function normalizePlan(value: unknown): Plan {

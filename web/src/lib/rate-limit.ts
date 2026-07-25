@@ -5,9 +5,9 @@ import { getSupabaseAdmin } from './supabase-admin'
 /** Unified quota bucket for all LLM API usage (chat, suggest, transcribe). */
 export const LLM_QUOTA_ROUTE = 'llm_session'
 
-// Shared abuse-prevention ceiling, not a plan-tiering mechanism — free, Pro,
-// and Pro+ all get the same generous hourly budget. The free plan's real
-// limit is note history (see getHistoryRetentionDays in entitlements.ts).
+// Shared abuse-prevention ceiling, not a plan-tiering mechanism — unpaid,
+// trial, Pro, and Pro+ all get a generous hourly budget. Product limits are
+// enforced via Stripe trial + paid entitlements, not this hourly cap.
 const HOURLY_LIMITS: Record<Plan, number> = {
   free: 120,
   pro: 120,

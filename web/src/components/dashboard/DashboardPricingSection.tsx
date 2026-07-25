@@ -48,7 +48,7 @@ export function DashboardPricingSection() {
       compact
       className="mt-8"
       heading="Upgrade your plan"
-      description="You're on the free plan with 30 days of note history. Upgrade to Pro or Pro+ for unlimited history."
+      description="Start a 30-day free trial of Pro or Pro+. Cancel anytime before the trial ends — no charge until then."
       plans={plans}
     />
   )

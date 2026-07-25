@@ -35,6 +35,287 @@ export type BlogPost = {
 
 export const BLOG_POSTS: BlogPost[] = [
   {
+    slug: 'how-to-take-meeting-notes-without-a-bot',
+    title: 'How to Take Meeting Notes Without a Bot Joining (2026 Guide)',
+    excerpt:
+      'Want better meeting notes without a recorder bot on the guest list? Here is how bot-free AI notepads work — and a clear step-by-step with Clarifi on Mac.',
+    date: 'July 25, 2026',
+    readTime: '10 min read',
+    category: 'blog',
+    author: { name: 'Clarifi Team' },
+    image: '/blog/how-to-take-meeting-notes-without-a-bot.png',
+    imageAlt:
+      'Hand holding a magnifying glass over meeting notes — illustrating how bot-free AI turns raw notes into clear insights',
+    metaTitle: 'How to Take Meeting Notes Without a Bot (2026)',
+    metaDescription:
+      'Learn how to take meeting notes without a bot joining Zoom, Meet, or Teams. Bot-free AI notepads capture on-device — step-by-step with Clarifi on Mac.',
+    blocks: [
+      {
+        type: 'p',
+        text: 'Short answer: Use a bot-free AI notepad that captures audio on your device — nothing joins the call as a participant. Skip Otter- or Fireflies-style recorder bots when clients, candidates, or company policy hate an extra name on the guest list. On Mac, Clarifi listens in the background while you jot light notes, then turns the meeting into a summary, decisions, and action items.',
+        strong: true,
+      },
+      {
+        type: 'p',
+        text: 'If you have ever watched a sales call go quiet the moment "Notetaker Bot" appears in the participant strip, you already know the problem. Great notes should not require an awkward third party on every Zoom, Google Meet, or Teams invite.',
+      },
+      {
+        type: 'p',
+        text: 'This guide covers how to take meeting notes without a bot joining — what bot-free actually means, three practical options, a step-by-step Clarifi workflow, platform tips, and the consent rules you still need to follow.',
+      },
+      { type: 'hr' },
+      {
+        type: 'h2',
+        id: 'why-bots-feel-broken',
+        text: 'Why meeting bots feel broken',
+      },
+      {
+        type: 'p',
+        text: 'Classic AI notetakers (Otter, Fireflies, Fathom, and similar) usually join the call as a visible participant. That design is simple for the vendor — and noisy for everyone else.',
+      },
+      {
+        type: 'ul',
+        items: [
+          'Someone asks "who invited that?" mid-intro and the room tightens.',
+          'Hosts see a recording banner or guest they did not approve.',
+          'Enterprise rooms block unknown bots, so your "notes tool" never gets in.',
+          'People perform for the recorder instead of talking like humans.',
+        ],
+      },
+      {
+        type: 'p',
+        text: 'Bots are fine for many internal standups. They are a poor fit for client calls, interviews, fundraising, legal-adjacent chats, or any room where trust is the product.',
+      },
+      {
+        type: 'h2',
+        id: 'what-bot-free-means',
+        text: 'What “meeting notes without a bot” actually means',
+      },
+      {
+        type: 'p',
+        text: 'Bot-free AI meeting notes run as software on your computer. They capture microphone and system audio locally. Nothing new appears on the Zoom, Meet, or Teams participant list — because nothing joined.',
+      },
+      {
+        type: 'p',
+        text: 'That is the same architecture behind Clarifi, Granola, and Jamie-class tools: on-device capture → transcript → structured notes after you hang up. It also works when there is no video room at all — phone calls and in-person meetings can use the Mac mic.',
+      },
+      {
+        type: 'p',
+        text: 'Bot-free is not the same as "secret" or "undetectable surveillance." You are still documenting a conversation. Treat consent and company policy seriously (more on that below).',
+      },
+      {
+        type: 'h2',
+        id: 'three-ways',
+        text: 'Three ways to take notes without a bot joining',
+      },
+      {
+        type: 'table',
+        headers: ['Approach', 'How it works', 'Best for', 'Tradeoff'],
+        rows: [
+          [
+            'Manual notes',
+            'Notion, Docs, or a paper pad while you listen',
+            'Short, low-stakes check-ins',
+            'You miss details the moment you type; no transcript',
+          ],
+          [
+            'Bot notetaker',
+            'A participant joins, records, summarizes later',
+            'Internal meetings where bots are welcome',
+            'Visible bot, recording banners, blocked rooms',
+          ],
+          [
+            'Bot-free AI notepad',
+            'Desktop app captures on-device; you jot light notes; AI expands after',
+            'Client calls, interviews, any meeting where the guest list should stay clean',
+            'Needs a Mac app install (Clarifi today); still requires honest consent habits',
+          ],
+        ],
+      },
+      {
+        type: 'p',
+        text: 'If you are still weighing categories — notetaker vs copilot vs notepad — start with our guide on whether you actually need an AI meeting assistant.',
+      },
+      {
+        type: 'link',
+        text: 'AI Meeting Assistant: Do You Actually Need One in 2026? →',
+        href: '/blog/ai-meeting-assistant',
+      },
+      {
+        type: 'cta',
+        text: 'Prefer the bot-free path? Clarifi offers a 30-day free trial on Pro and Pro+ — no bot on the guest list.',
+        href: '/pricing',
+        label: 'Start free trial →',
+      },
+      {
+        type: 'h2',
+        id: 'step-by-step-clarifi',
+        text: 'Step-by-step: meeting notes without a bot (Clarifi on Mac)',
+      },
+      {
+        type: 'p',
+        text: 'Here is the practical workflow Clarifi is built for — light notes during the call, clean artifact after.',
+      },
+      {
+        type: 'ol',
+        items: [
+          'Create a free Clarifi account and download the Mac app.',
+          'Open Clarifi before your Zoom, Meet, or Teams call. Start a meeting note and begin capture when the conversation starts.',
+          'Stay present. Use the scratchpad for sparse cues only — names, numbers, "follow up on security doc" — not a full transcript.',
+          'When the call ends, stop capture. Clarifi merges your notes with the on-device transcript into a summary, decisions, action items, and full transcript.',
+          'Review, rename speakers if needed, Ask AI about what was said, then share the note or copy a follow-up.',
+        ],
+      },
+      {
+        type: 'p',
+        text: 'You never invite a Clarifi bot to the calendar event. Guests see the same participant list they would without any note tool.',
+      },
+      {
+        type: 'h2',
+        id: 'platforms',
+        text: 'Zoom, Google Meet, Teams — and in-person',
+      },
+      {
+        type: 'p',
+        text: 'The pattern is the same on every video platform: join the meeting yourself, let Clarifi listen on the Mac. No calendar bot, no guest approval for a third-party recorder.',
+      },
+      {
+        type: 'ul',
+        items: [
+          'Zoom — start Clarifi capture when you join; jot scratchpad notes as usual.',
+          'Google Meet — same flow; useful when Meet rooms block unknown bots.',
+          'Microsoft Teams — same flow; avoids the "extra guest" problem in locked tenants.',
+          'In-person or phone — use microphone capture; there is no bot to join because there is no video room.',
+        ],
+      },
+      {
+        type: 'p',
+        text: 'For a deeper comparison of Clarifi against Granola, Cluely, and LockedIn AI, see our 2026 tool breakdown.',
+      },
+      {
+        type: 'link',
+        text: 'Clarifi vs Cluely, Granola & LockedIn AI →',
+        href: '/blog/clarifi-vs-cluely-granola-lockedin-ai',
+      },
+      {
+        type: 'h2',
+        id: 'consent',
+        text: 'Consent and ethics still matter',
+      },
+      {
+        type: 'p',
+        text: 'Bot-free does not mean "record everyone silently and hope for the best." Laws and company policies vary. In many places you need consent to record or transcribe. In others, one-party consent is enough — but trust with a client may still require a simple heads-up.',
+      },
+      {
+        type: 'ul',
+        items: [
+          'Check your employer’s recording and AI policy before you capture.',
+          'When in doubt, say you are taking notes with an AI notepad — the same courtesy you would give a human note-taker.',
+          'Do not use bot-free tools to hide surveillance. Discretion is about not disrupting the call with a bot avatar, not about deceiving people.',
+        ],
+      },
+      {
+        type: 'p',
+        text: 'For the sales-ethics angle on live AI support, read our honest take on whether using AI in meetings is cheating.',
+      },
+      {
+        type: 'link',
+        text: 'Is Using AI in Meetings Cheating? →',
+        href: '/blog/is-using-ai-in-meetings-cheating',
+      },
+      {
+        type: 'h2',
+        id: 'when-to-choose',
+        text: 'When Clarifi vs when a bot is fine',
+      },
+      {
+        type: 'table',
+        headers: ['Situation', 'Better choice', 'Why'],
+        rows: [
+          [
+            'Client demos, interviews, fundraising',
+            'Bot-free notepad (Clarifi)',
+            'Guest list stays clean; conversation stays natural',
+          ],
+          [
+            'Internal standup where bots are normal',
+            'Bot notetaker or shared doc',
+            'Visibility is not a problem; team vaults may help',
+          ],
+          [
+            'You want light notes + AI summary after every call',
+            'Clarifi',
+            'Built as a Mac AI notepad — 30-day free trial on Pro and Pro+',
+          ],
+          [
+            'You need live prompts mid-sentence',
+            'Real-time copilot tools',
+            'Different job than post-call notes — see our comparison post',
+          ],
+        ],
+      },
+      {
+        type: 'h2',
+        id: 'faq',
+        text: 'FAQ',
+      },
+      {
+        type: 'h3',
+        text: 'Does Clarifi join Zoom as a bot?',
+      },
+      {
+        type: 'p',
+        text: 'No. Clarifi is a Mac app that captures audio on your device. It never appears on the Zoom, Google Meet, or Teams participant list.',
+      },
+      {
+        type: 'h3',
+        text: 'How is this different from Otter or Fireflies?',
+      },
+      {
+        type: 'p',
+        text: 'Most Otter- and Fireflies-style workflows rely on a bot participant (or a very visible recorder). Clarifi is a bot-free AI notepad: you jot sparse notes, it listens locally, and you get structured notes after the call.',
+      },
+      {
+        type: 'h3',
+        text: 'Is taking meeting notes without a bot legal?',
+      },
+      {
+        type: 'p',
+        text: 'It depends on your location and company policy. Bot-free only changes how capture works — not whether consent or disclosure is required. When unsure, ask or disclose.',
+      },
+      {
+        type: 'h3',
+        text: 'Does bot-free AI meeting notes work on Google Meet and Teams?',
+      },
+      {
+        type: 'p',
+        text: 'Yes. Because nothing joins the meeting, Clarifi works the same way across Zoom, Google Meet, and Microsoft Teams, plus in-person conversations on the Mac mic.',
+      },
+      {
+        type: 'h3',
+        text: 'Is Clarifi available on Windows or iPhone?',
+      },
+      {
+        type: 'p',
+        text: 'Clarifi is a Mac app today. Sign up, download for Mac, and start a 30-day free trial of Pro or Pro+ — cancel anytime before you are charged.',
+      },
+      {
+        type: 'p',
+        text: 'Clarifi is an AI notepad for meetings — jot light notes while it listens, then get a clean summary, decisions, and action items. No bot joins your call.',
+      },
+      {
+        type: 'cta',
+        text: 'Start a 30-day free trial on Pro or Pro+.',
+        href: '/pricing',
+        label: 'Start free trial →',
+      },
+      {
+        type: 'p',
+        text: 'Questions or takes? Find us on X @Clarifi_ai.',
+      },
+    ],
+  },
+  {
     slug: 'clarifi-vs-cluely-granola-lockedin-ai',
     featured: true,
     title: 'Clarifi vs Cluely, Granola & LockedIn AI: Which AI Meeting Tool Fits You in 2026?',
@@ -110,7 +391,7 @@ export const BLOG_POSTS: BlogPost[] = [
             'Summary, decisions, actions, transcript',
             'Personal notepad (no stealth overlay)',
             'Personal-first (no team workspace yet)',
-            'Free forever · unlimited meetings · 30-day history',
+            '30-day free trial on Pro & Pro+',
           ],
           [
             'Cluely',
@@ -164,7 +445,7 @@ export const BLOG_POSTS: BlogPost[] = [
           'No "AI notetaker joined the meeting" awkwardness',
           'In-call scratchpad plus floating recording widget',
           'Works with personal email — built for Europe and anyone work-email tools lock out',
-          'Free forever: unlimited meetings with 30 days of note history',
+          '30-day free trial on Pro and Pro+',
           'Summary, decisions, actions, and transcript after every call',
         ],
       },
@@ -333,12 +614,12 @@ export const BLOG_POSTS: BlogPost[] = [
       { type: 'h2', id: 'clarifi-pricing', text: 'Clarifi pricing' },
       {
         type: 'p',
-        text: 'Clarifi starts free — unlimited meetings with 30 days of note history. Paid plans unlock longer history and team features when you need them:',
+        text: 'Clarifi offers a 30-day free trial on both Pro and Pro+. After the trial, paid plans continue unless you cancel:',
       },
       {
         type: 'ul',
         items: [
-          'Free — unlimited meetings, 30-day note history, AI summary after every call',
+          '30-day free trial on Pro and Pro+ — cancel anytime before you are charged',
           'Pro — $19/month: unlimited history and personal power features',
           'Pro+ — $39/seat/month: team sharing when you outgrow a personal notepad',
         ],
@@ -386,17 +667,17 @@ export const BLOG_POSTS: BlogPost[] = [
       { type: 'h2', id: 'bottom-line', text: 'Bottom line' },
       {
         type: 'p',
-        text: 'The best AI meeting tool in 2026 is not one name on a list — it is the one that matches when you need help. Granola and Clarifi win post-meeting clarity (Clarifi adds personal-email access, a floating widget, and scratchpad). LockedIn AI wins interview loops. Cluely competes for live assistance without a bot. Clarifi is built for people who want notes they trust after every call — free forever with 30-day history.',
+        text: 'The best AI meeting tool in 2026 is not one name on a list — it is the one that matches when you need help. Granola and Clarifi win post-meeting clarity (Clarifi adds personal-email access, a floating widget, and scratchpad). LockedIn AI wins interview loops. Cluely competes for live assistance without a bot. Clarifi is built for people who want notes they trust after every call — with a 30-day free trial on Pro and Pro+.',
       },
       {
         type: 'cta',
-        text: 'Try Clarifi free — unlimited meetings, no bot on the guest list.',
+        text: 'Try Clarifi with a 30-day free trial — no bot on the guest list.',
         href: '/download',
         label: 'Download Clarifi →',
       },
       {
         type: 'cta',
-        text: 'See what’s included on the free plan.',
+        text: 'See Pro and Pro+ pricing (30-day free trial on both).',
         href: '/pricing',
         label: 'See pricing →',
       },
@@ -602,9 +883,9 @@ export const BLOG_POSTS: BlogPost[] = [
       },
       {
         type: 'cta',
-        text: 'Get started free — unlimited meetings with 30 days of note history.',
-        href: '/sign-up',
-        label: 'Sign up free →',
+        text: 'Start a 30-day free trial on Pro or Pro+.',
+        href: '/pricing',
+        label: 'Start free trial →',
       },
       {
         type: 'p',
@@ -834,9 +1115,9 @@ export const BLOG_POSTS: BlogPost[] = [
       },
       {
         type: 'cta',
-        text: 'Get started free — unlimited meetings with 30 days of note history.',
-        href: '/sign-up',
-        label: 'Sign up free →',
+        text: 'Start a 30-day free trial on Pro or Pro+.',
+        href: '/pricing',
+        label: 'Start free trial →',
       },
       {
         type: 'p',

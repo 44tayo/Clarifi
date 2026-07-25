@@ -8,8 +8,8 @@ export const FAQ_ITEMS = [
     a: 'Anyone in meetings: team syncs, client calls, interviews, lectures, and 1:1s. Clarifi runs as a lightweight desktop notepad alongside Zoom, Meet, Teams, and any app you already use.',
   },
   {
-    q: 'Is there a free plan?',
-    a: "Yes. Clarifi's free plan includes unlimited meetings with 30 days of note history. Upgrade to Pro or Pro+ for unlimited history, sharing, and team features.",
+    q: 'Is there a free trial?',
+    a: 'Yes. Pro and Pro+ both include a 30-day free trial. You can cancel anytime before it ends and you will not be charged. After the trial, Pro is $19/month and Pro+ is $39/seat/month.',
   },
   {
     q: 'How do I pair the desktop app?',

@@ -75,7 +75,7 @@ const PROMPT_CHIPS = [
 ]
 
 export const CLARIFI_INTRO_REPLY =
-  'Clarifi is an AI notepad for meetings — it listens in the background while you jot quick notes, then turns everything into a clean summary, decisions, and action items the moment you\'re done. No bot joins your call. Sign up free to get started.'
+  'Clarifi is an AI notepad for meetings — it listens in the background while you jot quick notes, then turns everything into a clean summary, decisions, and action items the moment you\'re done. No bot joins your call. Start a 30-day free trial to get started.'
 
 function isClarifiQuestion(message: string): boolean {
   const lower = message.toLowerCase()

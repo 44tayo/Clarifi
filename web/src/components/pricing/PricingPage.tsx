@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useState } from 'react'
 import { MarketingNav } from '@/components/marketing/MarketingNav'
@@ -58,9 +57,10 @@ export function PricingPage() {
         )}
 
         <section className="pricing-hero" data-reveal>
-          <h1 className="pricing-hero-title">Free to start. Upgrade when you need more.</h1>
+          <h1 className="pricing-hero-title">Try Clarifi free for 30 days.</h1>
           <p className="pricing-hero-sub">
-            Unlimited meetings on every plan. Upgrade for unlimited note history and team features.
+            Pro and Pro+ both include a 30-day free trial. Cancel anytime before it ends — no charge
+            until the trial is over.
           </p>
 
           <div className="pricing-toggles">
@@ -121,19 +121,13 @@ export function PricingPage() {
                 ) : null}
               </div>
 
-              {plan.id === 'free' ? (
-                <Link href="/sign-up" className="pricing-card-cta">
-                  {plan.cta}
-                </Link>
-              ) : (
-                <PricingCheckoutButton
-                  planId={plan.id}
-                  interval={billing}
-                  className="pricing-card-cta"
-                >
-                  {plan.cta}
-                </PricingCheckoutButton>
-              )}
+              <PricingCheckoutButton
+                planId={plan.id}
+                interval={billing}
+                className="pricing-card-cta"
+              >
+                {plan.cta}
+              </PricingCheckoutButton>
 
               <p className="pricing-card-tagline">{plan.tagline}</p>
 

@@ -16,6 +16,9 @@ export type PricingPlan = {
   features: string[]
 }
 
+/** Days of free trial on Pro and Pro+ Stripe subscriptions. */
+export const TRIAL_DAYS = 30
+
 const PLAN_AMOUNTS: Record<'pro' | 'pro_plus', { monthly: number; annualTotal: number }> = {
   pro: { monthly: 19, annualTotal: 180 },
   pro_plus: { monthly: 39, annualTotal: 348 },
@@ -39,6 +42,11 @@ export function maxAnnualSavingsPercent() {
 }
 
 export const PRICING_FEATURES = [
+  {
+    label: '30-day free trial',
+    pro: 'Included',
+    proPlus: 'Included',
+  },
   {
     label: 'Note history',
     pro: 'Unlimited',
@@ -91,39 +99,27 @@ export const PRICING_FEATURES = [
   },
 ] as const
 
+/** Public pricing cards — Pro and Pro+ only (both include a 30-day free trial). */
 export function getPricingPlans(interval: BillingInterval = 'monthly'): PricingPlan[] {
   const isAnnual = interval === 'annual'
 
   return [
-    {
-      id: 'free',
-      name: 'Free',
-      audience: 'Individual',
-      price: '$0',
-      period: '',
-      tagline: 'Unlimited meetings with 30 days of note history.',
-      cta: 'Get started free',
-      features: [
-        'Unlimited meetings, recorded and transcribed',
-        '30 days of note history',
-        'AI-enhanced summaries and action items',
-        'Floating widget + scratchpad during calls',
-      ],
-    },
     {
       id: 'pro',
       name: 'Pro',
       audience: 'Individual',
       price: isAnnual ? '$15' : '$19',
       period: isAnnual ? '/ month' : '/ month',
-      billedNote: isAnnual ? 'Billed $180 annually' : undefined,
+      billedNote: isAnnual ? 'Billed $180 annually after trial' : 'After 30-day free trial',
       savingsNote: isAnnual ? annualSavings('pro').label : undefined,
-      tagline: 'Unlimited history and access for solo operators.',
-      cta: 'Upgrade to Pro',
+      badge: '30-day free trial',
+      tagline: 'Full Clarifi for solo operators — try free for 30 days.',
+      cta: 'Start 30-day free trial',
       features: [
-        'Unlimited note history — never locked out of old meetings',
-        'Unlimited AI responses',
+        '30-day free trial — cancel anytime',
         'Unlimited meeting notetaking',
+        'Unlimited note history',
+        'Unlimited AI responses',
         'Unlimited custom prompting',
         'Custom keybinds',
         'Priority support',
@@ -133,14 +129,17 @@ export function getPricingPlans(interval: BillingInterval = 'monthly'): PricingP
       id: 'pro_plus',
       name: 'Pro+',
       audience: 'Team',
-      badge: 'For teams',
+      badge: '30-day free trial',
       price: isAnnual ? '$29' : '$39',
       period: '/ seat / month',
-      billedNote: isAnnual ? 'Billed $348 per seat annually' : undefined,
+      billedNote: isAnnual
+        ? 'Billed $348 per seat annually after trial'
+        : 'After 30-day free trial',
       savingsNote: isAnnual ? annualSavings('pro_plus').label : undefined,
-      tagline: 'Everything in Pro, built for teams.',
-      cta: 'Upgrade to Pro+',
+      tagline: 'Everything in Pro for teams — try free for 30 days.',
+      cta: 'Start 30-day free trial',
       features: [
+        '30-day free trial — cancel anytime',
         'Everything in Pro',
         'Unlimited note history',
         'Shared team communities',

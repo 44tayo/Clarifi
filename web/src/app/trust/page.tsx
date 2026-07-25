@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { MarketingNav } from '@/components/marketing/MarketingNav'
-import { FREE_HISTORY_RETENTION_DAYS } from '@/lib/entitlements'
 import '../legal.css'
 
 const CONTACT_EMAIL = 'tayowilliams23@gmail.com'
@@ -120,11 +119,10 @@ export default function TrustPage() {
 
           <h2 id="retention">Data Retention &amp; Deletion</h2>
           <p>
-            Meetings themselves are never limited — every plan, including the free plan, supports
-            unlimited meetings. The free plan keeps your{' '}
-            <strong>most recent {FREE_HISTORY_RETENTION_DAYS} days</strong> of note history visible;
-            older notes are preserved (not deleted) and become viewable again if you upgrade. Pro and
-            Pro+ keep full history with no time limit.
+            Pro and Pro+ both include a <strong>30-day free trial</strong>, then continue as paid
+            subscriptions unless you cancel. While you are on Pro or Pro+, your full meeting note
+            history stays visible with no time limit. If your subscription ends, we preserve your
+            data; contact us if you need export or deletion help.
           </p>
           <p>
             You can request full deletion of your account and associated data at any time by emailing{' '}

@@ -30,7 +30,7 @@ cd web && npm run dev
 ## What the app includes
 
 - First-run onboarding (welcome → connect → mic / system-audio permissions)
-- Meetings sidebar with free-plan 30-day history lock
+- Meetings sidebar with history retention for unpaid accounts
 - In-call scratchpad + live transcript
 - Floating recording widget (timer / stop) while capturing
 - Post-meeting AI summary with Summary / Transcript / Scratchpad tabs

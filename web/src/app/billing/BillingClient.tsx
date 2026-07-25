@@ -71,8 +71,8 @@ export default function BillingClient() {
       <div className="max-w-4xl mx-auto px-8 py-12">
         <h1 className="text-3xl font-bold mb-2">Choose your plan</h1>
         <p className="text-white/50 mb-6">
-          Free forever with unlimited meetings and 30 days of note history. Upgrade any time for
-          unlimited history and team features.
+          Pro and Pro+ both include a 30-day free trial. You won&apos;t be charged until the trial
+          ends — cancel anytime.
         </p>
 
         {checkoutStatus === 'success' && (
