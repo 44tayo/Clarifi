@@ -32,8 +32,13 @@ export default async function proxy(request: NextRequest) {
     return NextResponse.redirect(canonical, 308)
   }
 
-  if (pathname === '/live' || pathname === '/prelaunch' || pathname.startsWith('/preview')) {
-    return NextResponse.redirect(new URL('/', request.url))
+  if (
+    pathname === '/home' ||
+    pathname === '/live' ||
+    pathname === '/prelaunch' ||
+    pathname.startsWith('/preview')
+  ) {
+    return NextResponse.redirect(new URL('/', request.url), 308)
   }
 
   // Supabase sometimes returns ?code= on Site URL (/). Forward those to the
