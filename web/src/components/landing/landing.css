@@ -289,6 +289,12 @@
   background: var(--cl-blue);
 }
 
+/* White Apple mark on blue download CTAs (nav + hero) */
+.bg-primary .apple-logo,
+.download-mac-btn-secondary .apple-logo {
+  filter: brightness(0) invert(1);
+}
+
 .download-mac-btn-outline {
   background: #fff;
   color: var(--cl-navy, #1a1a2e);

@@ -82,8 +82,18 @@ export function HeroBackgroundPaths({ className }: { className?: string }) {
         className="absolute inset-0"
         style={{
           background:
-            'linear-gradient(180deg, rgba(37,99,235,0.52) 0%, rgba(59,130,246,0.22) 38%, transparent 62%)',
+            'linear-gradient(180deg, rgba(37,99,235,0.45) 0%, rgba(59,130,246,0.2) 38%, transparent 62%)',
         }}
+      />
+
+      {/* Soft darkening behind copy so white title/subtitle stay readable */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(ellipse 70% 55% at 50% 28%, rgba(8,16,36,0.42) 0%, rgba(8,16,36,0.18) 45%, transparent 72%)',
+        }}
+        aria-hidden
       />
 
       <div

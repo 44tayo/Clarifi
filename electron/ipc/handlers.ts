@@ -135,6 +135,7 @@ import {
   type TranscriptEntry,
   type TranscriptSource,
 } from '../transcriptUtils'
+import { DeepgramLiveSession, type LiveSpeakerState } from '../deepgramLive'
 
 let handlersRegistered = false
 let sessionTranscriptEntries: TranscriptEntry[] = []
@@ -1222,9 +1223,9 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
       }
       const audioBase64 = typeof payload?.audioBase64 === 'string' ? payload.audioBase64 : ''
       if (!audioBase64) return { error: 'audio_required' }
-      const format = payload?.format === 'wav' ? 'wav' : 'webm'
       try {
-        const text = await transcribeDictationAudio(audioBase64, { format })
+        // Format is sniffed from the buffer inside transcribeAudioBuffer.
+        const text = await transcribeDictationAudio(audioBase64)
         if (!text) return { error: 'transcribe_failed' }
         return { text }
       } catch (err) {

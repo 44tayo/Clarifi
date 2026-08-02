@@ -25,6 +25,12 @@
   padding-right: 1.5rem;
 }
 
+/* White Apple mark on blue primary CTAs */
+.bg-primary .apple-logo,
+.download-mac-btn-secondary .apple-logo {
+  filter: brightness(0) invert(1);
+}
+
 .marketing-faq {
   padding-top: 2.5rem;
   padding-bottom: 3.5rem;

@@ -29,6 +29,7 @@ export function AppleLogo({ size = 16 }: { size?: number }) {
       width={size}
       height={size}
       aria-hidden
+      className="apple-logo"
       style={{ display: 'block', width: size, height: size, flexShrink: 0 }}
     />
   )

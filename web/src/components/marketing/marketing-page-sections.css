@@ -39,20 +39,20 @@
 }
 
 .marketing-page .landing-hero-scroll .marketing-hero-title,
-.marketing-page .landing-hero-scroll .marketing-hero-title > span {
+.marketing-page .landing-hero-scroll .marketing-hero-title span {
   color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28), 0 2px 18px rgba(0, 0, 0, 0.32);
 }
 
-.marketing-page .landing-hero-scroll .marketing-hero-title > span > span:first-of-type {
-  color: #ffffff !important;
-}
-
-.marketing-page .landing-hero-scroll .marketing-hero-title .hero-rotating-word {
+.marketing-page .landing-hero-scroll .marketing-hero-title .hero-rotating-word,
+.marketing-page .landing-hero-scroll .marketing-hero-title .hero-rotating-word span {
   color: #60b4ff !important;
+  text-shadow: 0 1px 10px rgba(96, 180, 255, 0.4), 0 1px 8px rgba(0, 0, 0, 0.3);
 }
 
-.marketing-page .landing-hero-scroll .landing-hero-copy .text-muted-foreground {
-  color: rgba(255, 255, 255, 0.88) !important;
+.marketing-page .landing-hero-scroll .landing-hero-subtitle {
+  color: rgba(255, 255, 255, 0.92) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28), 0 2px 14px rgba(0, 0, 0, 0.3);
 }
 
 .marketing-page .logos3-heading {
