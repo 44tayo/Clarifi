@@ -137,6 +137,34 @@ export function HomeView({
                       <span className="home-upcoming-title">
                         {event.title || 'Untitled meeting'}
                       </span>
+                      {event.isOnline && event.meetingUrl ? (
+                        <span
+                          className="home-upcoming-join"
+                          role="button"
+                          tabIndex={0}
+                          title="Open the call and start recording"
+                          onClick={(clickEvent) => {
+                            clickEvent.stopPropagation()
+                            void window.electronAPI.invoke(
+                              'calendar:open-meeting-url',
+                              event.meetingUrl,
+                            )
+                            onStartCalendarEvent(event)
+                          }}
+                          onKeyDown={(keyEvent) => {
+                            if (keyEvent.key !== 'Enter' && keyEvent.key !== ' ') return
+                            keyEvent.preventDefault()
+                            keyEvent.stopPropagation()
+                            void window.electronAPI.invoke(
+                              'calendar:open-meeting-url',
+                              event.meetingUrl,
+                            )
+                            onStartCalendarEvent(event)
+                          }}
+                        >
+                          Join &amp; record
+                        </span>
+                      ) : null}
                       <span className="home-upcoming-chevron" aria-hidden>
                         ›
                       </span>

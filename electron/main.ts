@@ -1,6 +1,6 @@
 import * as path from 'path'
 
-import { app, BrowserWindow, crashReporter, nativeTheme, shell } from 'electron'
+import { app, BrowserWindow, crashReporter, nativeTheme, screen, shell } from 'electron'
 
 import { exchangeAuthToken, invalidateDeviceProfileCache } from './deviceAuth'
 import { initErrorReporting } from './errorReporting'
@@ -86,13 +86,35 @@ if (process.platform === 'darwin') {
   })
 }
 
+/** Default open size: ~25cm × 16.5cm on a typical Mac display (~110 DIP/inch). */
+const DEFAULT_WINDOW_WIDTH_CM = 25
+const DEFAULT_WINDOW_HEIGHT_CM = 16.5
+/** Logical pixels per inch — matches on-screen cm better than raw AppKit 72pt on Retina. */
+const DEFAULT_WINDOW_DIP_PER_INCH = 110
+
+function defaultMainWindowBounds(): { x: number; y: number; width: number; height: number } {
+  const { x: ax, y: ay, width: aw, height: ah } = screen.getPrimaryDisplay().workArea
+  const width = Math.min(
+    aw,
+    Math.max(720, Math.round((DEFAULT_WINDOW_WIDTH_CM / 2.54) * DEFAULT_WINDOW_DIP_PER_INCH)),
+  )
+  const height = Math.min(
+    ah,
+    Math.max(480, Math.round((DEFAULT_WINDOW_HEIGHT_CM / 2.54) * DEFAULT_WINDOW_DIP_PER_INCH)),
+  )
+  const x = Math.round(ax + (aw - width) / 2)
+  const y = Math.round(ay + (ah - height) / 2)
+  return { x, y, width, height }
+}
+
 function createMainWindow(): BrowserWindow {
   const resolved = applyNativeTheme(loadAudioPreferences().theme)
+  const bounds = defaultMainWindowBounds()
   const win = new BrowserWindow({
-    width: 1120,
-    height: 760,
-    minWidth: 880,
-    minHeight: 560,
+    ...bounds,
+    minWidth: 720,
+    minHeight: 480,
+    show: false,
     title: 'Clarifi',
     backgroundColor: THEME_WINDOW_BG[resolved],
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
@@ -103,6 +125,19 @@ function createMainWindow(): BrowserWindow {
       nodeIntegration: false,
       sandbox: true,
     },
+  })
+
+  // Re-apply after macOS/Electron frame restore so first paint matches the default.
+  win.once('ready-to-show', () => {
+    if (win.isDestroyed()) return
+    const next = defaultMainWindowBounds()
+    win.setBounds(next, false)
+    win.show()
+    // Second pass after show — macOS sometimes restores a prior frame on first paint.
+    setTimeout(() => {
+      if (win.isDestroyed()) return
+      win.setBounds(defaultMainWindowBounds(), false)
+    }, 50)
   })
 
   if (isDev) {

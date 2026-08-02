@@ -4,6 +4,7 @@ export type SearchableMeeting = {
   summary?: string
   userNotes?: string
   enhancedNotes?: string
+  transcript?: Array<{ text: string }>
   startedAt?: number
   createdAt: number
 }
@@ -21,10 +22,15 @@ function normalize(value: string): string {
 }
 
 function haystack(meeting: SearchableMeeting): string {
+  const transcriptText = (meeting.transcript ?? []).map((entry) => entry.text).join(' ')
   return normalize(
-    [meeting.title, meeting.summary ?? '', meeting.userNotes ?? '', meeting.enhancedNotes ?? ''].join(
-      ' ',
-    ),
+    [
+      meeting.title,
+      meeting.summary ?? '',
+      meeting.userNotes ?? '',
+      meeting.enhancedNotes ?? '',
+      transcriptText,
+    ].join(' '),
   )
 }
 
@@ -42,7 +48,11 @@ export function scoreMeeting(meeting: SearchableMeeting, query: string): number 
   return 0
 }
 
-export function searchMeetings(meetings: SearchableMeeting[], query: string, limit = 8): SearchableMeeting[] {
+export function searchMeetings<T extends SearchableMeeting>(
+  meetings: T[],
+  query: string,
+  limit = 8,
+): T[] {
   const q = normalize(query)
   if (!q) {
     return [...meetings]

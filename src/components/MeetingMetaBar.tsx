@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { FolderPicker } from './FolderPicker'
+import { TagPicker } from './TagPicker'
 import {
   candidatePeopleFromMeeting,
   displayNameForSpeaker,
@@ -19,6 +20,8 @@ type MeetingMetaBarProps = {
   folders: Folder[]
   onSetFolders: (folderIds: string[]) => void
   onCreateFolder: (name: string) => Promise<Folder | void> | Folder | void
+  allTags: string[]
+  onSetTags: (tags: string[]) => void
   onAssignSpeaker: (speakerKey: string, identity: SpeakerIdentity) => void
   documentLayout?: boolean
   /** Live capture transcript (may be ahead of persisted meeting.transcript). */
@@ -42,6 +45,27 @@ function formatMeetingDateShort(meeting: Meeting): string {
   return new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(
     new Date(start),
   )
+}
+
+/** Granola-inspired detail line: "Wed 24 Jul · 24/07/2026, 19:23" (+ end if present). */
+function formatMeetingDateDetail(meeting: Meeting): string {
+  const created = meeting.createdAt
+  const start = meeting.startedAt ?? meeting.scheduledStart ?? meeting.createdAt
+  const at = created || start
+  const end = meeting.endedAt
+  const date = new Date(at)
+  const weekday = new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(date)
+  const dayMonth = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(date)
+  const numeric = new Intl.DateTimeFormat(undefined, {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(date)
+  const timeOpts: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' }
+  const time = new Intl.DateTimeFormat(undefined, timeOpts).format(date)
+  if (!end) return `${weekday} ${dayMonth} · ${numeric}, ${time}`
+  const endTime = new Intl.DateTimeFormat(undefined, timeOpts).format(new Date(end))
+  return `${weekday} ${dayMonth} · ${numeric}, ${time} – ${endTime}`
 }
 
 function uniqueTranscriptSpeakers(entries: TranscriptEntry[]): string[] {
@@ -173,7 +197,7 @@ function SpeakersPopover({
   onAssignSpeaker: (speakerKey: string, identity: SpeakerIdentity) => void
   onClose: () => void
 }) {
-  const [activeKey, setActiveKey] = useState<string | null>(speakerKeys[0] ?? null)
+  const [activeKey, setActiveKey] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [playing, setPlaying] = useState<string | null>(null)
   const [contactDirectory, setContactDirectory] = useState<ContactDirectoryPerson[]>(
@@ -254,9 +278,8 @@ function SpeakersPopover({
   }, [localCandidates, localContacts, remoteFiltered, query])
 
   useEffect(() => {
-    if (!activeKey && speakerKeys[0]) setActiveKey(speakerKeys[0])
     if (activeKey && !speakerKeys.includes(activeKey)) {
-      setActiveKey(speakerKeys[0] ?? null)
+      setActiveKey(null)
     }
   }, [activeKey, speakerKeys])
 
@@ -385,21 +408,45 @@ function SpeakersPopover({
                 <div className={`speakers-popover-row${active ? ' is-active' : ''}`}>
                   <SpeakerAvatar label={name} seed={email || name || key} />
                   <div className="speakers-popover-row-main">
-                    <button
-                      type="button"
-                      className="speakers-popover-row-select"
-                      onClick={() => setActiveKey(key)}
-                    >
-                      <div className="speakers-popover-name-line">
-                        <span className="speakers-popover-name">{name}</span>
-                        {email ? (
-                          <>
-                            <span className="speakers-popover-dot">·</span>
-                            <span className="speakers-popover-email">{email}</span>
-                          </>
-                        ) : null}
-                      </div>
-                    </button>
+                    <div className="speakers-popover-name-line">
+                      <button
+                        type="button"
+                        className="speakers-popover-name"
+                        onClick={() => setActiveKey((prev) => (prev === key ? null : key))}
+                        aria-expanded={active}
+                        title={active ? 'Close rename' : 'Rename speaker'}
+                      >
+                        {name}
+                      </button>
+                      {email ? (
+                        <>
+                          <span className="speakers-popover-dot">·</span>
+                          <span className="speakers-popover-email">{email}</span>
+                        </>
+                      ) : null}
+                      {canPlaySpeaker(meeting, entries, key) ? (
+                        <button
+                          type="button"
+                          className="speakers-popover-icon-btn"
+                          aria-label={`Play sample of ${name}`}
+                          disabled={playing === key}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            if (playLock.current) return
+                            playLock.current = true
+                            setPlaying(key)
+                            void playSpeakerSnippet(meeting.id, key)
+                              .catch(() => false)
+                              .finally(() => {
+                                playLock.current = false
+                                setPlaying(null)
+                              })
+                          }}
+                        >
+                          {playing === key ? '…' : '▶'}
+                        </button>
+                      ) : null}
+                    </div>
                     {active ? (
                       <div className="speakers-popover-active-body">
                         <input
@@ -416,32 +463,13 @@ function SpeakersPopover({
                               event.preventDefault()
                               commitTyped()
                             }
+                            if (event.key === 'Escape') {
+                              event.preventDefault()
+                              setActiveKey(null)
+                            }
                           }}
                         />
                         {snippet ? <p className="speakers-popover-snippet">{snippet}</p> : null}
-                        <div className="speakers-popover-actions">
-                          {canPlaySpeaker(meeting, entries, key) ? (
-                            <button
-                              type="button"
-                              className="speakers-popover-icon-btn"
-                              aria-label={`Play sample of ${name}`}
-                              disabled={playing === key}
-                              onClick={() => {
-                                if (playLock.current) return
-                                playLock.current = true
-                                setPlaying(key)
-                                void playSpeakerSnippet(meeting.id, key)
-                                  .catch(() => false)
-                                  .finally(() => {
-                                    playLock.current = false
-                                    setPlaying(null)
-                                  })
-                              }}
-                            >
-                              {playing === key ? '…' : '▶'}
-                            </button>
-                          ) : null}
-                        </div>
                         {!contactsDismissed &&
                         (query.trim() || mergedCandidates.length > 0 || needsReconnect) ? (
                           <div className="speakers-contacts">
@@ -532,14 +560,20 @@ export function MeetingMetaBar({
   folders,
   onSetFolders,
   onCreateFolder,
+  allTags,
+  onSetTags,
   onAssignSpeaker,
   documentLayout = false,
   transcriptEntries,
 }: MeetingMetaBarProps) {
   const [folderOpen, setFolderOpen] = useState(false)
+  const [tagOpen, setTagOpen] = useState(false)
   const [speakersOpen, setSpeakersOpen] = useState(false)
+  const [dateOpen, setDateOpen] = useState(false)
   const speakersRootRef = useRef<HTMLDivElement>(null)
+  const dateRootRef = useRef<HTMLDivElement>(null)
   const selectedFolderIds = meeting.folderIds ?? []
+  const selectedTags = meeting.tags ?? []
   const entries = transcriptEntries ?? meeting.transcript
   const speakerKeys = useMemo(() => uniqueTranscriptSpeakers(entries), [entries])
   const namedCount = speakerKeys.filter((key) =>
@@ -572,6 +606,24 @@ export function MeetingMetaBar({
     return () => document.removeEventListener('mousedown', onDoc)
   }, [speakersOpen])
 
+  useEffect(() => {
+    if (!dateOpen) return
+    const onDoc = (event: MouseEvent) => {
+      if (!dateRootRef.current?.contains(event.target as Node)) {
+        setDateOpen(false)
+      }
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setDateOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [dateOpen])
+
   const speakersControl = (
     <div className="meeting-meta-speakers" ref={speakersRootRef}>
       {speakerKeys.length > 0 ? (
@@ -581,6 +633,8 @@ export function MeetingMetaBar({
           onClick={() => {
             setSpeakersOpen((v) => !v)
             setFolderOpen(false)
+            setTagOpen(false)
+            setDateOpen(false)
           }}
           aria-expanded={speakersOpen}
         >
@@ -626,25 +680,41 @@ export function MeetingMetaBar({
           <div className="meta-pill-wrap meeting-meta-speakers-compact">{speakersControl}</div>
         ) : null}
         <div className="meta-pill-wrap">
-          <button
-            type="button"
-            className="meta-pill"
-            onClick={() => {
-              setFolderOpen((v) => !v)
-              setSpeakersOpen(false)
-            }}
-          >
-            Add to folder
-          </button>
-          <FolderPicker
-            open={folderOpen}
-            folders={folders}
-            selectedFolderIds={selectedFolderIds}
-            onChange={onSetFolders}
-            onCreateFolder={onCreateFolder}
-            onClose={() => setFolderOpen(false)}
-          />
-        </div>
+        {selectedFolders.map((folder) => (
+          <span key={folder.id} className="meeting-folder-chip">
+            <span className="meeting-chip-label">{folder.name}</span>
+            <button
+              type="button"
+              className="meeting-chip-remove"
+              aria-label={`Remove from folder ${folder.name}`}
+              title="Remove from folder"
+              onClick={() =>
+                onSetFolders(selectedFolderIds.filter((id) => id !== folder.id))
+              }
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        <button
+          type="button"
+          className="meta-pill"
+          onClick={() => {
+            setFolderOpen((v) => !v)
+            setSpeakersOpen(false)
+          }}
+        >
+          Add to folder
+        </button>
+        <FolderPicker
+          open={folderOpen}
+          folders={folders}
+          selectedFolderIds={selectedFolderIds}
+          onChange={onSetFolders}
+          onCreateFolder={onCreateFolder}
+          onClose={() => setFolderOpen(false)}
+        />
+      </div>
       </div>
     )
   }
@@ -656,13 +726,32 @@ export function MeetingMetaBar({
 
   return (
     <div className="meeting-meta-bar meeting-meta-bar-doc">
-      <span className="meta-pill is-static" title={formatMeetingTime(meeting)}>
-        <svg className="meta-pill-icon" width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden>
-          <rect x="2.5" y="3.5" width="11" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
-          <path d="M2.5 6.5h11M5.5 2.5v2M10.5 2.5v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-        </svg>
-        {formatMeetingDateShort(meeting)}
-      </span>
+      <div className="meta-pill-wrap" ref={dateRootRef}>
+        <button
+          type="button"
+          className="meta-pill"
+          aria-expanded={dateOpen}
+          aria-haspopup="dialog"
+          onClick={() => {
+            setDateOpen((v) => !v)
+            setFolderOpen(false)
+            setTagOpen(false)
+            setSpeakersOpen(false)
+          }}
+        >
+          <svg className="meta-pill-icon" width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden>
+            <rect x="2.5" y="3.5" width="11" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+            <path d="M2.5 6.5h11M5.5 2.5v2M10.5 2.5v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+          </svg>
+          {formatMeetingDateShort(meeting)}
+        </button>
+        {dateOpen ? (
+          <div className="meta-popover meeting-date-popover" role="dialog" aria-label="Meeting time">
+            <div className="meeting-date-popover-title">{meeting.title}</div>
+            <div className="meeting-date-popover-detail">{formatMeetingDateDetail(meeting)}</div>
+          </div>
+        ) : null}
+      </div>
 
       <div className="meta-pill-wrap meeting-meta-speakers-compact">
         {speakerKeys.length > 0 ? (
@@ -687,7 +776,18 @@ export function MeetingMetaBar({
       <div className="meta-pill-wrap">
         {selectedFolders.map((folder) => (
           <span key={folder.id} className="meeting-folder-chip">
-            {folder.name}
+            <span className="meeting-chip-label">{folder.name}</span>
+            <button
+              type="button"
+              className="meeting-chip-remove"
+              aria-label={`Remove from folder ${folder.name}`}
+              title="Remove from folder"
+              onClick={() =>
+                onSetFolders(selectedFolderIds.filter((id) => id !== folder.id))
+              }
+            >
+              ×
+            </button>
           </span>
         ))}
         <button
@@ -695,7 +795,9 @@ export function MeetingMetaBar({
           className="meta-pill"
           onClick={() => {
             setFolderOpen((v) => !v)
+            setTagOpen(false)
             setSpeakersOpen(false)
+            setDateOpen(false)
           }}
         >
           <svg className="meta-pill-icon" width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden>
@@ -715,6 +817,44 @@ export function MeetingMetaBar({
           onChange={onSetFolders}
           onCreateFolder={onCreateFolder}
           onClose={() => setFolderOpen(false)}
+        />
+      </div>
+
+      <div className="meta-pill-wrap meeting-meta-tags">
+        {selectedTags.map((tag) => (
+          <span key={tag} className="meeting-tag-chip">
+            <span className="meeting-chip-label">{tag}</span>
+            <button
+              type="button"
+              className="meeting-chip-remove"
+              aria-label={`Remove tag ${tag}`}
+              title="Remove tag"
+              onClick={() =>
+                onSetTags(selectedTags.filter((t) => t.toLowerCase() !== tag.toLowerCase()))
+              }
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        <button
+          type="button"
+          className="meta-pill-quiet"
+          onClick={() => {
+            setTagOpen((v) => !v)
+            setFolderOpen(false)
+            setSpeakersOpen(false)
+            setDateOpen(false)
+          }}
+        >
+          + Tag
+        </button>
+        <TagPicker
+          open={tagOpen}
+          allTags={allTags}
+          selectedTags={selectedTags}
+          onChange={onSetTags}
+          onClose={() => setTagOpen(false)}
         />
       </div>
     </div>

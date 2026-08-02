@@ -6,11 +6,9 @@ import type { Meeting } from '../types/meeting'
 type MeetingDocHeaderProps = {
   meeting: Meeting
   onTitleChange: (title: string) => void
-  onBackHome: () => void
   onShare: () => void
   onCopyLink: () => Promise<void>
-  onToggleMaximize: () => void
-  isMaximized: boolean
+  onExport: (format: 'markdown' | 'pdf') => void
   onDelete: () => void
   /** True only after at least one person has been invited (not merely link published). */
   hasSharedWithPeople?: boolean
@@ -60,11 +58,9 @@ function SharedPeopleIcon() {
 export function MeetingDocHeader({
   meeting,
   onTitleChange,
-  onBackHome,
   onShare,
   onCopyLink,
-  onToggleMaximize,
-  isMaximized,
+  onExport,
   onDelete,
   hasSharedWithPeople = false,
 }: MeetingDocHeaderProps) {
@@ -88,37 +84,10 @@ export function MeetingDocHeader({
   }, [menuOpen])
 
   return (
-    <header className="meeting-doc-header">
-      <div className="meeting-doc-top">
-        <div className="meeting-doc-nav">
-          <button
-            type="button"
-            className="meeting-doc-icon-btn meeting-doc-back"
-            onClick={onBackHome}
-            aria-label="Back to home"
-            title="Back to home"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-              <path
-                d="M10 3.5 5.5 8 10 12.5"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
-              <path
-                d="M2.5 7.2 8 2.5l5.5 4.7V13a1 1 0 0 1-1 1H9.2V9.8H6.8V14H3.5a1 1 0 0 1-1-1V7.2Z"
-                stroke="currentColor"
-                strokeWidth="1.35"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-        </div>
-
-        <div className="meeting-doc-actions">
+    <>
+      {/* Sticky actions only — title scrolls with the document below. */}
+      <div className="meeting-doc-chrome">
+        <div className="meeting-doc-actions no-drag">
           <button
             type="button"
             className={`meeting-doc-share-pill${hasSharedWithPeople ? ' is-shared' : ''}`}
@@ -134,7 +103,7 @@ export function MeetingDocHeader({
             idleLabel=""
             successLabel=""
             successDuration={1600}
-            className="meeting-doc-icon-btn"
+            className="meeting-doc-icon-btn meeting-doc-copy-link"
             aria-label="Copy share link"
             title="Copy share link"
             icon={
@@ -156,37 +125,6 @@ export function MeetingDocHeader({
             onClick={onCopyLink}
           />
 
-          <button
-            type="button"
-            className="meeting-doc-icon-btn"
-            onClick={onToggleMaximize}
-            aria-label={isMaximized ? 'Exit focus mode' : 'Maximize note'}
-            title={isMaximized ? 'Exit focus mode' : 'Maximize note'}
-            aria-pressed={isMaximized}
-          >
-            {isMaximized ? (
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden>
-                <path
-                  d="M6 3H3v3M10 3h3v3M6 13H3v-3M10 13h3v-3"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            ) : (
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden>
-                <path
-                  d="M9.5 3H13v3.5M6.5 13H3V9.5M13 9.5V13H9.5M3 6.5V3h3.5"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            )}
-          </button>
-
           <div className="meeting-doc-menu" ref={menuRef}>
             <button
               type="button"
@@ -205,6 +143,73 @@ export function MeetingDocHeader({
               <div className="meeting-doc-menu-popover" role="menu">
                 <button
                   type="button"
+                  className="meeting-doc-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    onExport('markdown')
+                  }}
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    aria-hidden
+                    className="meeting-doc-menu-item-icon"
+                  >
+                    <path
+                      d="M8 2.5v8M8 10.5 5 7.5M8 10.5l3-3"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M3 11v1.5A1.5 1.5 0 0 0 4.5 14h7a1.5 1.5 0 0 0 1.5-1.5V11"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  Export as Markdown
+                </button>
+                <button
+                  type="button"
+                  className="meeting-doc-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    onExport('pdf')
+                  }}
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    aria-hidden
+                    className="meeting-doc-menu-item-icon"
+                  >
+                    <path
+                      d="M8 2.5v8M8 10.5 5 7.5M8 10.5l3-3"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M3 11v1.5A1.5 1.5 0 0 0 4.5 14h7a1.5 1.5 0 0 0 1.5-1.5V11"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  Export as PDF
+                </button>
+                <div className="meeting-doc-menu-divider" role="separator" />
+                <button
+                  type="button"
                   className="meeting-doc-menu-item is-danger"
                   role="menuitem"
                   onClick={() => {
@@ -212,6 +217,28 @@ export function MeetingDocHeader({
                     onDelete()
                   }}
                 >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    aria-hidden
+                    className="meeting-doc-menu-item-icon"
+                  >
+                    <path
+                      d="M5.5 2.5h5M3 4.5h10M6.5 4.5V3.25A.75.75 0 0 1 7.25 2.5h1.5a.75.75 0 0 1 .75.75V4.5M12.5 4.5l-.55 8.05a1.25 1.25 0 0 1-1.25 1.2H5.3a1.25 1.25 0 0 1-1.25-1.2L3.5 4.5"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M6.75 7v4.5M9.25 7v4.5"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                    />
+                  </svg>
                   Delete meeting
                 </button>
               </div>
@@ -220,12 +247,14 @@ export function MeetingDocHeader({
         </div>
       </div>
 
-      <input
-        className="meeting-doc-title"
-        value={meeting.title}
-        onChange={(event) => onTitleChange(event.target.value)}
-        aria-label="Meeting title"
-      />
-    </header>
+      <header className="meeting-doc-header">
+        <input
+          className="meeting-doc-title"
+          value={meeting.title}
+          onChange={(event) => onTitleChange(event.target.value)}
+          aria-label="Meeting title"
+        />
+      </header>
+    </>
   )
 }

@@ -1,7 +1,11 @@
 import { authorizeLlmRequest } from '@/lib/llm-route-auth'
 import { hasFeature } from '@/lib/entitlements'
 import { planRequiredResponse } from '@/lib/plan-guard'
-import { chatWithMeetingContext, type ChatImageMime } from '@/lib/llm-server'
+import {
+  chatWithMeetingContext,
+  type ChatImageMime,
+  type ChatPurpose,
+} from '@/lib/llm-server'
 import {
   isDefaultChatModel,
   normalizeChatEffort,
@@ -51,11 +55,15 @@ export async function POST(req: Request) {
     images?: unknown
     model?: string
     effort?: ChatEffort
+    purpose?: ChatPurpose
   }
 
   if (!payload.message || typeof payload.message !== 'string') {
     return Response.json({ error: 'message_required' }, { status: 400 })
   }
+
+  const purpose: ChatPurpose =
+    payload.purpose === 'enhance_notes' ? 'enhance_notes' : 'chat'
 
   const images = parseImages(payload.images)
   const screenImage =
@@ -65,7 +73,7 @@ export async function POST(req: Request) {
       ? payload.screenImage
       : undefined
 
-  if (payload.useScreenContext || screenImage || images.length > 0) {
+  if (purpose !== 'enhance_notes' && (payload.useScreenContext || screenImage || images.length > 0)) {
     if (!hasFeature(plan, 'screen_context') && (payload.useScreenContext || screenImage)) {
       return planRequiredResponse('pro', 'screen_context')
     }
@@ -74,7 +82,13 @@ export async function POST(req: Request) {
   }
 
   const modelId = typeof payload.model === 'string' ? payload.model.trim() : ''
-  if (modelId && !isDefaultChatModel(modelId) && !hasFeature(plan, 'premium_models')) {
+  // Enhance notes picks Sonnet server-side — do not gate on the client's premium model list.
+  if (
+    purpose !== 'enhance_notes' &&
+    modelId &&
+    !isDefaultChatModel(modelId) &&
+    !hasFeature(plan, 'premium_models')
+  ) {
     return planRequiredResponse('pro', 'premium_models')
   }
 
@@ -88,8 +102,9 @@ export async function POST(req: Request) {
     useScreenContext: Boolean(payload.useScreenContext),
     screenImage,
     images,
-    model: modelId || undefined,
+    model: purpose === 'enhance_notes' ? undefined : modelId || undefined,
     effort: normalizeChatEffort(payload.effort),
+    purpose,
   })
 
   if ('error' in result) {

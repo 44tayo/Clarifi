@@ -22,6 +22,20 @@ function planFromPriceId(priceId: string | undefined | null): 'free' | 'pro' | '
   return 'free'
 }
 
+function trialFieldsFromSubscription(sub: Stripe.Subscription): {
+  trial_ends_at: string | null
+  subscription_status: string
+} {
+  const trialEndsAt =
+    sub.status === 'trialing' && typeof sub.trial_end === 'number'
+      ? new Date(sub.trial_end * 1000).toISOString()
+      : null
+  return {
+    trial_ends_at: trialEndsAt,
+    subscription_status: sub.status,
+  }
+}
+
 type SubMoney = {
   plan: 'free' | 'pro' | 'pro_plus'
   quantity: number
@@ -161,6 +175,15 @@ Deno.serve(async (req) => {
     if (typeof session.subscription === 'string') {
       try {
         const sub = await stripe.subscriptions.retrieve(session.subscription)
+        if (userId) {
+          await supabase
+            .from('profiles')
+            .update({
+              ...trialFieldsFromSubscription(sub),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('user_id', userId)
+        }
         const eventType =
           sub.status === 'trialing' ? 'trial_started' : 'billing_started'
         await logBillingEvent(supabase, {
@@ -196,6 +219,7 @@ Deno.serve(async (req) => {
         stripe_customer_id:
           typeof subscription.customer === 'string' ? subscription.customer : null,
         stripe_subscription_id: active ? subscription.id : null,
+        ...trialFieldsFromSubscription(subscription),
         updated_at: new Date().toISOString(),
       })
     }
@@ -233,6 +257,8 @@ Deno.serve(async (req) => {
         stripe_customer_id:
           typeof subscription.customer === 'string' ? subscription.customer : null,
         stripe_subscription_id: null,
+        trial_ends_at: null,
+        subscription_status: 'canceled',
         updated_at: new Date().toISOString(),
       })
     }

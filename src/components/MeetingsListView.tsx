@@ -1,3 +1,6 @@
+import { useMemo, useState } from 'react'
+
+import { searchMeetings } from '../lib/commandPalette'
 import { MeetingRow } from './MeetingRow'
 import type { ConnectionStatus, Meeting } from '../types/meeting'
 
@@ -9,7 +12,6 @@ type MeetingsListViewProps = {
   connection: ConnectionStatus
   onSelectMeeting: (id: string) => void
   onOpenDashboard: () => void
-  onNewMeeting: () => void
   isMeetingLocked: (meeting: Meeting) => boolean
 }
 
@@ -20,9 +22,15 @@ export function MeetingsListView({
   selectedId,
   onSelectMeeting,
   onOpenDashboard,
-  onNewMeeting,
   isMeetingLocked,
 }: MeetingsListViewProps) {
+  const [query, setQuery] = useState('')
+
+  const visibleMeetings = useMemo(() => {
+    if (!query.trim()) return meetings
+    return searchMeetings(meetings, query, meetings.length)
+  }, [meetings, query])
+
   return (
     <div className="meetings-list-view">
       <header className="home-view-header">
@@ -30,16 +38,29 @@ export function MeetingsListView({
           <h1 className="home-view-title">{title}</h1>
           {subtitle ? <p className="home-view-subtitle">{subtitle}</p> : null}
         </div>
-        <button type="button" className="btn btn-primary" onClick={onNewMeeting}>
-          + New meeting
-        </button>
       </header>
 
+      <div className="meetings-list-search">
+        <svg className="meetings-list-search-icon" width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden>
+          <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.4" />
+          <path d="M13 13l-2.5-2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+        </svg>
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search meetings, notes, transcripts…"
+          aria-label="Search meetings"
+        />
+      </div>
+
       <div className="meetings-list-body">
-        {meetings.length === 0 ? (
-          <p className="home-muted">No meetings in this list yet.</p>
+        {visibleMeetings.length === 0 ? (
+          <p className="home-muted">
+            {query.trim() ? 'No meetings match your search.' : 'No meetings in this list yet.'}
+          </p>
         ) : (
-          meetings.map((meeting) => {
+          visibleMeetings.map((meeting) => {
             const locked = isMeetingLocked(meeting)
             return (
               <MeetingRow

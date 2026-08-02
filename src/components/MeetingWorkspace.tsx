@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { EnhancedNotesPanel } from './EnhancedNotesPanel'
-import { MeetingAskAiModal } from './MeetingAskAiModal'
+import { MeetingAskFloat, type AskSelectionRequest } from './MeetingAskFloat'
 import { MeetingDocHeader } from './MeetingDocHeader'
 import { MeetingMetaBar, assignFromDisplayName } from './MeetingMetaBar'
 import { NotesEditor } from './NotesEditor'
@@ -14,17 +14,17 @@ import { useToast } from '../hooks/useToast'
 import { applySpeakerIdentity } from '../../shared/speakers'
 import type { SpeakerIdentity } from '../../shared/speakers'
 import type { useRecording } from '../hooks/useRecording'
+import type { MeetingTemplateId } from '../../shared/meetingTemplates'
 import type { Folder, Meeting } from '../types/meeting'
 
 type MeetingWorkspaceProps = {
   meeting: Meeting
   connected: boolean
   plan?: string
+  ownerEmail?: string | null
   captureMeetingId: string | null
   recording: ReturnType<typeof useRecording>
   folders: Folder[]
-  isMaximized?: boolean
-  onToggleMaximize?: () => void
   onStartCapture: (meetingId: string) => void
   onUpdate: (patch: {
     title?: string
@@ -33,14 +33,18 @@ type MeetingWorkspaceProps = {
     speakerIdentities?: Meeting['speakerIdentities']
     actionItems?: string[]
     completedActionItems?: string[]
+    enhancedNotes?: string
+    evidenceCache?: Record<string, string>
   }) => void
   onDelete: () => void
   onEnhance: () => void
   onConnect: () => void
   onOpenDashboard: () => void
-  onBackHome: () => void
   onSetFolders: (folderIds: string[]) => void
   onCreateFolder: (name: string) => Promise<Folder | void> | Folder | void
+  allTags: string[]
+  onSetTags: (tags: string[]) => void
+  onChangeTemplate: (templateId: MeetingTemplateId) => void
 }
 
 type ReadyTab = 'summary' | 'transcript' | 'tasks' | 'notes'
@@ -56,20 +60,21 @@ export function MeetingWorkspace({
   meeting,
   connected,
   plan,
+  ownerEmail,
   captureMeetingId,
   recording,
   folders,
-  isMaximized = false,
-  onToggleMaximize,
   onStartCapture,
   onUpdate,
   onDelete,
   onEnhance,
   onConnect,
   onOpenDashboard,
-  onBackHome,
   onSetFolders,
   onCreateFolder,
+  allTags,
+  onSetTags,
+  onChangeTemplate,
 }: MeetingWorkspaceProps) {
   const isCapturingThisMeeting = captureMeetingId === meeting.id
   const recordingState = isCapturingThisMeeting ? recording.state : 'idle'
@@ -78,8 +83,9 @@ export function MeetingWorkspace({
   const [readyTab, setReadyTab] = useState<ReadyTab>('summary')
   const [connectPromptOpen, setConnectPromptOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
-  const [askAiOpen, setAskAiOpen] = useState(false)
+  const [shareMounted, setShareMounted] = useState(false)
   const [hasSharedWithPeople, setHasSharedWithPeople] = useState(false)
+  const [selectionAsk, setSelectionAsk] = useState<AskSelectionRequest | null>(null)
   const sharedFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { toast } = useToast()
 
@@ -103,13 +109,22 @@ export function MeetingWorkspace({
 
   useEffect(() => {
     setHasSharedWithPeople(false)
-    setAskAiOpen(false)
     setShareOpen(false)
+    setShareMounted(false)
     if (sharedFlashTimerRef.current) {
       clearTimeout(sharedFlashTimerRef.current)
       sharedFlashTimerRef.current = null
     }
   }, [meeting.id])
+
+  const openShare = useCallback(() => {
+    setShareMounted(true)
+    setShareOpen(true)
+  }, [])
+
+  const closeShare = useCallback(() => {
+    setShareOpen(false)
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -182,12 +197,12 @@ export function MeetingWorkspace({
 
   const handleCopyLink = useCallback(async () => {
     if (!canShare) {
-      setShareOpen(true)
+      openShare()
       throw new Error('Sharing requires Pro+')
     }
     const result = await copyMeetingShareLink(meeting.id)
     if (!result.ok) {
-      setShareOpen(true)
+      openShare()
       const message =
         result.error === 'plan_required'
           ? 'Sharing requires Pro+'
@@ -199,10 +214,25 @@ export function MeetingWorkspace({
       throw new Error(message)
     }
     toast('Link copied')
-  }, [canShare, meeting.id, toast])
+  }, [canShare, meeting.id, toast, openShare])
+
+  const handleExport = useCallback(
+    async (format: 'markdown' | 'pdf') => {
+      const result = (await window.electronAPI.invoke('meetings:export', {
+        meetingId: meeting.id,
+        format,
+      })) as { ok: boolean; error?: string }
+      if (result.ok) {
+        toast(format === 'pdf' ? 'Exported as PDF' : 'Exported as Markdown')
+      } else if (result.error !== 'cancelled') {
+        toast('Export failed — try again')
+      }
+    },
+    [meeting.id, toast],
+  )
 
   return (
-    <div className={`meeting-workspace${showEnhanced ? ' has-ask-dock' : ''}${isMaximized ? ' is-focus' : ''}`}>
+    <div className={`meeting-workspace${showEnhanced ? ' has-ask-float' : ''}`}>
       {!connected ? (
         <div className="connect-banner">
           <span>
@@ -244,11 +274,9 @@ export function MeetingWorkspace({
           <MeetingDocHeader
             meeting={meeting}
             onTitleChange={(title) => onUpdate({ title })}
-            onBackHome={onBackHome}
-            onShare={() => setShareOpen(true)}
+            onShare={openShare}
             onCopyLink={handleCopyLink}
-            onToggleMaximize={() => onToggleMaximize?.()}
-            isMaximized={isMaximized}
+            onExport={(format) => void handleExport(format)}
             onDelete={onDelete}
             hasSharedWithPeople={hasSharedWithPeople}
           />
@@ -272,6 +300,8 @@ export function MeetingWorkspace({
             folders={folders}
             onSetFolders={onSetFolders}
             onCreateFolder={onCreateFolder}
+            allTags={allTags}
+            onSetTags={onSetTags}
             onAssignSpeaker={assignSpeaker}
             documentLayout={showEnhanced}
             transcriptEntries={transcript}
@@ -352,55 +382,95 @@ export function MeetingWorkspace({
             </div>
 
             {readyTab === 'summary' ? (
-              <EnhancedNotesPanel meeting={meeting} onRegenerate={onEnhance} />
+              <EnhancedNotesPanel
+                meeting={meeting}
+                paired={connected}
+                onConnect={onConnect}
+                onChangeTemplate={onChangeTemplate}
+                onOpenTranscript={() => setReadyTab('transcript')}
+                onUpdateNotes={(enhancedNotes) => onUpdate({ enhancedNotes })}
+                onCacheEvidence={(claim, summary) => {
+                  onUpdate({
+                    evidenceCache: {
+                      ...(meeting.evidenceCache ?? {}),
+                      [claim]: summary,
+                    },
+                  })
+                }}
+                onAskWithSelection={(text, mode) => setSelectionAsk({ text, mode })}
+              />
             ) : null}
 
             {readyTab === 'transcript' ? (
               <section className="enhanced-panel artifact-transcript-panel">
-                <div className="artifact-doc-toolbar">
-                  <StatefulButton
-                    variant="link"
-                    idleLabel="Copy transcript"
-                    successLabel="Copied"
-                    successDuration={1600}
-                    className="artifact-doc-copy"
-                    onClick={async () => {
-                      const text = meeting.transcript
-                        .map((entry) => {
-                          const name =
-                            meeting.speakerLabels?.[entry.speaker]?.trim() || entry.speaker
-                          return `${name}: ${entry.text}`
-                        })
-                        .join('\n')
-                      await navigator.clipboard.writeText(text)
-                      toast('Transcript copied')
-                    }}
+                <div className="artifact-reading-column">
+                  <div className="artifact-doc-toolbar">
+                    <StatefulButton
+                      variant="link"
+                      idleLabel="Copy transcript"
+                      successLabel="Copied"
+                      successDuration={1600}
+                      className="artifact-doc-copy"
+                      icon={
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+                          <rect
+                            x="5.5"
+                            y="5.5"
+                            width="7"
+                            height="8"
+                            rx="1.2"
+                            stroke="currentColor"
+                            strokeWidth="1.4"
+                          />
+                          <path
+                            d="M10.5 5.5V4.2A1.2 1.2 0 0 0 9.3 3H4.2A1.2 1.2 0 0 0 3 4.2v5.1A1.2 1.2 0 0 0 4.2 10.5H5.5"
+                            stroke="currentColor"
+                            strokeWidth="1.4"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      }
+                      onClick={async () => {
+                        const text = meeting.transcript
+                          .map((entry) => {
+                            const name =
+                              meeting.speakerLabels?.[entry.speaker]?.trim() || entry.speaker
+                            return `${name}: ${entry.text}`
+                          })
+                          .join('\n')
+                        await navigator.clipboard.writeText(text)
+                      }}
+                    />
+                  </div>
+                  <TranscriptPanel
+                    entries={meeting.transcript}
+                    activity="silent"
+                    live={false}
+                    speakerLabels={meeting.speakerLabels}
+                    startedAt={meeting.startedAt}
+                    onRenameSpeaker={renameSpeaker}
+                    hideHeader
                   />
                 </div>
-                <TranscriptPanel
-                  entries={meeting.transcript}
-                  activity="silent"
-                  live={false}
-                  speakerLabels={meeting.speakerLabels}
-                  startedAt={meeting.startedAt}
-                  onRenameSpeaker={renameSpeaker}
-                  hideHeader
-                />
               </section>
             ) : null}
 
             {readyTab === 'tasks' ? (
-              <TasksPanel meeting={meeting} onToggle={toggleTask} onAdd={addTask} />
+              <div className="artifact-reading-column">
+                <TasksPanel meeting={meeting} onToggle={toggleTask} onAdd={addTask} />
+              </div>
             ) : null}
 
             {readyTab === 'notes' ? (
               <div className="editor-layout artifact-scratchpad">
-                <NotesEditor
-                  label="Scratchpad"
-                  hint="Private notes from the call — kept separate from the AI summary."
-                  value={meeting.userNotes}
-                  onChange={(userNotes) => onUpdate({ userNotes })}
-                />
+                <div className="artifact-reading-column">
+                  <NotesEditor
+                    label="Scratchpad"
+                    hint="Private notes from the call — kept separate from the AI summary."
+                    value={meeting.userNotes}
+                    onChange={(userNotes) => onUpdate({ userNotes })}
+                  />
+                </div>
               </div>
             ) : null}
           </>
@@ -408,32 +478,24 @@ export function MeetingWorkspace({
       </div>
 
       {showEnhanced ? (
-        <div className="meeting-ask-dock">
-          <button
-            type="button"
-            className="meeting-ask-ai-btn"
-            onClick={() => setAskAiOpen(true)}
-          >
-            <span className="meeting-ask-ai-btn-shine" aria-hidden />
-            Ask AI
-          </button>
-        </div>
-      ) : null}
-
-      {askAiOpen ? (
-        <MeetingAskAiModal
+        <MeetingAskFloat
           meeting={meeting}
           paired={connected}
           onConnect={onConnect}
-          onClose={() => setAskAiOpen(false)}
+          selectionRequest={selectionAsk}
+          onSelectionHandled={() => setSelectionAsk(null)}
         />
       ) : null}
 
-      {shareOpen ? (
+      {shareMounted ? (
         <ShareNotesPanel
+          key={meeting.id}
           meeting={meeting}
           canShare={canShare}
-          onClose={() => setShareOpen(false)}
+          ownerEmail={ownerEmail}
+          open={shareOpen}
+          onClose={closeShare}
+          onExited={() => setShareMounted(false)}
           onUpgrade={onOpenDashboard}
           onInviteSent={flashSharedPill}
         />

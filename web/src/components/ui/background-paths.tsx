@@ -64,13 +64,13 @@ export function HeroBackgroundPaths({ className }: { className?: string }) {
       aria-hidden
     >
       <Image
-        src="/images/hero-notto-sky.jpg"
+        src="/images/hero-mountain.jpg"
         alt=""
         fill
         priority
         quality={95}
         sizes="100vw"
-        className="hero-sky-photo object-cover object-[center_18%]"
+        className="hero-sky-photo object-cover object-[center_35%]"
       />
 
       <div

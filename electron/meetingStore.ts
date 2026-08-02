@@ -3,7 +3,9 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { randomUUID } from 'crypto'
 
+import type { MeetingTemplateId } from '../shared/meetingTemplates'
 import type { MeetingAttendee, SpeakerIdentities } from '../shared/speakers'
+import { aggregateTags, normalizeTags } from '../shared/tags'
 import type { TranscriptEntry } from './transcriptUtils'
 
 export type MeetingStatus = 'draft' | 'live' | 'processing' | 'ready' | 'error'
@@ -33,10 +35,14 @@ export type StoredMeeting = {
   attendeeEmails?: string[]
   attendees?: MeetingAttendee[]
   folderIds?: string[]
+  tags?: string[]
+  templateId?: MeetingTemplateId
   enhancedNotes?: string
   summary?: string
   actionItems?: string[]
   completedActionItems?: string[]
+  /** Claim text → cached TRANSCRIPT SUMMARY from on-click eyeglass. */
+  evidenceCache?: Record<string, string>
   enhanceError?: string
   /** Relative path under userData for local system-audio recording (snippet replay). */
   recordingPath?: string
@@ -159,6 +165,7 @@ export type CreateMeetingInput = {
   speakerLabels?: Record<string, string>
   speakerIdentities?: SpeakerIdentities
   folderIds?: string[]
+  templateId?: MeetingTemplateId
 }
 
 export function createMeeting(input?: CreateMeetingInput | string): StoredMeeting {
@@ -181,6 +188,7 @@ export function createMeeting(input?: CreateMeetingInput | string): StoredMeetin
     attendeeEmails: options.attendeeEmails,
     attendees: options.attendees,
     folderIds: options.folderIds ?? [],
+    templateId: options.templateId ?? 'general',
   }
   const meetings = readAll()
   meetings.unshift(meeting)
@@ -320,6 +328,21 @@ export function setMeetingFolders(meetingId: string, folderIds: string[]): Store
   const valid = new Set(listFolders().map((f) => f.id))
   const unique = Array.from(new Set(folderIds.filter((id) => valid.has(id))))
   return updateMeeting(meetingId, { folderIds: unique })
+}
+
+export function setMeetingTags(meetingId: string, tags: string[]): StoredMeeting | null {
+  return updateMeeting(meetingId, { tags: normalizeTags(tags) })
+}
+
+export function listAllTags(): string[] {
+  return aggregateTags(readAll().map((meeting) => meeting.tags))
+}
+
+export function setMeetingTemplate(
+  meetingId: string,
+  templateId: MeetingTemplateId,
+): StoredMeeting | null {
+  return updateMeeting(meetingId, { templateId })
 }
 
 function defaultTitle(at: number): string {

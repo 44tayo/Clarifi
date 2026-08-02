@@ -9,25 +9,12 @@ import {
   type KeyboardEvent,
 } from 'react'
 
+import { useWhisperDictation } from '../hooks/useWhisperDictation'
+
 const SPRING =
   'max-width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), height 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
 const SMOOTH =
   'max-width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), height 0.15s ease-out'
-
-type SpeechRecognitionLike = {
-  continuous: boolean
-  interimResults: boolean
-  start: () => void
-  stop: () => void
-  onresult:
-    | ((event: {
-        resultIndex: number
-        results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>
-      }) => void)
-    | null
-  onerror: ((event: unknown) => void) | null
-  onend: (() => void) | null
-}
 
 type HomeAskInputProps = {
   value: string
@@ -88,8 +75,6 @@ export const HomeAskInput = forwardRef<HTMLDivElement, HomeAskInputProps>(
   ) {
     const [expanded, setExpanded] = useState(false)
     const [smooth, setSmooth] = useState(false)
-    const [isRecording, setIsRecording] = useState(false)
-    const [audioData, setAudioData] = useState<number[]>(() => Array(5).fill(0))
     const [containerHeight, setContainerHeight] = useState(116)
     const [textareaHeight, setTextareaHeight] = useState(68)
     const [scrolling, setScrolling] = useState(false)
@@ -99,10 +84,6 @@ export const HomeAskInput = forwardRef<HTMLDivElement, HomeAskInputProps>(
     const topFadeRef = useRef<HTMLDivElement>(null)
     const bottomFadeRef = useRef<HTMLDivElement>(null)
     const valueRef = useRef(value)
-    const streamRef = useRef<MediaStream | null>(null)
-    const audioContextRef = useRef<AudioContext | null>(null)
-    const rafRef = useRef<number | null>(null)
-    const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
 
     useImperativeHandle(ref, () => rootRef.current as HTMLDivElement)
 
@@ -110,10 +91,30 @@ export const HomeAskInput = forwardRef<HTMLDivElement, HomeAskInputProps>(
       valueRef.current = value
     }, [value])
 
+    const setValue = useCallback(
+      (next: string) => {
+        setSmooth(true)
+        onChange(next)
+      },
+      [onChange],
+    )
+
+    const dictation = useWhisperDictation({
+      disabled: disabled || sending,
+      onTranscript: (text) => {
+        const base = valueRef.current.trim()
+        setValue(base ? `${base} ${text}` : text)
+        setExpanded(true)
+        requestAnimationFrame(() => textareaRef.current?.focus())
+      },
+    })
+
+    const isRecording = dictation.isRecording
+    const dictationBusy = dictation.isRecording || dictation.isTranscribing
     const hasValue = value.trim().length > 0
-    const showArrow = (hasValue || sending) && !isRecording
-    const showStop = isRecording
-    const showMic = !hasValue && !isRecording && !sending
+    const showArrow = (hasValue || sending) && !dictationBusy
+    const showStop = dictation.isRecording || dictation.isTranscribing
+    const showMic = !hasValue && !dictationBusy && !sending
 
     const updateFades = useCallback(() => {
       const el = textareaRef.current
@@ -130,109 +131,11 @@ export const HomeAskInput = forwardRef<HTMLDivElement, HomeAskInputProps>(
       }
     }, [])
 
-    const setValue = useCallback(
-      (next: string) => {
-        setSmooth(true)
-        onChange(next)
-      },
-      [onChange],
-    )
-
     const expand = useCallback(() => {
       if (disabled) return
       setSmooth(false)
       setExpanded(true)
     }, [disabled])
-
-    const stopRecording = useCallback(() => {
-      recognitionRef.current?.stop()
-      recognitionRef.current = null
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current)
-        rafRef.current = null
-      }
-      streamRef.current?.getTracks().forEach((track) => track.stop())
-      streamRef.current = null
-      void audioContextRef.current?.close()
-      audioContextRef.current = null
-      setIsRecording(false)
-      setAudioData(Array(5).fill(0))
-    }, [])
-
-    const startRecording = useCallback(async () => {
-      if (disabled || sending) return
-      setSmooth(false)
-      setExpanded(true)
-
-      let stream: MediaStream | null = null
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      } catch {
-        return
-      }
-
-      streamRef.current = stream
-      setIsRecording(true)
-
-      const AudioCtx =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-      const audioCtx = new AudioCtx()
-      audioContextRef.current = audioCtx
-      const analyser = audioCtx.createAnalyser()
-      analyser.fftSize = 64
-      audioCtx.createMediaStreamSource(stream).connect(analyser)
-      const dataArray = new Uint8Array(analyser.frequencyBinCount)
-
-      const tick = () => {
-        analyser.getByteFrequencyData(dataArray)
-        const bands = new Array(5).fill(0)
-        const step = Math.floor(dataArray.length / 5) || 1
-        for (let i = 0; i < 5; i += 1) {
-          let sum = 0
-          for (let j = 0; j < step; j += 1) sum += dataArray[i * step + j] ?? 0
-          bands[i] = sum / step / 255
-        }
-        setAudioData(bands)
-        rafRef.current = requestAnimationFrame(tick)
-      }
-      tick()
-
-      const SpeechRecognitionCtor =
-        (window as unknown as { SpeechRecognition?: new () => SpeechRecognitionLike })
-          .SpeechRecognition ||
-        (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognitionLike })
-          .webkitSpeechRecognition
-
-      if (!SpeechRecognitionCtor) {
-        stopRecording()
-        return
-      }
-
-      const recognition = new SpeechRecognitionCtor()
-      recognition.continuous = true
-      recognition.interimResults = true
-      let baseline = valueRef.current
-
-      recognition.onresult = (event) => {
-        let interim = ''
-        let finalChunk = ''
-        for (let i = event.resultIndex; i < event.results.length; i += 1) {
-          const result = event.results[i]
-          if (!result) continue
-          if (result.isFinal) finalChunk += result[0].transcript
-          else interim += result[0].transcript
-        }
-        if (finalChunk) baseline += (baseline ? ' ' : '') + finalChunk
-        setValue((baseline + (interim ? ` ${interim}` : '')).trim())
-      }
-      recognition.onerror = () => stopRecording()
-      recognition.onend = () => stopRecording()
-      recognitionRef.current = recognition
-      recognition.start()
-    }, [disabled, sending, setValue, stopRecording])
-
-    useEffect(() => () => stopRecording(), [stopRecording])
 
     useEffect(() => {
       if ((hasValue || sending) && !expanded) {
@@ -242,7 +145,7 @@ export const HomeAskInput = forwardRef<HTMLDivElement, HomeAskInputProps>(
     }, [hasValue, sending, expanded])
 
     useEffect(() => {
-      if (!expanded || isRecording) return undefined
+      if (!expanded || dictationBusy) return undefined
       const timer = window.setTimeout(() => {
         const el = textareaRef.current
         if (!el) return
@@ -251,7 +154,7 @@ export const HomeAskInput = forwardRef<HTMLDivElement, HomeAskInputProps>(
         el.setSelectionRange(length, length)
       }, 50)
       return () => window.clearTimeout(timer)
-    }, [expanded, isRecording])
+    }, [expanded, dictationBusy])
 
     useEffect(() => {
       const el = textareaRef.current
@@ -282,7 +185,7 @@ export const HomeAskInput = forwardRef<HTMLDivElement, HomeAskInputProps>(
 
     const handleBlur = (event: FocusEvent<HTMLDivElement>) => {
       if (rootRef.current?.contains(event.relatedTarget as Node)) return
-      if (!value.trim() && !isRecording && !sending) {
+      if (!value.trim() && !dictationBusy && !sending) {
         setSmooth(false)
         setExpanded(false)
       }
@@ -290,22 +193,25 @@ export const HomeAskInput = forwardRef<HTMLDivElement, HomeAskInputProps>(
 
     const handleSubmit = () => {
       const text = value.trim()
-      if (!text || disabled || sending || isRecording) return
+      if (!text || disabled || sending || dictationBusy) return
       setSmooth(false)
       onSubmit(text)
       setExpanded(false)
     }
 
     const onAction = () => {
-      if (isRecording) {
-        stopRecording()
+      if (dictation.isRecording) {
+        dictation.toggle()
         return
       }
+      if (dictation.isTranscribing) return
       if (hasValue) {
         handleSubmit()
         return
       }
-      void startRecording()
+      setSmooth(false)
+      setExpanded(true)
+      dictation.toggle()
     }
 
     const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -313,7 +219,7 @@ export const HomeAskInput = forwardRef<HTMLDivElement, HomeAskInputProps>(
         event.preventDefault()
         handleSubmit()
       }
-      if (event.key === 'Escape' && !value.trim() && !isRecording) {
+      if (event.key === 'Escape' && !value.trim() && !dictationBusy) {
         setSmooth(false)
         setExpanded(false)
       }
@@ -326,7 +232,9 @@ export const HomeAskInput = forwardRef<HTMLDivElement, HomeAskInputProps>(
         onBlur={handleBlur}
         style={{
           maxWidth: expanded ? 480 : 320,
-          transition: smooth ? 'max-width 0.15s ease-out' : 'max-width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+          transition: smooth
+            ? 'max-width 0.15s ease-out'
+            : 'max-width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
         }}
       >
         <div
@@ -336,7 +244,7 @@ export const HomeAskInput = forwardRef<HTMLDivElement, HomeAskInputProps>(
             transition: smooth ? SMOOTH : SPRING,
           }}
           onMouseDown={(event) => {
-            if (!expanded || event.target === textareaRef.current || isRecording) return
+            if (!expanded || event.target === textareaRef.current || dictationBusy) return
             event.preventDefault()
             textareaRef.current?.focus()
           }}
@@ -350,9 +258,15 @@ export const HomeAskInput = forwardRef<HTMLDivElement, HomeAskInputProps>(
             onChange={(event) => setValue(event.target.value)}
             onScroll={updateFades}
             onKeyDown={onKeyDown}
-            placeholder={placeholder}
+            placeholder={
+              dictation.isRecording
+                ? 'Listening…'
+                : dictation.isTranscribing
+                  ? 'Transcribing…'
+                  : placeholder
+            }
             aria-label="Ask Clarifi about your meetings"
-            disabled={disabled || isRecording || sending}
+            disabled={disabled || dictationBusy || sending}
             style={{
               transition: smooth
                 ? 'height 0.15s ease-out'
@@ -383,15 +297,11 @@ export const HomeAskInput = forwardRef<HTMLDivElement, HomeAskInputProps>(
           </button>
 
           <div
-            className={`home-prompt-wave${isRecording ? ' is-visible' : ''}`}
+            className={`home-prompt-wave${isRecording ? ' is-visible is-pulsing' : ''}`}
             aria-hidden={!isRecording}
           >
-            {audioData.map((level, index) => (
-              <span
-                key={index}
-                className="home-prompt-wave-bar"
-                style={{ height: `${Math.max(4, level * 24)}px` }}
-              />
+            {[0, 1, 2, 3].map((index) => (
+              <span key={index} className="home-prompt-wave-bar" />
             ))}
           </div>
 
@@ -403,14 +313,22 @@ export const HomeAskInput = forwardRef<HTMLDivElement, HomeAskInputProps>(
               event.stopPropagation()
             }}
             onClick={onAction}
-            disabled={disabled || (sending && !isRecording)}
-            aria-label={showArrow ? 'Send' : showStop ? 'Stop recording' : 'Use voice input'}
+            disabled={disabled || (sending && !dictation.isRecording) || dictation.isTranscribing}
+            aria-label={
+              showArrow
+                ? 'Send'
+                : dictation.isTranscribing
+                  ? 'Transcribing'
+                  : showStop
+                    ? 'Stop dictation'
+                    : 'Start dictation'
+            }
           >
             <span
               className={`home-prompt-action-icon${showArrow ? ' is-visible' : ''}`}
               aria-hidden
             >
-              {sending && !isRecording ? <span className="home-prompt-spinner" /> : <ArrowUpIcon />}
+              {sending && !dictationBusy ? <span className="home-prompt-spinner" /> : <ArrowUpIcon />}
             </span>
             <span
               className={`home-prompt-action-icon${showMic ? ' is-visible' : ''}`}
@@ -422,7 +340,11 @@ export const HomeAskInput = forwardRef<HTMLDivElement, HomeAskInputProps>(
               className={`home-prompt-action-icon${showStop ? ' is-visible' : ''}`}
               aria-hidden
             >
-              <StopIcon />
+              {dictation.isTranscribing ? (
+                <span className="home-prompt-spinner" />
+              ) : (
+                <StopIcon />
+              )}
             </span>
           </button>
         </div>

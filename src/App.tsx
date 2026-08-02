@@ -13,18 +13,22 @@ import { OnboardingFlow } from './components/OnboardingFlow'
 import { SettingsPanel } from './components/SettingsPanel'
 import { SharedWithMeView } from './components/SharedWithMeView'
 import { Sidebar } from './components/Sidebar'
+import { SidebarToggle } from './components/SidebarToggle'
 import { ToastProvider } from './components/ui/Toast'
 import { useAudioPreferences } from './hooks/useAudioPreferences'
 import { useAuth } from './hooks/useAuth'
 import { useCalendar } from './hooks/useCalendar'
 import { useFolders } from './hooks/useFolders'
 import { useMeetings } from './hooks/useMeetings'
+import { useTags } from './hooks/useTags'
 import { useRecording } from './hooks/useRecording'
 import { useSidebarWidth } from './hooks/useSidebarWidth'
 import { formatMicCaptureError, isMicPermissionError } from './lib/microphones'
+import { takeDiscardMeetingOnMicCancel } from './lib/micPickerCancel'
 import { applyTheme } from './lib/theme'
 import { meetingAttendeesFromCalendar } from '../shared/speakers'
 import type { CalendarEvent } from '../shared/calendar'
+import type { MeetingTemplateId } from '../shared/meetingTemplates'
 import type { Meeting, SpeakerIdentities } from './types/meeting'
 import type { SidebarSelection } from './types/navigation'
 
@@ -46,8 +50,15 @@ function App() {
     openConnect: openCalendarConnect,
     refresh: refreshCalendar,
   } = useCalendar(connection.paired)
-  const { meetings, createMeeting, updateMeeting, deleteMeeting, enhanceMeeting, getMeeting } =
-    useMeetings()
+  const {
+    meetings,
+    createMeeting,
+    updateMeeting,
+    deleteMeeting,
+    enhanceMeeting,
+    getMeeting,
+    setMeetingTemplate,
+  } = useMeetings()
   const {
     folders,
     createFolder,
@@ -55,6 +66,7 @@ function App() {
     deleteFolder,
     setMeetingFolders,
   } = useFolders()
+  const { tags: allTags, setMeetingTags } = useTags()
   const { dragging: sidebarResizing, onResizePointerDown, resetWidth: resetSidebarWidth } =
     useSidebarWidth()
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -69,13 +81,10 @@ function App() {
   const [micPermissionDenied, setMicPermissionDenied] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deletingMeeting, setDeletingMeeting] = useState(false)
-  const [meetingFocusMode, setMeetingFocusMode] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const captureMeetingIdRef = useRef<string | null>(null)
-
-  useEffect(() => {
-    if (!activeMeeting) setMeetingFocusMode(false)
-  }, [activeMeeting])
+  /** Meeting created for this capture attempt — discard on mic-picker cancel. */
+  const discardMeetingOnMicCancelRef = useRef<string | null>(null)
 
   const recording = useRecording(captureMeetingId)
 
@@ -155,6 +164,20 @@ function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const meta = event.metaKey || event.ctrlKey
+      if (!meta || event.key.toLowerCase() !== 's') return
+      const target = event.target as HTMLElement | null
+      const tag = target?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || target?.isContentEditable) return
+      event.preventDefault()
+      setSidebarCollapsed((collapsed) => !collapsed)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   const selectedFromList = useMemo(
     () => meetings.find((meeting) => meeting.id === selectedId) ?? null,
     [meetings, selectedId],
@@ -172,9 +195,10 @@ function App() {
   }, [selectedFromList, connection.plan])
 
   const beginCapture = useCallback(
-    async (meetingId: string) => {
+    async (meetingId: string, options?: { discardOnMicCancel?: boolean }) => {
       setMicPickerError(null)
       setMicPermissionDenied(false)
+      discardMeetingOnMicCancelRef.current = options?.discardOnMicCancel ? meetingId : null
 
       const status = (await window.electronAPI.invoke('audio:status')) as {
         isRecording?: boolean
@@ -182,6 +206,7 @@ function App() {
       }
       if (status.isRecording) {
         const activeId = status.meetingId ?? meetingId
+        discardMeetingOnMicCancelRef.current = null
         setCaptureMeetingId(activeId)
         setSelectedId(activeId)
         setMicPickerOpen(false)
@@ -189,11 +214,12 @@ function App() {
       }
 
       setCaptureMeetingId(meetingId)
+      setSelectedId(meetingId)
       if (prefs?.skipMicPicker) {
         try {
           await recording.start(meetingId)
+          discardMeetingOnMicCancelRef.current = null
           setMicPickerOpen(false)
-          setSelectedId(meetingId)
         } catch (error) {
           console.error('[capture]', error)
           setMicPickerError(formatMicCaptureError(error))
@@ -208,8 +234,24 @@ function App() {
   )
 
   const handleNewMeeting = useCallback(async () => {
+    const status = (await window.electronAPI.invoke('audio:status')) as {
+      isRecording?: boolean
+      meetingId?: string | null
+    }
+    if (status.isRecording) {
+      const activeId = status.meetingId
+      if (activeId) {
+        setCaptureMeetingId(activeId)
+        setSelectedId(activeId)
+      }
+      setMicPickerOpen(false)
+      return
+    }
+
     const meeting = await createMeeting()
-    await beginCapture(meeting.id)
+    setSelectedId(meeting.id)
+    setActiveMeeting(meeting)
+    await beginCapture(meeting.id, { discardOnMicCancel: true })
   }, [beginCapture, createMeeting])
 
   const handleStartCalendarEvent = useCallback(
@@ -239,7 +281,7 @@ function App() {
       })
       setSelectedId(meeting.id)
       setActiveMeeting(meeting)
-      await beginCapture(meeting.id)
+      await beginCapture(meeting.id, { discardOnMicCancel: true })
     },
     [beginCapture, createMeeting, meetings],
   )
@@ -271,14 +313,27 @@ function App() {
   )
 
   const handleMicPickerClose = useCallback(() => {
+    const { deleteId: discardId } = takeDiscardMeetingOnMicCancel(
+      discardMeetingOnMicCancelRef.current,
+    )
+    discardMeetingOnMicCancelRef.current = null
     setMicPickerOpen(false)
     setMicPickerError(null)
     setMicPermissionDenied(false)
     setCaptureMeetingId(null)
-  }, [])
+    if (!discardId) return
+    if (selectedId === discardId) setSelectedId(null)
+    if (activeMeeting?.id === discardId) setActiveMeeting(null)
+    void deleteMeeting(discardId)
+  }, [activeMeeting?.id, deleteMeeting, selectedId])
 
   const handleMicPickerStart = useCallback(
-    async (deviceId: string, label: string, skipNextTime: boolean) => {
+    async (
+      deviceId: string,
+      label: string,
+      skipNextTime: boolean,
+      templateId: MeetingTemplateId,
+    ) => {
       const meetingId = captureMeetingIdRef.current
       if (!meetingId) return
 
@@ -288,9 +343,13 @@ function App() {
         preferredMicrophoneId: deviceId,
         preferredMicrophoneLabel: label,
       })
+      if (templateId !== 'general') {
+        await setMeetingTemplate(meetingId, templateId)
+      }
 
       try {
         await recording.start(meetingId)
+        discardMeetingOnMicCancelRef.current = null
         setMicPickerOpen(false)
         setMicPickerError(null)
         setSelectedId(meetingId)
@@ -303,7 +362,7 @@ function App() {
         setMicPermissionDenied(isMicPermissionError(error))
       }
     },
-    [recording, updatePrefs],
+    [recording, setMeetingTemplate, updatePrefs],
   )
 
   const handleUpdate = useCallback(
@@ -314,6 +373,8 @@ function App() {
       speakerIdentities?: SpeakerIdentities
       actionItems?: string[]
       completedActionItems?: string[]
+      enhancedNotes?: string
+      evidenceCache?: Record<string, string>
     }) => {
       if (!activeMeeting) return
       const updated = await updateMeeting(activeMeeting.id, patch)
@@ -377,7 +438,6 @@ function App() {
     setNav(selection)
     setSelectedId(null)
     setActiveMeeting(null)
-    setMeetingFocusMode(false)
   }, [])
 
   const handleCommandNavigate = useCallback(
@@ -412,13 +472,21 @@ function App() {
     if (nav.view === 'folder' && nav.folderId) {
       return meetings.filter((meeting) => (meeting.folderIds ?? []).includes(nav.folderId!))
     }
+    if (nav.view === 'tag' && nav.tagName) {
+      const wanted = nav.tagName.toLowerCase()
+      return meetings.filter((meeting) =>
+        (meeting.tags ?? []).some((tag) => tag.toLowerCase() === wanted),
+      )
+    }
     return meetings
   }, [meetings, nav])
 
   const folderTitle =
     nav.view === 'folder'
       ? folders.find((folder) => folder.id === nav.folderId)?.name ?? 'Folder'
-      : 'Meetings'
+      : nav.view === 'tag'
+        ? `#${nav.tagName ?? ''}`
+        : 'Meetings'
 
   if (onboardingDone === null) {
     return <div className="app-shell" />
@@ -440,48 +508,38 @@ function App() {
     <ToastProvider>
     <ErrorBoundary>
       <div
-        className={`app-shell${meetingFocusMode && activeMeeting ? ' is-meeting-focus' : ''}${
-          sidebarCollapsed && !(meetingFocusMode && activeMeeting) ? ' is-sidebar-collapsed' : ''
+        className={`app-shell${
+          sidebarCollapsed ? ' is-sidebar-collapsed' : ''
         }`}
       >
         <div className="app-titlebar-drag" aria-hidden="true" />
         <OfflineBanner />
-        {!meetingFocusMode || !activeMeeting ? (
-          sidebarCollapsed ? (
-            <button
-              type="button"
-              className="sidebar-expand-btn no-drag"
-              aria-label="Expand sidebar"
-              title="Expand sidebar"
-              onClick={() => setSidebarCollapsed(false)}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
-                <path d="M9.5 4.5v15" />
-              </svg>
-            </button>
-          ) : (
-            <Sidebar
-              selection={nav}
-              onSelectView={handleSelectView}
-              meetings={meetings}
-              onSelectMeeting={(id) => void handleSelect(id)}
-              folders={folders}
-              onCreateFolder={(name) => void createFolder(name)}
-              onRenameFolder={(id, name) => void renameFolder(id, name)}
-              onDeleteFolder={(id) => void deleteFolder(id)}
-              connection={connection}
-              onNewMeeting={() => void handleNewMeeting()}
-              onConnect={() => void openConnect()}
-              onOpenDashboard={() => void openDashboard()}
-              onOpenSettings={() => setSettingsOpen(true)}
-              resizing={sidebarResizing}
-              onResizePointerDown={onResizePointerDown}
-              onResizeDoubleClick={resetSidebarWidth}
-              onCollapse={() => setSidebarCollapsed(true)}
-            />
-          )
-        ) : null}
+        <SidebarToggle
+          expanded={!sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed((collapsed) => !collapsed)}
+          className="sidebar-toggle-chrome"
+        />
+        <Sidebar
+          selection={nav}
+          onSelectView={handleSelectView}
+          meetings={meetings}
+          onSelectMeeting={(id) => void handleSelect(id)}
+          folders={folders}
+          onCreateFolder={(name) => void createFolder(name)}
+          onRenameFolder={(id, name) => void renameFolder(id, name)}
+          onDeleteFolder={(id) => void deleteFolder(id)}
+          allTags={allTags}
+          connection={connection}
+          calendarConnected={calendarStatus.connected}
+          onNewMeeting={() => void handleNewMeeting()}
+          onConnect={() => void openConnect()}
+          onOpenDashboard={() => void openDashboard()}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onConnectCalendar={() => void openCalendarConnect('google')}
+          resizing={sidebarResizing}
+          onResizePointerDown={onResizePointerDown}
+          onResizeDoubleClick={resetSidebarWidth}
+        />
 
         {settingsOpen ? (
           <SettingsPanel onClose={() => setSettingsOpen(false)} calendarEnabled={connection.paired} />
@@ -500,8 +558,8 @@ function App() {
           error={micPickerError}
           permissionDenied={micPermissionDenied}
           onClose={handleMicPickerClose}
-          onStart={(deviceId, label, skipNextTime) =>
-            handleMicPickerStart(deviceId, label, skipNextTime)
+          onStart={(deviceId, label, skipNextTime, templateId) =>
+            handleMicPickerStart(deviceId, label, skipNextTime, templateId)
           }
         />
 
@@ -551,18 +609,16 @@ function App() {
               meeting={activeMeeting}
               connected={connection.paired}
               plan={connection.plan}
+              ownerEmail={connection.email}
               captureMeetingId={captureMeetingId}
               recording={recording}
               folders={folders}
-              isMaximized={meetingFocusMode}
-              onToggleMaximize={() => setMeetingFocusMode((v) => !v)}
               onStartCapture={handleStartCapture}
               onUpdate={(patch) => void handleUpdate(patch)}
               onDelete={requestDelete}
               onEnhance={() => void handleEnhance()}
               onConnect={() => void openConnect()}
               onOpenDashboard={() => void openDashboard()}
-              onBackHome={() => handleSelectView({ view: 'home' })}
               onSetFolders={(folderIds) => {
                 void setMeetingFolders(activeMeeting.id, folderIds).then(async () => {
                   const refreshed = await getMeeting(activeMeeting.id)
@@ -578,6 +634,20 @@ function App() {
                   if (refreshed) setActiveMeeting(refreshed)
                 }
                 return folder
+              }}
+              allTags={allTags}
+              onSetTags={(tags) => {
+                void setMeetingTags(activeMeeting.id, tags).then(async () => {
+                  const refreshed = await getMeeting(activeMeeting.id)
+                  if (refreshed) setActiveMeeting(refreshed)
+                })
+              }}
+              onChangeTemplate={(templateId) => {
+                void setMeetingTemplate(activeMeeting.id, templateId).then(async () => {
+                  const refreshed = await getMeeting(activeMeeting.id)
+                  if (refreshed) setActiveMeeting(refreshed)
+                  await handleEnhance()
+                })
               }}
             />
           ) : nav.view === 'home' ? (
@@ -617,14 +687,15 @@ function App() {
               subtitle={
                 nav.view === 'folder'
                   ? 'Meetings in this folder'
-                  : 'All of your meeting notes'
+                  : nav.view === 'tag'
+                    ? 'Meetings tagged with this label'
+                    : 'All of your meeting notes'
               }
               meetings={filteredMeetings}
               selectedId={selectedId}
               connection={connection}
               onSelectMeeting={(id) => void handleSelect(id)}
               onOpenDashboard={() => void openDashboard()}
-              onNewMeeting={() => void handleNewMeeting()}
               isMeetingLocked={(meeting) => isMeetingLocked(meeting, connection.plan)}
             />
           )}

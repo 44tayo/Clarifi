@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  isShareViewerAuthorized,
+  normalizeShareLinkAccess,
   shareUrlForToken,
   snapshotSharedMeetingContent,
 } from '../web/src/lib/share-link'
@@ -36,5 +38,69 @@ describe('public share link helpers', () => {
   it('treats /share pages as public (no login)', () => {
     expect(isPublicPath('/share/abc123')).toBe(true)
     expect(isPublicPath('/api/share/abc123')).toBe(true)
+  })
+})
+
+describe('share link access control', () => {
+  it('defaults unknown/missing values to anyone', () => {
+    expect(normalizeShareLinkAccess(undefined)).toBe('anyone')
+    expect(normalizeShareLinkAccess(null)).toBe('anyone')
+    expect(normalizeShareLinkAccess('nonsense')).toBe('anyone')
+    expect(normalizeShareLinkAccess('invited')).toBe('invited')
+  })
+
+  it('allows anyone-mode links for anonymous requesters', () => {
+    expect(
+      isShareViewerAuthorized({
+        linkAccess: 'anyone',
+        ownerEmail: 'owner@example.com',
+        invitedEmails: [],
+        requesterEmail: null,
+      }),
+    ).toBe(true)
+  })
+
+  it('denies invited-mode links to anonymous (signed-out) requesters', () => {
+    expect(
+      isShareViewerAuthorized({
+        linkAccess: 'invited',
+        ownerEmail: 'owner@example.com',
+        invitedEmails: ['guest@example.com'],
+        requesterEmail: null,
+      }),
+    ).toBe(false)
+  })
+
+  it('denies invited-mode links to signed-in but non-invited requesters', () => {
+    expect(
+      isShareViewerAuthorized({
+        linkAccess: 'invited',
+        ownerEmail: 'owner@example.com',
+        invitedEmails: ['guest@example.com'],
+        requesterEmail: 'stranger@example.com',
+      }),
+    ).toBe(false)
+  })
+
+  it('allows the owner even without being explicitly invited', () => {
+    expect(
+      isShareViewerAuthorized({
+        linkAccess: 'invited',
+        ownerEmail: 'Owner@Example.com',
+        invitedEmails: [],
+        requesterEmail: 'owner@example.com',
+      }),
+    ).toBe(true)
+  })
+
+  it('allows invited emails case-insensitively', () => {
+    expect(
+      isShareViewerAuthorized({
+        linkAccess: 'invited',
+        ownerEmail: 'owner@example.com',
+        invitedEmails: ['Guest@Example.com'],
+        requesterEmail: 'guest@example.com',
+      }),
+    ).toBe(true)
   })
 })

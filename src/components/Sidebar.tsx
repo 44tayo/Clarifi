@@ -1,5 +1,7 @@
 import {
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
@@ -18,15 +20,17 @@ type SidebarProps = {
   onCreateFolder: (name: string) => void
   onRenameFolder: (id: string, name: string) => void
   onDeleteFolder: (id: string) => void
+  allTags: string[]
   connection: ConnectionStatus
+  calendarConnected?: boolean
   onNewMeeting: () => void
   onConnect: () => void
   onOpenDashboard: () => void
   onOpenSettings: () => void
+  onConnectCalendar?: () => void
   resizing?: boolean
   onResizePointerDown?: (event: ReactPointerEvent<HTMLDivElement>) => void
   onResizeDoubleClick?: () => void
-  onCollapse?: () => void
 }
 
 function NavIcon({ children }: { children: ReactNode }) {
@@ -37,75 +41,42 @@ function NavIcon({ children }: { children: ReactNode }) {
   )
 }
 
-function Chevron({ open }: { open?: boolean }) {
-  return (
-    <span className={`sidebar-nav-chevron${open ? ' is-open' : ''}`} aria-hidden>
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-        <path
-          d="M4.5 2.5 8 6 4.5 9.5"
-          stroke="currentColor"
-          strokeWidth="1.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </span>
-  )
-}
-
 function accountInitial(email?: string) {
   const trimmed = email?.trim()
   if (!trimmed) return 'C'
   return trimmed.charAt(0).toUpperCase()
 }
 
-type AccordionProps = {
-  label: string
-  active: boolean
-  icon: ReactNode
-  onOpenAll: () => void
-  onAdd?: () => void
-  addLabel?: string
-  children: ReactNode
+function planDisplay(connection: ConnectionStatus): string {
+  if (connection.planLabel?.trim()) return connection.planLabel.trim()
+  if (connection.plan === 'pro_plus') return 'Pro+'
+  if (connection.plan === 'pro') return 'Pro'
+  if (!connection.paired) return 'Not connected'
+  return `Free · ${FREE_HISTORY_RETENTION_DAYS}d history`
 }
 
-function NavAccordion({ label, active, icon, onOpenAll, onAdd, addLabel, children }: AccordionProps) {
-  const [open, setOpen] = useState(false)
+function isPaidPlan(connection: ConnectionStatus): boolean {
+  return connection.plan === 'pro' || connection.plan === 'pro_plus'
+}
 
-  return (
-    <div className={`sidebar-nav-accordion${open ? ' is-open' : ''}${active ? ' is-active' : ''}`}>
-      <div className="sidebar-nav-accordion-trigger">
-        <button
-          type="button"
-          className={`sidebar-nav-item sidebar-nav-accordion-main${active ? ' is-active' : ''}`}
-          aria-expanded={open}
-          onClick={() => {
-            setOpen((prev) => !prev)
-            onOpenAll()
-          }}
-        >
-          <NavIcon>{icon}</NavIcon>
-          <span className="sidebar-nav-accordion-label">{label}</span>
-          <Chevron open={open} />
-        </button>
-        {onAdd ? (
-          <button
-            type="button"
-            className="sidebar-nav-accordion-add"
-            aria-label={addLabel ?? `New ${label}`}
-            title={addLabel ?? `New ${label}`}
-            onClick={(event) => {
-              event.stopPropagation()
-              onAdd()
-            }}
-          >
-            +
-          </button>
-        ) : null}
-      </div>
-      {open ? <div className="sidebar-nav-accordion-panel">{children}</div> : null}
-    </div>
-  )
+const TRIAL_TOTAL_DAYS = 30
+
+function trialDayProgress(trialEndsAtIso: string): {
+  daysLeft: number
+  daysUsed: number
+  ratio: number
+} {
+  const ends = Date.parse(trialEndsAtIso)
+  if (!Number.isFinite(ends)) {
+    return { daysLeft: 0, daysUsed: TRIAL_TOTAL_DAYS, ratio: 1 }
+  }
+  const dayMs = 24 * 60 * 60 * 1000
+  const starts = ends - TRIAL_TOTAL_DAYS * dayMs
+  const now = Date.now()
+  const daysLeft = Math.max(0, Math.ceil((ends - now) / dayMs))
+  const daysUsed = Math.min(TRIAL_TOTAL_DAYS, Math.max(0, Math.floor((now - starts) / dayMs)))
+  const ratio = Math.min(1, Math.max(0, daysUsed / TRIAL_TOTAL_DAYS))
+  return { daysLeft, daysUsed, ratio }
 }
 
 export function Sidebar({
@@ -117,19 +88,50 @@ export function Sidebar({
   onCreateFolder,
   onRenameFolder,
   onDeleteFolder,
+  allTags,
   connection,
+  calendarConnected = false,
   onNewMeeting,
   onConnect,
   onOpenDashboard,
   onOpenSettings,
+  onConnectCalendar,
   resizing = false,
   onResizePointerDown,
   onResizeDoubleClick,
-  onCollapse,
 }: SidebarProps) {
-  const isActive = (view: SidebarSelection['view'], folderId?: string) => {
+  const [accountOpen, setAccountOpen] = useState(false)
+  const accountMenuRef = useRef<HTMLDivElement>(null)
+  const plan = planDisplay(connection)
+  const paid = isPaidPlan(connection)
+  const trial =
+    connection.trialActive && connection.trialEndsAt
+      ? trialDayProgress(connection.trialEndsAt)
+      : null
+  const ctaLabel = connection.trialActive || !paid ? 'Upgrade' : 'Manage plan'
+
+  useEffect(() => {
+    if (!accountOpen) return
+    const onPointer = (event: MouseEvent) => {
+      if (!accountMenuRef.current?.contains(event.target as Node)) setAccountOpen(false)
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setAccountOpen(false)
+    }
+    document.addEventListener('mousedown', onPointer)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onPointer)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [accountOpen])
+
+  const isActive = (view: SidebarSelection['view'], id?: string) => {
     if (view === 'folder') {
-      return selection.view === 'folder' && selection.folderId === folderId
+      return selection.view === 'folder' && selection.folderId === id
+    }
+    if (view === 'tag') {
+      return selection.view === 'tag' && selection.tagName === id
     }
     return selection.view === view
   }
@@ -142,8 +144,13 @@ export function Sidebar({
     [meetings],
   )
 
+  const runAndClose = (action: () => void) => {
+    setAccountOpen(false)
+    action()
+  }
+
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar${accountOpen ? ' is-account-menu-open' : ''}`}>
       <div
         className={`sidebar-resize-handle${resizing ? ' is-dragging' : ''}`}
         role="separator"
@@ -153,35 +160,10 @@ export function Sidebar({
         onDoubleClick={onResizeDoubleClick}
       />
       <div className="sidebar-header">
-        <div className="sidebar-header-top">
-          <div className="sidebar-brand">
-            <img
-              className="sidebar-brand-mark"
-              src={`${import.meta.env.BASE_URL}clarifi-logo.png`}
-              alt=""
-              width={22}
-              height={22}
-              draggable={false}
-            />
-            <span className="sidebar-brand-name">Clarifi</span>
-          </div>
-          {onCollapse ? (
-            <button
-              type="button"
-              className="sidebar-collapse-btn no-drag"
-              aria-label="Collapse sidebar"
-              title="Collapse sidebar"
-              onClick={onCollapse}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
-                <path d="M9.5 4.5v15" />
-              </svg>
-            </button>
-          ) : null}
-        </div>
+        {/* Spacer so the fixed sidebar toggle doesn’t overlap New meeting */}
+        <div className="sidebar-header-top" aria-hidden="true" />
         <button type="button" className="sidebar-start-btn" onClick={onNewMeeting}>
-          New meeting
+          + New meeting
         </button>
       </div>
 
@@ -199,111 +181,32 @@ export function Sidebar({
           Home
         </button>
 
-        <NavAccordion
-          label="Chat"
-          active={isActive('chat')}
-          onOpenAll={() => onSelectView({ view: 'chat' })}
-          onAdd={() => onSelectView({ view: 'chat' })}
-          addLabel="New chat"
-          icon={
+        <button
+          type="button"
+          className={`sidebar-nav-item${isActive('chat') ? ' is-active' : ''}`}
+          onClick={() => onSelectView({ view: 'chat' })}
+        >
+          <NavIcon>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v7A2.5 2.5 0 0 1 16.5 16H10l-4 3.5V16H7.5A2.5 2.5 0 0 1 5 13.5v-7Z" />
             </svg>
-          }
-        >
-          <p className="sidebar-flyout-empty">Ask across your meetings</p>
-          <button
-            type="button"
-            className="sidebar-flyout-item"
-            onClick={() => onSelectView({ view: 'chat' })}
-          >
-            Open chat
-          </button>
-        </NavAccordion>
+          </NavIcon>
+          Chat
+        </button>
 
-        <NavAccordion
-          label="Meetings"
-          active={isActive('meetings') || selection.view === 'folder'}
-          onOpenAll={() => onSelectView({ view: 'meetings' })}
-          onAdd={onNewMeeting}
-          addLabel="New meeting"
-          icon={
+        <button
+          type="button"
+          className={`sidebar-nav-item${isActive('meetings') ? ' is-active' : ''}`}
+          onClick={() => onSelectView({ view: 'meetings' })}
+        >
+          <NavIcon>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <rect x="4" y="5" width="16" height="15" rx="2" />
               <path d="M8 3v4M16 3v4M4 10h16" />
             </svg>
-          }
-        >
-          <div className="sidebar-flyout-section-row">
-            <p className="sidebar-flyout-section">Folders</p>
-            <button
-              type="button"
-              className="sidebar-flyout-section-add"
-              aria-label="New folder"
-              title="New folder"
-              onClick={() => {
-                const name = window.prompt('Folder name', 'New folder')
-                if (name?.trim()) onCreateFolder(name.trim())
-              }}
-            >
-              +
-            </button>
-          </div>
-          {folders.map((folder) => (
-            <div key={folder.id} className="sidebar-flyout-folder-row">
-              <button
-                type="button"
-                className={`sidebar-flyout-item${isActive('folder', folder.id) ? ' is-active' : ''}`}
-                onClick={() => onSelectView({ view: 'folder', folderId: folder.id })}
-                onDoubleClick={() => {
-                  const name = window.prompt('Rename folder', folder.name)
-                  if (name?.trim() && name.trim() !== folder.name) {
-                    onRenameFolder(folder.id, name.trim())
-                  }
-                }}
-                title="Double-click to rename"
-              >
-                <span className="sidebar-flyout-item-icon" aria-hidden>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M3.5 8.5A2.5 2.5 0 0 1 6 6h4l2 2h6a2.5 2.5 0 0 1 2.5 2.5v7A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5v-9Z" />
-                  </svg>
-                </span>
-                {folder.name}
-              </button>
-              <button
-                type="button"
-                className="sidebar-flyout-folder-delete"
-                aria-label={`Delete ${folder.name}`}
-                onClick={() => {
-                  if (window.confirm(`Delete folder “${folder.name}”? Meetings stay in Meetings.`)) {
-                    onDeleteFolder(folder.id)
-                    if (selection.view === 'folder' && selection.folderId === folder.id) {
-                      onSelectView({ view: 'meetings' })
-                    }
-                  }
-                }}
-              >
-                ×
-              </button>
-            </div>
-          ))}
-
-          <p className="sidebar-flyout-section">Meetings</p>
-          {recentMeetings.length === 0 ? (
-            <p className="sidebar-flyout-empty">No meetings yet</p>
-          ) : (
-            recentMeetings.map((meeting) => (
-              <button
-                key={meeting.id}
-                type="button"
-                className="sidebar-flyout-item"
-                onClick={() => onSelectMeeting(meeting.id)}
-              >
-                {meeting.title}
-              </button>
-            ))
-          )}
-        </NavAccordion>
+          </NavIcon>
+          Meetings
+        </button>
 
         <button
           type="button"
@@ -321,11 +224,7 @@ export function Sidebar({
           Shared with me
         </button>
 
-        <button
-          type="button"
-          className="sidebar-nav-item"
-          onClick={onOpenSettings}
-        >
+        <button type="button" className="sidebar-nav-item" onClick={onOpenSettings}>
           <NavIcon>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="3" />
@@ -334,42 +233,229 @@ export function Sidebar({
           </NavIcon>
           Settings
         </button>
+
+        <div className="sidebar-nav-section">
+          <div className="sidebar-flyout-section-row">
+            <p className="sidebar-flyout-section">Folders</p>
+            <button
+              type="button"
+              className="sidebar-flyout-section-add"
+              aria-label="New folder"
+              title="New folder"
+              onClick={() => {
+                const name = window.prompt('Folder name', 'New folder')
+                if (name?.trim()) onCreateFolder(name.trim())
+              }}
+            >
+              +
+            </button>
+          </div>
+          {folders.length === 0 ? (
+            <p className="sidebar-flyout-empty">No folders yet</p>
+          ) : (
+            folders.map((folder) => (
+              <div key={folder.id} className="sidebar-flyout-folder-row">
+                <button
+                  type="button"
+                  className={`sidebar-flyout-item${isActive('folder', folder.id) ? ' is-active' : ''}`}
+                  onClick={() => onSelectView({ view: 'folder', folderId: folder.id })}
+                  onDoubleClick={() => {
+                    const name = window.prompt('Rename folder', folder.name)
+                    if (name?.trim() && name.trim() !== folder.name) {
+                      onRenameFolder(folder.id, name.trim())
+                    }
+                  }}
+                  title="Double-click to rename"
+                >
+                  <span className="sidebar-flyout-item-icon" aria-hidden>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M3.5 8.5A2.5 2.5 0 0 1 6 6h4l2 2h6a2.5 2.5 0 0 1 2.5 2.5v7A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5v-9Z" />
+                    </svg>
+                  </span>
+                  {folder.name}
+                </button>
+                <button
+                  type="button"
+                  className="sidebar-flyout-folder-delete"
+                  aria-label={`Delete ${folder.name}`}
+                  onClick={() => {
+                    if (window.confirm(`Delete folder “${folder.name}”? Meetings stay in Meetings.`)) {
+                      onDeleteFolder(folder.id)
+                      if (selection.view === 'folder' && selection.folderId === folder.id) {
+                        onSelectView({ view: 'meetings' })
+                      }
+                    }
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            ))
+          )}
+
+          {allTags.length > 0 ? (
+            <>
+              <p className="sidebar-flyout-section">Tags</p>
+              {allTags.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  className={`sidebar-flyout-item${isActive('tag', tag) ? ' is-active' : ''}`}
+                  onClick={() => onSelectView({ view: 'tag', tagName: tag })}
+                >
+                  <span className="sidebar-flyout-item-icon" aria-hidden>
+                    #
+                  </span>
+                  {tag}
+                </button>
+              ))}
+            </>
+          ) : null}
+
+          <p className="sidebar-flyout-section">Recent</p>
+          {recentMeetings.length === 0 ? (
+            <p className="sidebar-flyout-empty">No meetings yet</p>
+          ) : (
+            recentMeetings.map((meeting) => (
+              <button
+                key={meeting.id}
+                type="button"
+                className="sidebar-flyout-item"
+                onClick={() => onSelectMeeting(meeting.id)}
+              >
+                {meeting.title}
+              </button>
+            ))
+          )}
+        </div>
       </nav>
 
-      <div className="sidebar-footer">
-        {connection.paired ? (
-          <div className="account-chip account-chip-compact">
-            <span className="account-chip-avatar" aria-hidden>
-              {accountInitial(connection.email)}
-            </span>
-            <div className="account-chip-meta">
-              <span className="account-chip-email">{connection.email ?? 'Connected'}</span>
-              <span className="account-chip-plan">
-                {connection.planLabel ??
-                  (connection.plan !== 'pro' && connection.plan !== 'pro_plus'
-                    ? `Free · ${FREE_HISTORY_RETENTION_DAYS}d`
-                    : 'Plan')}
+      <div className="sidebar-footer" ref={accountMenuRef}>
+        {accountOpen ? (
+          <div className="sidebar-account-menu" role="menu" aria-label="Account">
+            <div className="sidebar-account-menu-header">
+              <span className="account-chip-avatar" aria-hidden>
+                {connection.paired ? accountInitial(connection.email) : '?'}
               </span>
+              <div className="sidebar-account-menu-meta">
+                <strong className="sidebar-account-menu-email">
+                  {connection.paired ? connection.email ?? 'Connected' : 'Not connected'}
+                </strong>
+                <span className="sidebar-account-menu-plan">{plan}</span>
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="account-chip account-chip-compact">
-            <span className="account-chip-avatar" aria-hidden>
-              ?
-            </span>
-            <div className="account-chip-meta">
-              <span className="account-chip-email">Not connected</span>
-              <button type="button" className="link-btn" onClick={onConnect}>
+
+            {trial ? (
+              <div className="sidebar-account-trial" aria-label="Free trial progress">
+                <div className="sidebar-account-trial-row">
+                  <span className="sidebar-account-trial-label">
+                    {plan} trial
+                  </span>
+                  <span className="sidebar-account-trial-days">
+                    {trial.daysLeft === 0
+                      ? 'Last day'
+                      : trial.daysLeft === 1
+                        ? '1 day left'
+                        : `${trial.daysLeft} days left`}
+                  </span>
+                </div>
+                <div
+                  className="sidebar-account-trial-track"
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={TRIAL_TOTAL_DAYS}
+                  aria-valuenow={trial.daysUsed}
+                  aria-label={`${trial.daysUsed} of ${TRIAL_TOTAL_DAYS} trial days used`}
+                >
+                  <span
+                    className="sidebar-account-trial-fill"
+                    style={{ width: `${Math.round(trial.ratio * 100)}%` }}
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            {connection.paired ? (
+              <button
+                type="button"
+                className="sidebar-account-menu-cta"
+                role="menuitem"
+                onClick={() => runAndClose(onOpenDashboard)}
+              >
+                {ctaLabel}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="sidebar-account-menu-cta"
+                role="menuitem"
+                onClick={() => runAndClose(onConnect)}
+              >
                 Connect account
               </button>
+            )}
+
+            <div className="sidebar-account-menu-actions">
+              <button
+                type="button"
+                className="sidebar-account-menu-item"
+                role="menuitem"
+                onClick={() => runAndClose(onOpenSettings)}
+              >
+                Settings
+              </button>
+              {connection.paired ? (
+                <button
+                  type="button"
+                  className="sidebar-account-menu-item"
+                  role="menuitem"
+                  onClick={() => runAndClose(onOpenDashboard)}
+                >
+                  Open dashboard
+                </button>
+              ) : null}
+              {connection.paired && !calendarConnected && onConnectCalendar ? (
+                <button
+                  type="button"
+                  className="sidebar-account-menu-item"
+                  role="menuitem"
+                  onClick={() => runAndClose(onConnectCalendar)}
+                >
+                  Connect calendar
+                </button>
+              ) : null}
             </div>
           </div>
-        )}
-        {connection.paired ? (
-          <button type="button" className="link-btn sidebar-dashboard-link" onClick={onOpenDashboard}>
-            Open dashboard
-          </button>
         ) : null}
+
+        <button
+          type="button"
+          className={`sidebar-account-trigger${accountOpen ? ' is-open' : ''}`}
+          aria-expanded={accountOpen}
+          aria-haspopup="menu"
+          onClick={() => setAccountOpen((open) => !open)}
+        >
+          <span className="account-chip-avatar" aria-hidden>
+            {connection.paired ? accountInitial(connection.email) : '?'}
+          </span>
+          <span className="account-chip-meta">
+            <span className="account-chip-email">
+              {connection.paired ? connection.email ?? 'Connected' : 'Not connected'}
+            </span>
+            <span className="account-chip-plan">{plan}</span>
+          </span>
+          <span className="sidebar-account-chevron" aria-hidden>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path
+                d="M3 7.5 6 4.5 9 7.5"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+        </button>
       </div>
     </aside>
   )

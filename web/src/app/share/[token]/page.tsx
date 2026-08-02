@@ -1,13 +1,15 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 
+import { getServerUser } from '@/lib/auth-server'
 import { getSharedMeetingByToken } from '@/lib/share-notes'
 
 type PageProps = { params: Promise<{ token: string }> }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { token } = await params
-  const shared = await getSharedMeetingByToken(token)
+  const user = await getServerUser()
+  const shared = await getSharedMeetingByToken(token, user?.email)
   return {
     title: shared ? `${shared.title} — Clarifi` : 'Shared notes — Clarifi',
   }
@@ -15,7 +17,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function SharedMeetingPage({ params }: PageProps) {
   const { token } = await params
-  const shared = await getSharedMeetingByToken(token)
+  const user = await getServerUser()
+  const shared = await getSharedMeetingByToken(token, user?.email)
 
   if (!shared) {
     return (

@@ -31,6 +31,9 @@ export type DeviceProfile = {
   plan?: string
   planLabel?: string
   entitlements?: string[]
+  trialEndsAt?: string | null
+  subscriptionStatus?: string | null
+  trialActive?: boolean
 }
 
 function profileCachePath(): string {
@@ -62,6 +65,9 @@ function writeCachedProfile(profile: DeviceProfile): void {
         plan: profile.plan,
         planLabel: profile.planLabel,
         entitlements: profile.entitlements,
+        trialEndsAt: profile.trialEndsAt ?? null,
+        subscriptionStatus: profile.subscriptionStatus ?? null,
+        trialActive: Boolean(profile.trialActive),
       }),
     )
   } catch {

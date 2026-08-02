@@ -10,12 +10,16 @@ import { getDesktopUserProfile } from '@/lib/desktop-profile'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { sendSharedNoteEmail, buildSharedNoteEmailText, sharedNoteEmailSubject } from '@/lib/share-email'
 import {
+  isShareViewerAuthorized,
+  normalizeShareLinkAccess,
   shareUrlForToken,
   snapshotSharedMeetingContent,
+  type ShareLinkAccess,
   type SharedMeetingSnapshotInput,
 } from '@/lib/share-link'
 
 export type SharedMeetingSnapshot = SharedMeetingSnapshotInput
+export type LinkAccess = ShareLinkAccess
 
 function admin() {
   const client = getSupabaseAdmin()
@@ -51,9 +55,11 @@ async function ensurePersonalCommunity(userId: string): Promise<string> {
 export async function publishSharedMeeting(
   userId: string,
   meeting: SharedMeetingSnapshot,
+  linkAccess: LinkAccess = 'anyone',
 ): Promise<{ shareUrl: string; itemId: string; communityId: string; token: string }> {
   const communityId = await ensurePersonalCommunity(userId)
   const content = snapshotSharedMeetingContent(meeting)
+  const access = normalizeShareLinkAccess(linkAccess)
 
   // Reuse an existing public token for this meeting so Copy link stays stable.
   const { data: existing, error: existingError } = await admin()
@@ -74,6 +80,9 @@ export async function publishSharedMeeting(
         title: meeting.title,
         content,
         community_id: communityId,
+        // Every (re-)publish syncs the current access mode server-side so a
+        // toggle change actually takes effect on the already-issued link.
+        link_access: access,
       })
       .eq('token', existing.token)
       .eq('owner_user_id', userId)
@@ -103,6 +112,7 @@ export async function publishSharedMeeting(
     item_id: item.id,
     title: meeting.title,
     content,
+    link_access: access,
   })
 
   if (error) throw error
@@ -115,23 +125,128 @@ export async function publishSharedMeeting(
   }
 }
 
-export async function getSharedMeetingByToken(token: string): Promise<{
+/** Owner view: current share link + who has been invited for this meeting. */
+export async function getSharedMeetingAccess(
+  userId: string,
+  meetingId: string,
+): Promise<{
+  shareUrl: string | null
+  communityId: string | null
+  itemId: string | null
+  linkAccess: LinkAccess
+  invitedEmails: string[]
+} | null> {
+  const { data, error } = await admin()
+    .from('shared_meeting_notes')
+    .select('token, item_id, community_id, link_access, invited_emails')
+    .eq('owner_user_id', userId)
+    .eq('content->>sourceMeetingId', meetingId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw error
+  if (!data) {
+    return {
+      shareUrl: null,
+      communityId: null,
+      itemId: null,
+      linkAccess: 'anyone',
+      invitedEmails: [],
+    }
+  }
+
+  const invitedEmails = (Array.isArray(data.invited_emails) ? data.invited_emails : [])
+    .filter((email): email is string => typeof email === 'string' && Boolean(email.trim()))
+    .map((email) => email.trim().toLowerCase())
+
+  return {
+    shareUrl: data.token ? shareUrlForToken(data.token as string, appOrigin()) : null,
+    communityId: (data.community_id as string | null) ?? null,
+    itemId: (data.item_id as string | null) ?? null,
+    linkAccess: normalizeShareLinkAccess(data.link_access),
+    invitedEmails,
+  }
+}
+
+/**
+ * Fetch a shared note by its public token, enforcing link_access server-side.
+ *
+ * When link_access is 'invited', the content is withheld from anyone whose
+ * email isn't the owner or on the invited list — including anonymous
+ * (signed-out) requests. Unauthorized/unknown tokens both resolve to `null`
+ * so callers can render one indistinguishable "not found" state rather than
+ * leaking whether a private token exists.
+ */
+export async function getSharedMeetingByToken(
+  token: string,
+  requesterEmail?: string | null,
+): Promise<{
   title: string
   content: SharedMeetingSnapshot & Record<string, unknown>
   createdAt: string
 } | null> {
   const { data, error } = await admin()
     .from('shared_meeting_notes')
-    .select('title, content, created_at')
+    .select('title, content, created_at, owner_user_id, link_access, invited_emails')
     .eq('token', token)
     .maybeSingle()
 
   if (error || !data) return null
+
+  const linkAccess = normalizeShareLinkAccess(data.link_access)
+  if (linkAccess === 'invited') {
+    const invitedEmails = (Array.isArray(data.invited_emails) ? data.invited_emails : []).filter(
+      (email): email is string => typeof email === 'string',
+    )
+    const ownerEmail = await getOwnerEmail(data.owner_user_id as string)
+
+    const authorized = isShareViewerAuthorized({
+      linkAccess,
+      ownerEmail,
+      invitedEmails,
+      requesterEmail,
+    })
+    if (!authorized) return null
+  }
+
   return {
     title: data.title as string,
     content: (data.content ?? {}) as SharedMeetingSnapshot & Record<string, unknown>,
     createdAt: data.created_at as string,
   }
+}
+
+async function getOwnerEmail(ownerUserId: string): Promise<string | null> {
+  const { data } = await admin()
+    .from('profiles')
+    .select('email')
+    .eq('user_id', ownerUserId)
+    .maybeSingle()
+  return (data?.email as string | undefined) ?? null
+}
+
+/** Add an email to a share's invited allowlist (dedup, case-insensitive). */
+async function addInvitedEmail(token: string, email: string): Promise<void> {
+  const normalized = email.trim().toLowerCase()
+  const { data, error } = await admin()
+    .from('shared_meeting_notes')
+    .select('invited_emails')
+    .eq('token', token)
+    .maybeSingle()
+
+  if (error || !data) return
+
+  const existing = (Array.isArray(data.invited_emails) ? data.invited_emails : [])
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.toLowerCase())
+
+  if (existing.includes(normalized)) return
+
+  await admin()
+    .from('shared_meeting_notes')
+    .update({ invited_emails: [...existing, normalized] })
+    .eq('token', token)
 }
 
 /**
@@ -174,6 +289,8 @@ export async function inviteToSharedCommunity(
   if (!shared?.token) {
     throw Object.assign(new Error('share_not_found'), { code: 'share_not_found' })
   }
+
+  await addInvitedEmail(shared.token, normalizedEmail)
 
   const content = (shared.content ?? {}) as Record<string, unknown>
   const attendees = Array.isArray(content.attendees)

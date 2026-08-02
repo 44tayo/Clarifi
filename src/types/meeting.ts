@@ -18,7 +18,9 @@ export type {
   SpeakerIdentity,
   SpeakerIdentitySource,
 } from '../../shared/speakers'
+export type { MeetingTemplateId } from '../../shared/meetingTemplates'
 
+import type { MeetingTemplateId } from '../../shared/meetingTemplates'
 import type { MeetingAttendee, SpeakerIdentities } from '../../shared/speakers'
 
 export type Folder = {
@@ -47,10 +49,14 @@ export type Meeting = {
   /** Structured calendar participants (preferred over emails-only). */
   attendees?: MeetingAttendee[]
   folderIds?: string[]
+  tags?: string[]
+  templateId?: MeetingTemplateId
   enhancedNotes?: string
   summary?: string
   actionItems?: string[]
   completedActionItems?: string[]
+  /** Claim text → cached TRANSCRIPT SUMMARY from on-click eyeglass. */
+  evidenceCache?: Record<string, string>
   enhanceError?: string
   /** Relative path under userData for local system-audio recording (snippet replay). */
   recordingPath?: string
@@ -61,6 +67,10 @@ export type ConnectionStatus = {
   email?: string
   plan?: string
   planLabel?: string
+  /** ISO timestamp when the Stripe 30-day trial ends (if active). */
+  trialEndsAt?: string | null
+  subscriptionStatus?: string | null
+  trialActive?: boolean
 }
 
 export type RecordingState = 'idle' | 'recording' | 'paused'

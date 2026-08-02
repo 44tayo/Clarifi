@@ -265,12 +265,12 @@
   gap: 0.5rem;
   height: 2.5rem;
   padding: 0 1.25rem;
-  background: var(--cl-blue);
-  color: #fff;
+  background: #ffffff;
+  color: #1a1a1a;
   font-weight: 500;
   font-size: 0.875rem;
   border-radius: 0.75rem;
-  border: 1px solid transparent;
+  border: 1px solid rgba(255, 255, 255, 0.9);
   cursor: pointer;
   font-family: inherit;
   text-decoration: none;
@@ -280,7 +280,7 @@
 }
 
 .download-mac-btn:hover {
-  background: var(--cl-blue-hover);
+  background: #f4f4f5;
   transform: none;
   box-shadow: none;
 }

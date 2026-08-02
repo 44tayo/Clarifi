@@ -8,6 +8,8 @@ export type ChatImagePayload = {
   mimeType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
 }
 
+export type ChatPurpose = 'chat' | 'enhance_notes'
+
 export type ChatRequest = {
   message: string
   transcriptLines?: string[]
@@ -16,6 +18,7 @@ export type ChatRequest = {
   images?: ChatImagePayload[]
   model?: string
   effort?: 'low' | 'medium' | 'max'
+  purpose?: ChatPurpose
 }
 
 export type ChatResult =
@@ -79,6 +82,7 @@ export async function proxyMeetingChat(request: ChatRequest): Promise<ChatResult
     ...(request.images?.length ? { images: request.images } : {}),
     ...(request.model ? { model: request.model } : {}),
     ...(request.effort ? { effort: request.effort } : {}),
+    ...(request.purpose ? { purpose: request.purpose } : {}),
   })
 
   if (status === 0) return { error: 'network_error' }

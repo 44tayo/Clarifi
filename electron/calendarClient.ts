@@ -75,12 +75,12 @@ export async function fetchCalendarOAuthUrl(
 
 type ContactsSearchResult = {
   connected: boolean
-  contacts: Array<{ displayName: string; email?: string; source: string }>
+  contacts: Array<{ displayName: string; email?: string; photoUrl?: string; source: string }>
   needsReconnect: boolean
 }
 
 const DIRECTORY_TTL_MS = 10 * 60 * 1000
-const EMPTY_TTL_MS = 30 * 1000
+const EMPTY_TTL_MS = 5 * 1000
 const QUERY_TTL_MS = 2 * 60 * 1000
 
 let directoryCache: { expiresAt: number; result: ContactsSearchResult } | null = null
@@ -103,18 +103,21 @@ function filterLocalContacts(
     .slice(0, 40)
 }
 
-async function fetchContactsFromApi(query: string): Promise<ContactsSearchResult> {
+async function fetchContactsFromApi(query: string, refresh = false): Promise<ContactsSearchResult> {
   const empty: ContactsSearchResult = {
     connected: false,
     contacts: [],
     needsReconnect: false,
   }
-  const q = encodeURIComponent(query.trim())
+  const params = new URLSearchParams()
+  if (query.trim()) params.set('q', query.trim())
+  if (refresh) params.set('refresh', '1')
+  const qs = params.toString()
   const { ok, data } = await deviceGet<{
     connected?: boolean
-    contacts?: Array<{ displayName: string; email?: string; source: string }>
+    contacts?: Array<{ displayName: string; email?: string; photoUrl?: string; source: string }>
     needsReconnect?: boolean
-  }>(`/api/desktop/calendar/contacts?q=${q}`)
+  }>(`/api/desktop/calendar/contacts${qs ? `?${qs}` : ''}`)
   if (!ok || !data) return empty
   return {
     connected: Boolean(data.connected),
@@ -137,10 +140,13 @@ async function getDirectory(): Promise<ContactsSearchResult> {
   }
 
   if (!directoryInFlight) {
-    directoryInFlight = fetchContactsFromApi('')
+    directoryInFlight = fetchContactsFromApi('', true)
       .then((result) => {
-        // Network failures stay uncached so the next open retries.
+        // Network failures / reconnect stay uncached so the next open retries.
         if (!result.connected && result.contacts.length === 0 && !result.needsReconnect) {
+          return result
+        }
+        if (result.needsReconnect && result.contacts.length === 0) {
           return result
         }
         const ttl = result.contacts.length === 0 ? EMPTY_TTL_MS : DIRECTORY_TTL_MS
@@ -176,6 +182,9 @@ export async function searchCalendarContacts(query: string): Promise<ContactsSea
   if (!inFlight) {
     inFlight = fetchContactsFromApi(q)
       .then((result) => {
+        if (result.needsReconnect && result.contacts.length === 0) {
+          return result
+        }
         const ttl = result.contacts.length === 0 ? EMPTY_TTL_MS : QUERY_TTL_MS
         queryCache.set(key, { expiresAt: Date.now() + ttl, result })
         return result

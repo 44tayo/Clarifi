@@ -30,12 +30,12 @@
 }
 
 .ds-dropdown-select-trigger:hover {
-  border-color: var(--ds-accent);
+  border-color: var(--ds-border-strong);
 }
 
 .ds-dropdown-select-trigger.is-open {
-  border-color: var(--ds-accent);
-  box-shadow: 0 0 0 3px var(--ds-accent-soft);
+  border-color: var(--ds-border-strong);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ds-border) 55%, transparent);
 }
 
 .ds-dropdown-select-trigger-label {

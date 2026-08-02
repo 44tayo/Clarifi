@@ -79,6 +79,40 @@ export type SharePublishResult = {
   communityId?: string
 }
 
+export type ShareAccessResult = {
+  ok: boolean
+  error?: string
+  shareUrl?: string | null
+  communityId?: string | null
+  itemId?: string | null
+  linkAccess?: 'anyone' | 'invited'
+  invitedEmails?: string[]
+}
+
+export async function getMeetingShareAccess(meetingId: string): Promise<ShareAccessResult> {
+  const { ok, status, data } = await deviceGet<{
+    error?: string
+    shareUrl?: string | null
+    communityId?: string | null
+    itemId?: string | null
+    linkAccess?: 'anyone' | 'invited'
+    invitedEmails?: string[]
+  }>(`/api/desktop/share?meetingId=${encodeURIComponent(meetingId)}`)
+
+  if (status === 0) return { ok: false, error: 'network_error' }
+  if (status === 401) return { ok: false, error: 'not_authenticated' }
+  if (status === 403) return { ok: false, error: 'plan_required' }
+  if (!ok || !data) return { ok: false, error: data?.error ?? 'share_failed' }
+  return {
+    ok: true,
+    shareUrl: data.shareUrl ?? null,
+    communityId: data.communityId ?? null,
+    itemId: data.itemId ?? null,
+    linkAccess: data.linkAccess === 'invited' ? 'invited' : 'anyone',
+    invitedEmails: Array.isArray(data.invitedEmails) ? data.invitedEmails : [],
+  }
+}
+
 export type SharedInboxInvite = {
   kind: 'invite'
   id: string
@@ -117,7 +151,10 @@ export type SharedItemDetail = {
   createdAt: string
 }
 
-export async function publishMeetingShare(meetingId: string): Promise<SharePublishResult> {
+export async function publishMeetingShare(
+  meetingId: string,
+  linkAccess: 'anyone' | 'invited' = 'anyone',
+): Promise<SharePublishResult> {
   const meeting = getMeeting(meetingId)
   if (!meeting) return { ok: false, error: 'meeting_not_found' }
 
@@ -140,6 +177,7 @@ export async function publishMeetingShare(meetingId: string): Promise<SharePubli
       endedAt: meeting.endedAt ?? meeting.startedAt ?? meeting.createdAt,
       createdAt: meeting.createdAt,
     },
+    linkAccess,
   })
 
   if (status === 0) return { ok: false, error: 'network_error' }

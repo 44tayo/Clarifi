@@ -8,10 +8,12 @@ import {
   resumeRecording,
   startRecording,
   stopRecording,
+  transcribeDictationAudio,
   wavHasSpeechEnergy,
   wavRms,
 } from '../audio'
 import {
+  getDictationEnabled,
   getMicSttEngine,
   loadAudioPreferences,
   saveAudioPreferences,
@@ -30,6 +32,7 @@ import {
   acceptSharedInvite,
   getSharedWithMeItem,
   inviteToSharedMeeting,
+  getMeetingShareAccess,
   listSharedWithMe,
   publishMeetingShare,
 } from '../shareClient'
@@ -57,13 +60,17 @@ import {
   ensureDemoArtifactMeeting,
   forgetDeletedMeetingIds,
   getMeeting,
+  listAllTags,
   listFolders,
   listMeetings,
   renameFolder,
   setMeetingFolders,
+  setMeetingTags,
+  setMeetingTemplate,
   updateMeeting,
   type StoredMeeting,
 } from '../meetingStore'
+import { normalizeMeetingTemplateId } from '../../shared/meetingTemplates'
 import {
   appendSystemWavChunk,
   deleteMeetingRecording,
@@ -78,6 +85,7 @@ import {
   registerEnhanceRunner,
 } from '../enhanceQueue'
 import { enhanceMeetingNotes } from '../noteEnhance'
+import { exportMeetingToFile } from '../meetingExport'
 import { isProxyConfigured } from '../proxyClient'
 import {
   loadOnboardingState,
@@ -552,6 +560,9 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
       email: profile.email,
       plan: profile.plan,
       planLabel: profile.planLabel,
+      trialEndsAt: profile.trialEndsAt ?? null,
+      subscriptionStatus: profile.subscriptionStatus ?? null,
+      trialActive: Boolean(profile.trialActive),
     }
   })
 
@@ -600,6 +611,14 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
     return { url }
   })
 
+  ipcMain.handle('calendar:open-meeting-url', async (_event, url?: unknown) => {
+    if (typeof url !== 'string' || !isAllowedExternalUrl(url)) {
+      return { ok: false }
+    }
+    await shell.openExternal(url)
+    return { ok: true }
+  })
+
   ipcMain.handle('calendar:status', async () => fetchCalendarStatus())
 
   ipcMain.handle('calendar:events', async () => fetchCalendarEvents())
@@ -607,6 +626,11 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
   ipcMain.handle('calendar:contacts-search', async (_event, payload?: { query?: string }) => {
     const query = typeof payload?.query === 'string' ? payload.query : ''
     return searchCalendarContacts(query)
+  })
+
+  ipcMain.handle('calendar:contacts-invalidate', () => {
+    invalidateCalendarContactsCache()
+    return { ok: true }
   })
 
   ipcMain.handle('contacts:list-local', () => ({
@@ -631,6 +655,7 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
     const selected = provider === 'microsoft' ? 'microsoft' : 'google'
     // Prefer a device-bound OAuth URL so calendar tokens save on the paired
     // account forever — not whatever browser user happens to be signed in.
+    invalidateCalendarContactsCache()
     const bound = await fetchCalendarOAuthUrl(selected)
     const url = bound.ok && bound.authUrl ? bound.authUrl : getCalendarConnectUrl(selected)
     if (isAllowedExternalUrl(url)) {
@@ -675,6 +700,7 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
     attendees?: StoredMeeting['attendees']
     speakerLabels?: Record<string, string>
     speakerIdentities?: StoredMeeting['speakerIdentities']
+    templateId?: StoredMeeting['templateId']
   }) => {
     const meeting = createMeeting(payload)
     broadcastMeetingsChanged()
@@ -693,11 +719,17 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
       attendeeEmails?: string[]
       actionItems?: string[]
       completedActionItems?: string[]
+      enhancedNotes?: string
+      evidenceCache?: Record<string, string>
     }) => {
       if (!payload?.id) return null
       const patch: Partial<StoredMeeting> = {}
       if (typeof payload.title === 'string') patch.title = payload.title
       if (typeof payload.userNotes === 'string') patch.userNotes = payload.userNotes
+      if (typeof payload.enhancedNotes === 'string') patch.enhancedNotes = payload.enhancedNotes
+      if (payload.evidenceCache && typeof payload.evidenceCache === 'object') {
+        patch.evidenceCache = payload.evidenceCache
+      }
       if (payload.speakerLabels && typeof payload.speakerLabels === 'object') {
         patch.speakerLabels = payload.speakerLabels
       }
@@ -773,8 +805,8 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
 
       const durationMs =
         typeof entry.audioEndMs === 'number' && entry.audioEndMs > startMs
-          ? Math.min(4500, entry.audioEndMs - startMs + 400)
-          : 4500
+          ? Math.min(5000, entry.audioEndMs - startMs + 400)
+          : 5000
 
       const audioBase64 = getSpeakerSnippetBase64(meetingId, startMs, durationMs)
       if (!audioBase64) return { ok: false, error: 'slice_failed' }
@@ -822,9 +854,53 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
     },
   )
 
-  ipcMain.handle('share:publish', async (_event, payload?: { meetingId?: string }) => {
+  ipcMain.handle(
+    'meetings:export',
+    async (_event, payload?: { meetingId?: string; format?: 'markdown' | 'pdf' }) => {
+      if (!payload?.meetingId) return { ok: false, error: 'meeting_required' }
+      const format = payload.format === 'pdf' ? 'pdf' : 'markdown'
+      return exportMeetingToFile(payload.meetingId, format)
+    },
+  )
+
+  ipcMain.handle('tags:list-all', () => listAllTags())
+
+  ipcMain.handle(
+    'meetings:set-tags',
+    (_event, payload?: { id?: string; tags?: string[] }) => {
+      if (!payload?.id || !Array.isArray(payload.tags)) return null
+      const tags = payload.tags.filter((value): value is string => typeof value === 'string')
+      const updated = setMeetingTags(payload.id, tags)
+      if (updated) broadcastMeetingsChanged()
+      return updated
+    },
+  )
+
+  ipcMain.handle(
+    'meetings:set-template',
+    (_event, payload?: { id?: string; templateId?: string }) => {
+      if (!payload?.id) return null
+      const templateId = normalizeMeetingTemplateId(payload.templateId)
+      const updated = setMeetingTemplate(payload.id, templateId)
+      if (updated) broadcastMeetingsChanged()
+      return updated
+    },
+  )
+
+  ipcMain.handle(
+    'share:publish',
+    async (_event, payload?: { meetingId?: string; linkAccess?: 'anyone' | 'invited' }) => {
+      if (!payload?.meetingId) return { ok: false, error: 'meeting_required' }
+      return publishMeetingShare(
+        payload.meetingId,
+        payload.linkAccess === 'invited' ? 'invited' : 'anyone',
+      )
+    },
+  )
+
+  ipcMain.handle('share:access', async (_event, payload?: { meetingId?: string }) => {
     if (!payload?.meetingId) return { ok: false, error: 'meeting_required' }
-    return publishMeetingShare(payload.meetingId)
+    return getMeetingShareAccess(payload.meetingId)
   })
 
   ipcMain.handle(
@@ -1134,6 +1210,29 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
     // exists so Settings can refresh after permission grants on macOS.
     return getPermissionStatus()
   })
+
+  ipcMain.handle(
+    'dictation:transcribe',
+    async (
+      _event,
+      payload?: { audioBase64?: string; format?: 'wav' | 'webm' },
+    ): Promise<{ text?: string; error?: string }> => {
+      if (!getDictationEnabled()) {
+        return { error: 'dictation_disabled' }
+      }
+      const audioBase64 = typeof payload?.audioBase64 === 'string' ? payload.audioBase64 : ''
+      if (!audioBase64) return { error: 'audio_required' }
+      const format = payload?.format === 'wav' ? 'wav' : 'webm'
+      try {
+        const text = await transcribeDictationAudio(audioBase64, { format })
+        if (!text) return { error: 'transcribe_failed' }
+        return { text }
+      } catch (err) {
+        console.error('dictation:transcribe failed', err)
+        return { error: 'transcribe_failed' }
+      }
+    },
+  )
 
   ipcMain.handle('onboarding:get', () => loadOnboardingState())
 

@@ -54,6 +54,21 @@ describe('command palette search', () => {
     const hits = searchMeetings(meetings, '', 2)
     expect(hits.map((m) => m.id)).toEqual(['1', '2'])
   })
+
+  it('finds meetings by transcript text, not just notes', () => {
+    const withTranscript = [
+      ...meetings,
+      {
+        id: '4',
+        title: 'Untitled',
+        createdAt: 4,
+        startedAt: 4,
+        transcript: [{ text: 'Let’s discuss the pricing tiers for enterprise.' }],
+      },
+    ]
+    const hits = searchMeetings(withTranscript, 'pricing tiers')
+    expect(hits.map((m) => m.id)).toEqual(['4'])
+  })
 })
 
 describe('shared-with-me public route', () => {

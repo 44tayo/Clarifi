@@ -5,6 +5,7 @@ import {
   resolvePreferredMicId,
   type MicOption,
 } from '../lib/microphones'
+import { MEETING_TEMPLATES, type MeetingTemplateId } from '../../shared/meetingTemplates'
 import { DropdownSelect } from './ui/DropdownSelect'
 
 type MicPickerModalProps = {
@@ -12,7 +13,12 @@ type MicPickerModalProps = {
   error?: string | null
   permissionDenied?: boolean
   onClose: () => void
-  onStart: (deviceId: string, label: string, skipNextTime: boolean) => Promise<void>
+  onStart: (
+    deviceId: string,
+    label: string,
+    skipNextTime: boolean,
+    templateId: MeetingTemplateId,
+  ) => Promise<void>
 }
 
 export function MicPickerModal({
@@ -25,6 +31,7 @@ export function MicPickerModal({
   const [mics, setMics] = useState<MicOption[]>([])
   const [selectedId, setSelectedId] = useState('')
   const [skipNextTime, setSkipNextTime] = useState(false)
+  const [templateId, setTemplateId] = useState<MeetingTemplateId>('general')
   const [starting, setStarting] = useState(false)
   const userSelectedRef = useRef(false)
   const preferredIdRef = useRef('')
@@ -42,6 +49,7 @@ export function MicPickerModal({
     }
 
     setSkipNextTime(false)
+    setTemplateId('general')
     let cancelled = false
 
     void (async () => {
@@ -88,7 +96,7 @@ export function MicPickerModal({
     setStarting(true)
     startingRef.current = true
     try {
-      await onStart(selectedId, selected?.label ?? 'System default', skipNextTime)
+      await onStart(selectedId, selected?.label ?? 'System default', skipNextTime, templateId)
     } finally {
       startingRef.current = false
       setStarting(false)
@@ -124,6 +132,19 @@ export function MicPickerModal({
             }}
             placeholder="System default"
             aria-label="Microphone"
+            disabled={starting}
+          />
+        </div>
+        <div className="mic-picker-field">
+          <DropdownSelect
+            value={templateId}
+            options={MEETING_TEMPLATES.map((template) => ({
+              value: template.id,
+              label: `${template.label} — ${template.description}`,
+            }))}
+            onChange={(value) => setTemplateId(value as MeetingTemplateId)}
+            placeholder="Meeting type"
+            aria-label="Meeting type"
             disabled={starting}
           />
         </div>

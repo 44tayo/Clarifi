@@ -1,5 +1,4 @@
 import {
-  useCallback,
   useEffect,
   useRef,
   useState,
@@ -13,6 +12,8 @@ import {
   type ChatEffort,
 } from '../../shared/chatOptions'
 import { DEFAULT_ACTIVE_MODEL_ID } from '../../shared/builtin-models'
+import { useWhisperDictation } from '../hooks/useWhisperDictation'
+import { DictationWaveformButton } from './DictationWaveformButton'
 
 export type ChatAttachmentPayload = {
   id: string
@@ -42,21 +43,6 @@ type ChatPromptInputProps = {
   onFocus?: () => void
   autoFocus?: boolean
   className?: string
-}
-
-type SpeechRecognitionLike = {
-  continuous: boolean
-  interimResults: boolean
-  start: () => void
-  stop: () => void
-  onresult:
-    | ((event: {
-        resultIndex: number
-        results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>
-      }) => void)
-    | null
-  onerror: ((event: unknown) => void) | null
-  onend: (() => void) | null
 }
 
 const MODELS = chatSelectableModels()
@@ -124,20 +110,6 @@ function PaperclipIcon() {
   )
 }
 
-function MicIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 14 14" fill="none" aria-hidden>
-      <rect x="5" y="1" width="4" height="7" rx="2" stroke="currentColor" strokeWidth="1.5" />
-      <path
-        d="M2.75 6.5V7a4.25 4.25 0 0 0 8.5 0v-.5M7 11.25V13"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
 function ArrowUpIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
@@ -148,14 +120,6 @@ function ArrowUpIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-    </svg>
-  )
-}
-
-function StopIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
-      <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" fill="currentColor" />
     </svg>
   )
 }
@@ -175,22 +139,29 @@ export function ChatPromptInput({
   const [attachments, setAttachments] = useState<ChatAttachmentPayload[]>([])
   const [modelOpen, setModelOpen] = useState(false)
   const [focused, setFocused] = useState(false)
-  const [isRecording, setIsRecording] = useState(false)
+  const [dictationError, setDictationError] = useState<string | null>(null)
 
   const rootRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const valueRef = useRef(value)
-  const streamRef = useRef<MediaStream | null>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
-  const rafRef = useRef<number | null>(null)
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const attachmentsRef = useRef(attachments)
   attachmentsRef.current = attachments
 
   useEffect(() => {
     valueRef.current = value
   }, [value])
+
+  const dictation = useWhisperDictation({
+    disabled: disabled || sending,
+    onTranscript: (text) => {
+      setDictationError(null)
+      const base = valueRef.current.trim()
+      onChange(base ? `${base} ${text}` : text)
+      requestAnimationFrame(() => textareaRef.current?.focus())
+    },
+    onError: (message) => setDictationError(message),
+  })
 
   useEffect(
     () => () => {
@@ -218,82 +189,16 @@ export function ChatPromptInput({
     if (autoFocus) textareaRef.current?.focus()
   }, [autoFocus])
 
+  useEffect(() => {
+    if (!dictationError) return undefined
+    const timer = window.setTimeout(() => setDictationError(null), 4000)
+    return () => window.clearTimeout(timer)
+  }, [dictationError])
+
   const selectedModel = MODELS.find((model) => model.id === modelId) ?? MODELS[0]
   const hasValue = value.trim().length > 0 || attachments.length > 0
-  const showSend = (hasValue || sending) && !isRecording
-
-  const stopRecording = useCallback(() => {
-    recognitionRef.current?.stop()
-    recognitionRef.current = null
-    if (rafRef.current) {
-      cancelAnimationFrame(rafRef.current)
-      rafRef.current = null
-    }
-    streamRef.current?.getTracks().forEach((track) => track.stop())
-    streamRef.current = null
-    void audioContextRef.current?.close()
-    audioContextRef.current = null
-    setIsRecording(false)
-  }, [])
-
-  useEffect(() => () => stopRecording(), [stopRecording])
-
-  const startRecording = useCallback(async () => {
-    if (disabled || sending) return
-    let stream: MediaStream | null = null
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    } catch {
-      return
-    }
-    streamRef.current = stream
-    setIsRecording(true)
-
-    const AudioCtx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-    const audioCtx = new AudioCtx()
-    audioContextRef.current = audioCtx
-    const analyser = audioCtx.createAnalyser()
-    analyser.fftSize = 64
-    audioCtx.createMediaStreamSource(stream).connect(analyser)
-    const dataArray = new Uint8Array(analyser.frequencyBinCount)
-    const tick = () => {
-      analyser.getByteFrequencyData(dataArray)
-      rafRef.current = requestAnimationFrame(tick)
-    }
-    tick()
-
-    const SpeechRecognitionCtor =
-      (window as unknown as { SpeechRecognition?: new () => SpeechRecognitionLike })
-        .SpeechRecognition ||
-      (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognitionLike })
-        .webkitSpeechRecognition
-    if (!SpeechRecognitionCtor) {
-      stopRecording()
-      return
-    }
-    const recognition = new SpeechRecognitionCtor()
-    recognition.continuous = true
-    recognition.interimResults = true
-    let baseline = valueRef.current
-    recognition.onresult = (event) => {
-      let interim = ''
-      let finalChunk = ''
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        const result = event.results[i]
-        if (!result) continue
-        if (result.isFinal) finalChunk += result[0].transcript
-        else interim += result[0].transcript
-      }
-      if (finalChunk) baseline += (baseline ? ' ' : '') + finalChunk
-      onChange((baseline + (interim ? ` ${interim}` : '')).trim())
-    }
-    recognition.onerror = () => stopRecording()
-    recognition.onend = () => stopRecording()
-    recognitionRef.current = recognition
-    recognition.start()
-  }, [disabled, onChange, sending, stopRecording])
+  const dictationBusy = dictation.isRecording || dictation.isTranscribing
+  const showSend = hasValue || sending
 
   const addFiles = async (fileList: FileList | null) => {
     if (!fileList?.length) return
@@ -316,7 +221,7 @@ export function ChatPromptInput({
 
   const handleSubmit = () => {
     const message = value.trim()
-    if ((!message && attachments.length === 0) || disabled || sending || isRecording) return
+    if ((!message && attachments.length === 0) || disabled || sending || dictationBusy) return
     onSubmit({
       message: message || 'Describe these images.',
       model: selectedModel?.id ?? DEFAULT_ACTIVE_MODEL_ID,
@@ -328,18 +233,6 @@ export function ChatPromptInput({
     })
     attachments.forEach((item) => URL.revokeObjectURL(item.previewUrl))
     setAttachments([])
-  }
-
-  const onSideAction = () => {
-    if (isRecording) {
-      stopRecording()
-      return
-    }
-    if (showSend) {
-      handleSubmit()
-      return
-    }
-    void startRecording()
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -380,6 +273,13 @@ export function ChatPromptInput({
       ) : null}
 
       <div className="chat-capsule-row">
+        <DictationWaveformButton
+          active={dictation.isRecording}
+          busy={dictation.isTranscribing}
+          disabled={disabled || sending}
+          onClick={dictation.toggle}
+        />
+
         <textarea
           ref={textareaRef}
           className="chat-capsule-textarea"
@@ -391,8 +291,14 @@ export function ChatPromptInput({
             onFocus?.()
           }}
           onBlur={() => setFocused(false)}
-          placeholder={placeholder}
-          disabled={disabled || isRecording || sending}
+          placeholder={
+            dictation.isRecording
+              ? 'Listening…'
+              : dictation.isTranscribing
+                ? 'Transcribing…'
+                : placeholder
+          }
+          disabled={disabled || dictationBusy || sending}
           aria-label="Chat message"
           rows={1}
         />
@@ -402,7 +308,7 @@ export function ChatPromptInput({
             <button
               type="button"
               className="chat-capsule-model"
-              disabled={disabled}
+              disabled={disabled || dictationBusy}
               aria-expanded={modelOpen}
               aria-haspopup="listbox"
               onClick={() => setModelOpen((open) => !open)}
@@ -437,7 +343,7 @@ export function ChatPromptInput({
           <button
             type="button"
             className="chat-capsule-icon-btn"
-            disabled={disabled || attachments.length >= MAX_ATTACHMENTS}
+            disabled={disabled || dictationBusy || attachments.length >= MAX_ATTACHMENTS}
             aria-label="Attach image"
             onClick={() => fileRef.current?.click()}
           >
@@ -452,27 +358,21 @@ export function ChatPromptInput({
             onChange={onFileChange}
           />
 
-          <button
-            type="button"
-            className={`chat-capsule-action${showSend ? ' is-send' : ''}${
-              isRecording ? ' is-stop' : ''
-            }`}
-            disabled={disabled || (sending && !isRecording)}
-            aria-label={showSend ? 'Send' : isRecording ? 'Stop recording' : 'Use voice input'}
-            onClick={onSideAction}
-          >
-            {sending && !isRecording ? (
-              <span className="chat-capsule-spinner" />
-            ) : isRecording ? (
-              <StopIcon />
-            ) : showSend ? (
-              <ArrowUpIcon />
-            ) : (
-              <MicIcon />
-            )}
-          </button>
+          {showSend ? (
+            <button
+              type="button"
+              className="chat-capsule-action is-send"
+              disabled={disabled || sending || dictationBusy || !hasValue}
+              aria-label="Send"
+              onClick={handleSubmit}
+            >
+              {sending ? <span className="chat-capsule-spinner" /> : <ArrowUpIcon />}
+            </button>
+          ) : null}
         </div>
       </div>
+
+      {dictationError ? <p className="chat-capsule-dictation-error">{dictationError}</p> : null}
     </div>
   )
 }

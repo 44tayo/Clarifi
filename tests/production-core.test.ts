@@ -44,6 +44,14 @@ describe('urlSafety', () => {
     expect(isAllowedExternalUrl('javascript:alert(1)')).toBe(false)
     expect(isAllowedExternalUrl('http://evil.example')).toBe(false)
   })
+
+  it('allows common video-call links used by calendar "Join & Record"', () => {
+    expect(isAllowedExternalUrl('https://zoom.us/j/1234567890')).toBe(true)
+    expect(isAllowedExternalUrl('https://meet.google.com/abc-defg-hij')).toBe(true)
+    expect(
+      isAllowedExternalUrl('https://teams.microsoft.com/l/meetup-join/abc'),
+    ).toBe(true)
+  })
 })
 
 describe('app-config', () => {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
+import type { MeetingTemplateId } from '../../shared/meetingTemplates'
 import type { Meeting, MeetingAttendee, SpeakerIdentities } from '../types/meeting'
 
 export function useMeetings() {
@@ -36,6 +37,7 @@ export function useMeetings() {
       attendees?: MeetingAttendee[]
       speakerLabels?: Record<string, string>
       speakerIdentities?: SpeakerIdentities
+      templateId?: MeetingTemplateId
     }) => {
       const meeting = (await window.electronAPI.invoke('meetings:create', input ?? {})) as Meeting
       await refresh()
@@ -56,6 +58,8 @@ export function useMeetings() {
         attendeeEmails?: string[]
         actionItems?: string[]
         completedActionItems?: string[]
+        enhancedNotes?: string
+        evidenceCache?: Record<string, string>
       },
     ) => {
       const updated = (await window.electronAPI.invoke('meetings:update', {
@@ -89,6 +93,18 @@ export function useMeetings() {
     [refresh],
   )
 
+  const setMeetingTemplate = useCallback(
+    async (id: string, templateId: MeetingTemplateId) => {
+      const updated = (await window.electronAPI.invoke('meetings:set-template', {
+        id,
+        templateId,
+      })) as Meeting | null
+      await refresh()
+      return updated
+    },
+    [refresh],
+  )
+
   return {
     meetings,
     loading,
@@ -98,5 +114,6 @@ export function useMeetings() {
     deleteMeeting,
     getMeeting,
     enhanceMeeting,
+    setMeetingTemplate,
   }
 }

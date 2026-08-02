@@ -5,12 +5,19 @@ import {
   type ChatEffort,
 } from './chatOptions'
 import {
+  CLARIFI_ENHANCED_NOTES_SYSTEM_PROMPT,
   CLARIFI_ENTERPRISE_SYSTEM_PROMPT,
   CLARIFI_GENERAL_SYSTEM_PROMPT,
   CLARIFI_SUGGESTIONS_SYSTEM_PROMPT,
 } from './prompts'
+import { resolveAnthropicApiModelId } from './builtin-models'
 
 const CHAT_MODEL = 'claude-haiku-4-5-20251001'
+/** Sonnet-class model for post-meeting Enhanced notes. */
+export const ENHANCE_NOTES_MODEL_ID = 'claude-fable-5'
+export const ENHANCE_NOTES_MAX_TOKENS = 8192
+
+export type ChatPurpose = 'chat' | 'enhance_notes'
 
 export interface Suggestion {
   text: string
@@ -32,6 +39,7 @@ export interface ChatRequest {
   images?: ScreenContextImage[]
   model?: string
   effort?: ChatEffort
+  purpose?: ChatPurpose
 }
 
 export type ChatResult = { reply: string } | { error: string }
@@ -60,9 +68,10 @@ function collectChatImages(request: ChatRequest): ScreenContextImage[] {
 
 export async function chatWithMeetingContext(request: ChatRequest): Promise<ChatResult> {
   const { message, transcriptLines, useScreenContext } = request
+  const purpose = request.purpose === 'enhance_notes' ? 'enhance_notes' : 'chat'
   const images = collectChatImages(request)
 
-  if (useScreenContext && images.length === 0) {
+  if (useScreenContext && images.length === 0 && purpose !== 'enhance_notes') {
     return { error: 'capture_failed' }
   }
 
@@ -75,33 +84,45 @@ export async function chatWithMeetingContext(request: ChatRequest): Promise<Chat
   const transcript =
     transcriptLines.length > 0 ? transcriptLines.join('\n') : '(no transcript yet)'
 
-  const hasImages = images.length > 0
+  const isEnhance = purpose === 'enhance_notes'
+
+  const hasImages = images.length > 0 && !isEnhance
   const screenStyleHint = useScreenContext && hasImages
     ? '\n\nReply concisely using screen context reply style. No backticks. No em-dashes. Max 6 visible details bullets. Max 6 tab names. One summary sentence with **bold** key names only. Total response under 1200 characters for simple screen questions.'
     : ''
 
-  const userText = hasImages
-    ? `Live meeting transcript:\n${transcript}\n\nUser typed question:\n${message}${screenStyleHint}`
-    : `Live meeting transcript:\n${transcript}\n\nUser question:\n${message}`
+  const userText = isEnhance
+    ? `Meeting transcript:\n${transcript}\n\nEnhance request:\n${message}`
+    : hasImages
+      ? `Live meeting transcript:\n${transcript}\n\nUser typed question:\n${message}${screenStyleHint}`
+      : `Live meeting transcript:\n${transcript}\n\nUser question:\n${message}`
 
-  const systemPrompt = useScreenContext && hasImages
-    ? CLARIFI_ENTERPRISE_SYSTEM_PROMPT
-    : CLARIFI_GENERAL_SYSTEM_PROMPT
+  const systemPrompt = isEnhance
+    ? CLARIFI_ENHANCED_NOTES_SYSTEM_PROMPT
+    : useScreenContext && hasImages
+      ? CLARIFI_ENTERPRISE_SYSTEM_PROMPT
+      : CLARIFI_GENERAL_SYSTEM_PROMPT
 
   const userContent: AnthropicContentBlock[] = [
-    ...images.map((image) => ({
-      type: 'image' as const,
-      source: {
-        type: 'base64' as const,
-        media_type: image.mimeType,
-        data: image.imageBase64,
-      },
-    })),
+    ...(hasImages
+      ? images.map((image) => ({
+          type: 'image' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: image.mimeType,
+            data: image.imageBase64,
+          },
+        }))
+      : []),
     { type: 'text', text: userText },
   ]
 
-  const model = resolveChatApiModel(request.model)
-  const maxTokens = maxTokensForEffort(normalizeChatEffort(request.effort))
+  const model = isEnhance
+    ? resolveAnthropicApiModelId(ENHANCE_NOTES_MODEL_ID)
+    : resolveChatApiModel(request.model)
+  const maxTokens = isEnhance
+    ? ENHANCE_NOTES_MAX_TOKENS
+    : maxTokensForEffort(normalizeChatEffort(request.effort))
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {

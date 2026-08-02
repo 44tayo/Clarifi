@@ -4,6 +4,10 @@ import { proxyMeetingChat } from './proxyClient'
 import type { StoredMeeting } from './meetingStore'
 import { updateMeeting } from './meetingStore'
 import { resolveSpeakerDisplay } from './transcriptUtils'
+import {
+  extractActionItems,
+  extractOverviewSummary,
+} from '../shared/parseEnhancedNotes'
 
 function transcriptLines(meeting: StoredMeeting): string[] {
   const labels = meeting.speakerLabels ?? {}
@@ -12,35 +16,57 @@ function transcriptLines(meeting: StoredMeeting): string[] {
   )
 }
 
+function formatMeetingMeta(meeting: StoredMeeting): string {
+  const parts: string[] = [`Meeting title: ${meeting.title}`]
+  if (meeting.startedAt) {
+    parts.push(`Date: ${new Date(meeting.startedAt).toISOString()}`)
+  }
+  if (meeting.startedAt && meeting.endedAt && meeting.endedAt > meeting.startedAt) {
+    const minutes = Math.max(1, Math.round((meeting.endedAt - meeting.startedAt) / 60_000))
+    parts.push(`Duration: ~${minutes} min`)
+  }
+  const speakers = Object.values(meeting.speakerLabels ?? {}).filter(Boolean)
+  if (speakers.length > 0) {
+    parts.push(`Speakers: ${speakers.join(', ')}`)
+  }
+  return parts.join('\n')
+}
+
 function buildEnhancePrompt(meeting: StoredMeeting): string {
   const notes = meeting.userNotes.trim() || '(no notes taken during the meeting)'
   const outputLanguage = getOutputLanguage()
-  // parseEnhancedReply below matches on the literal English "## Summary" /
-  // "## Action items" markers, so headers always stay in English even when
-  // the user asks for notes in another language — only the body content
-  // (and the language instruction appended below) changes.
   const languageNote =
     outputLanguage !== 'en'
-      ? `\n\nKeep the section headers exactly as shown above (in English), but write all other content in ${languageLabel(outputLanguage)}.`
+      ? `\n\nKeep structural section headers in English (especially "# Next Steps"), but write all other content in ${languageLabel(outputLanguage)}.`
       : ''
 
   return [
-    'Turn this meeting into polished notes for the user.',
-    'Use markdown with these sections exactly:',
-    '## Summary',
-    '## Key points',
-    '## Decisions',
-    '## Action items',
+    'Write a polished Enhanced meeting note from the transcript and user scratchpad below.',
     '',
-    'Keep it concise and practical. Preserve specifics from the user notes.',
-    'If the transcript is sparse, rely more on user notes.',
+    'Requirements:',
+    '- Invent topical # Section headings from what was discussed (like a Granola Enhanced note) — do not force a fixed Overview / Key points / Decisions shell when richer topics fit.',
+    '- Use nested markdown bullets (- and indented sub-bullets) with concrete specifics: names, numbers, dates, orgs, commitments.',
+    '- Prefer the user scratchpad as the skeleton when present; fill gaps from the transcript. If the transcript is sparse, lean on user notes.',
+    '- Optional insight callouts as markdown blockquotes (> ...) when advice or framing was given.',
+    '- End with exactly: # Next Steps',
+    '- Under Next Steps, list actionable bullets; bold the core action phrase with **...**.',
+    '- Dense, specific, and scannable — not vague, padded, or a raw transcript dump.',
     languageNote,
     '',
-    `Meeting title: ${meeting.title}`,
+    formatMeetingMeta(meeting),
     '',
-    'User notes during the meeting:',
+    'User notes during the meeting (scratchpad):',
     notes,
   ].join('\n')
+}
+
+function mergeCompletedActionItems(
+  previousCompleted: string[] | undefined,
+  nextItems: string[],
+): string[] {
+  if (!previousCompleted?.length || nextItems.length === 0) return []
+  const nextSet = new Set(nextItems.map((item) => item.toLowerCase()))
+  return previousCompleted.filter((item) => nextSet.has(item.toLowerCase()))
 }
 
 export async function enhanceMeetingNotes(meetingId: string): Promise<StoredMeeting | null> {
@@ -50,6 +76,7 @@ export async function enhanceMeetingNotes(meetingId: string): Promise<StoredMeet
   const result = await proxyMeetingChat({
     message: buildEnhancePrompt(meeting),
     transcriptLines: transcriptLines(meeting),
+    purpose: 'enhance_notes',
   })
 
   if ('error' in result) {
@@ -66,11 +93,16 @@ export async function enhanceMeetingNotes(meetingId: string): Promise<StoredMeet
   }
 
   const { summary, actionItems, body } = parseEnhancedReply(result.reply)
+  const completedActionItems = mergeCompletedActionItems(
+    meeting.completedActionItems,
+    actionItems ?? [],
+  )
   return updateMeeting(meetingId, {
     status: 'ready',
     enhancedNotes: body,
     summary,
     actionItems,
+    completedActionItems,
     enhanceError: undefined,
   })
 }
@@ -81,14 +113,11 @@ function parseEnhancedReply(reply: string): {
   body: string
 } {
   const body = reply.trim()
-  const summaryMatch = body.match(/## Summary\s*\n+([\s\S]*?)(?=\n## |\n*$)/i)
-  const actionsMatch = body.match(/## Action items\s*\n+([\s\S]*?)(?=\n## |\n*$)/i)
-
-  const summary = summaryMatch?.[1]?.trim()
-  const actionItems = actionsMatch?.[1]
-    ?.split('\n')
-    .map((line) => line.replace(/^[-*]\s*/, '').trim())
-    .filter(Boolean)
-
-  return { summary, actionItems, body }
+  const actionItems = extractActionItems(body)
+  const summary = extractOverviewSummary(body)
+  return {
+    summary,
+    actionItems: actionItems.length > 0 ? actionItems : undefined,
+    body,
+  }
 }

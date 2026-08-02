@@ -52,9 +52,17 @@ export function SettingsPanel({ onClose, calendarEnabled = false }: SettingsPane
     return () => navigator.mediaDevices?.removeEventListener('devicechange', onDeviceChange)
   }, [refreshMics])
 
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   return (
-    <div className="settings-overlay" role="dialog" aria-modal="true" aria-label="Settings">
-      <div className="settings-panel">
+    <div className="settings-overlay" role="dialog" aria-modal="true" aria-label="Settings" onClick={onClose}>
+      <div className="settings-panel" onClick={(event) => event.stopPropagation()}>
         <div className="settings-panel-header">
           <h2>Settings</h2>
           <button type="button" className="link-btn" onClick={onClose}>
