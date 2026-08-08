@@ -95,11 +95,15 @@ jobs:
           CLARIFI_API_URL: https://www.clarifiapp.com
         run: MAC_CI_ARCH=arm64 bash scripts/build-mac-ci.sh
 
-      - name: Upload macOS artifact
+      - name: Upload macOS release artifacts (DMG + updater zip/yml)
         uses: actions/upload-artifact@v4
         with:
-          name: clarifi-macos-dmg
-          path: release/*.dmg
+          name: clarifi-macos-release
+          path: |
+            release/*.dmg
+            release/*-mac.zip
+            release/*-mac.zip.blockmap
+            release/latest-mac.yml
           if-no-files-found: error
 
   build-win:
@@ -169,11 +173,11 @@ jobs:
             echo "skip=0" >> "$GITHUB_ENV"
           fi
 
-      - name: Download macOS DMGs
+      - name: Download macOS release artifacts
         if: env.skip != '1'
         uses: actions/download-artifact@v4
         with:
-          name: clarifi-macos-dmg
+          name: clarifi-macos-release
           path: release-assets
 
       - name: Download Windows installer
@@ -182,6 +186,15 @@ jobs:
         with:
           name: clarifi-windows-exe
           path: release-assets
+
+      - name: Require updater metadata before publishing latest
+        if: env.skip != '1'
+        run: |
+          set -euo pipefail
+          test -f release-assets/latest-mac.yml
+          ls release-assets/*-mac.zip >/dev/null
+          echo "Updater artifacts present:"
+          ls -la release-assets/
 
       - name: Publish GitHub Release assets
         if: env.skip != '1'
@@ -196,10 +209,16 @@ jobs:
           files: release-assets/**
           generate_release_notes: true
 
-      - name: Verify release DMG URLs
+      - name: Verify release DMG + updater metadata URLs
         if: env.skip != '1'
         run: |
           VERSION=$(node -p "require('./package.json').version")
           node scripts/verify-download-artifact.mjs \
             "https://github.com/Tayowill/clarificluely/releases/download/v${VERSION}/Clarifi-${VERSION}-arm64.dmg" \
+            50000000 || true
+          node scripts/verify-download-artifact.mjs \
+            "https://github.com/Tayowill/clarificluely/releases/download/v${VERSION}/latest-mac.yml" \
+            100 || true
+          node scripts/verify-download-artifact.mjs \
+            "https://github.com/Tayowill/clarificluely/releases/download/v${VERSION}/Clarifi-${VERSION}-arm64-mac.zip" \
             50000000 || true

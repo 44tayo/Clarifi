@@ -53,7 +53,8 @@ export async function POST(req: Request) {
       ? payload.language
       : null
   const langParam = language ? `&language=${encodeURIComponent(language)}` : '&detect_language=true'
-  const query = `model=nova-3&diarize_model=latest&punctuate=true&utterances=true&smart_format=true&mip_opt_out=true${langParam}`
+  // Batch v2 diarizer — stronger multi-speaker turn detection than streaming.
+  const query = `model=nova-3&diarize_model=v2&punctuate=true&utterances=true&paragraphs=true&smart_format=true&mip_opt_out=true${langParam}`
 
   const audioBuffer = Buffer.from(payload.audioBase64, 'base64')
   const response = await fetch(`https://api.deepgram.com/v1/listen?${query}`, {

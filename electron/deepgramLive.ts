@@ -1,5 +1,6 @@
 import WebSocket from 'ws'
 
+import { splitWordsIntoSpeakerRuns } from '../shared/speakerRuns'
 import { getTranscriptionLanguage } from './audioPreferences'
 import { getDeepgramApiBaseUrl, getDeepgramApiKey } from './keys'
 import {
@@ -34,6 +35,8 @@ type DeepgramLiveOptions = {
   fixedSpeakerLabel?: string
   /** Restore Speaker N mapping after pause/resume so labels stay stable. */
   initialSpeakerState?: LiveSpeakerState
+  /** Nova-3 keyterm boosts (attendee names, product terms). */
+  keyterms?: string[]
   onFinal: (utterance: LiveFinalUtterance) => void
   /**
    * Fired for in-progress (non-final) results so the UI can show a live
@@ -77,7 +80,7 @@ function wsBaseUrl(): string {
   return 'wss://api.deepgram.com'
 }
 
-function buildListenUrl(diarize: boolean): string {
+function buildListenUrl(diarize: boolean, keyterms: string[] = []): string {
   const language = getTranscriptionLanguage()
   const params = new URLSearchParams({
     model: 'nova-3',
@@ -87,8 +90,9 @@ function buildListenUrl(diarize: boolean): string {
     encoding: 'linear16',
     sample_rate: String(SAMPLE_RATE),
     channels: '1',
-    endpointing: '300',
-    utterance_end_ms: '1000',
+    // Slightly longer endpointing → more words per final → better speaker runs.
+    endpointing: '500',
+    utterance_end_ms: '1200',
     vad_events: 'true',
     mip_opt_out: 'true',
     filler_words: 'true',
@@ -102,7 +106,28 @@ function buildListenUrl(diarize: boolean): string {
     // Streaming language detect is model-dependent; default English for live meetings.
     params.set('language', 'en')
   }
+  for (const term of keyterms.slice(0, 40)) {
+    const cleaned = term.trim()
+    if (cleaned) params.append('keyterm', cleaned)
+  }
   return `${wsBaseUrl()}/v1/listen?${params.toString()}`
+}
+
+function majoritySpeakerIndex(words: DgWord[]): number {
+  const counts = new Map<number, number>()
+  for (const word of words) {
+    if (typeof word.speaker !== 'number') continue
+    counts.set(word.speaker, (counts.get(word.speaker) ?? 0) + 1)
+  }
+  let best = 0
+  let bestCount = -1
+  for (const [index, count] of counts) {
+    if (count > bestCount) {
+      best = index
+      bestCount = count
+    }
+  }
+  return best
 }
 
 export class DeepgramLiveSession {
@@ -141,7 +166,7 @@ export class DeepgramLiveSession {
       return false
     }
 
-    const url = buildListenUrl(this.options.diarize)
+    const url = buildListenUrl(this.options.diarize, this.options.keyterms ?? [])
     console.log('Deepgram live connecting:', url.replace(/Token=[^&]+/g, 'Token=***'))
 
     return await new Promise<boolean>((resolve) => {
@@ -252,7 +277,7 @@ export class DeepgramLiveSession {
       const interimAlt = message.channel?.alternatives?.[0]
       const interimText = normalizeTranscriptText(interimAlt?.transcript ?? '')
       if (!interimText || !this.options.onInterim) return
-      const guessIndex = typeof interimAlt?.words?.[0]?.speaker === 'number' ? interimAlt.words[0]!.speaker! : 0
+      const guessIndex = majoritySpeakerIndex(interimAlt?.words ?? [])
       this.options.onInterim({
         text: interimText,
         speaker: this.stableSpeaker(guessIndex),
@@ -284,84 +309,34 @@ export class DeepgramLiveSession {
       return
     }
 
-    // Split final result into contiguous speaker runs for accurate Speaker N labels.
-    let currentIndex = typeof words[0]?.speaker === 'number' ? words[0]!.speaker! : 0
-    let parts: string[] = []
-    let runStart =
-      typeof words[0]?.start === 'number' ? Math.round(words[0]!.start! * 1000) : streamOffsetMs
+    // Gap-aware runs: pause ⇒ new speaker immediately; within continuous speech
+    // debounce single-word blips (see shared/speakerRuns.ts).
+    const runs = splitWordsIntoSpeakerRuns(
+      words.map((word) => ({
+        token: word.punctuated_word ?? word.word ?? '',
+        speaker: typeof word.speaker === 'number' ? word.speaker : 0,
+        startMs: typeof word.start === 'number' ? Math.round(word.start * 1000) : undefined,
+        endMs: typeof word.end === 'number' ? Math.round(word.end * 1000) : undefined,
+      })),
+    )
 
-    const flush = () => {
-      const text = normalizeTranscriptText(parts.join(' '))
-      if (!text) return
+    for (const run of runs) {
+      const text = normalizeTranscriptText(run.text)
+      if (!text) continue
       if (isLikelyHallucination(text, this.options.source, { trusted: true })) {
-        console.warn('Deepgram live: dropped speaker-run as hallucination/garbage:', JSON.stringify(text))
-        return
+        console.warn(
+          'Deepgram live: dropped speaker-run as hallucination/garbage:',
+          JSON.stringify(text),
+        )
+        continue
       }
       this.options.onFinal({
         text,
-        speaker: this.stableSpeaker(currentIndex),
-        deepgramIndex: currentIndex,
-        streamOffsetMs: runStart,
+        speaker: this.stableSpeaker(run.speakerIndex),
+        deepgramIndex: run.speakerIndex,
+        streamOffsetMs: run.startMs ?? streamOffsetMs,
       })
     }
-
-    // Debounce single-word diarization flips: only treat a speaker change as
-    // real once the new speaker persists for 2 consecutive words. A lone
-    // differing word is folded back into the current run instead of becoming
-    // its own short-lived run — short runs are exactly what real speech
-    // fragments look like, so fragmenting on every blip both misattributes
-    // speakers and increases the odds a real 2-3 word utterance gets treated
-    // as noise downstream.
-    let pendingIndex: number | null = null
-    let pendingTokens: string[] = []
-    let pendingStart = 0
-
-    const foldPendingIntoCurrent = () => {
-      if (pendingTokens.length === 0) return
-      parts.push(...pendingTokens)
-      pendingIndex = null
-      pendingTokens = []
-    }
-
-    const commitPending = () => {
-      flush()
-      parts = pendingTokens
-      currentIndex = pendingIndex!
-      runStart = pendingStart
-      pendingIndex = null
-      pendingTokens = []
-    }
-
-    for (const word of words) {
-      const nextIndex = typeof word.speaker === 'number' ? word.speaker : currentIndex
-      const token = word.punctuated_word ?? word.word ?? ''
-      if (!token) continue
-      const wordStart =
-        typeof word.start === 'number' ? Math.round(word.start * 1000) : streamOffsetMs
-
-      if (nextIndex === currentIndex) {
-        foldPendingIntoCurrent()
-        parts.push(token)
-        continue
-      }
-
-      if (pendingIndex === nextIndex) {
-        pendingTokens.push(token)
-        commitPending()
-        continue
-      }
-
-      foldPendingIntoCurrent()
-      pendingIndex = nextIndex
-      pendingTokens = [token]
-      pendingStart = wordStart
-    }
-
-    // A trailing unconfirmed candidate at the end of the final result can't
-    // be debounced further — keep it attached to the current speaker rather
-    // than risk an orphan one-word run.
-    foldPendingIntoCurrent()
-    if (parts.length > 0) flush()
   }
 }
 

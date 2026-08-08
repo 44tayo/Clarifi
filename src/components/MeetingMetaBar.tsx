@@ -96,6 +96,7 @@ function canPlaySpeaker(meeting: Meeting, entries: TranscriptEntry[], speaker: s
 type ContactDirectoryPerson = {
   displayName: string
   email?: string
+  photoUrl?: string
   source: SpeakerIdentity['source']
 }
 
@@ -125,7 +126,12 @@ function loadSpeakersContactDirectory(force = false): Promise<void> {
   ])
     .then(([remoteResult, localResult]) => {
       const data = remoteResult as {
-        contacts?: Array<{ displayName: string; email?: string; source?: string }>
+        contacts?: Array<{
+          displayName: string
+          email?: string
+          photoUrl?: string
+          source?: string
+        }>
         needsReconnect?: boolean
       }
       speakersContactNeedsReconnect = Boolean(data?.needsReconnect)
@@ -135,14 +141,16 @@ function loadSpeakersContactDirectory(force = false): Promise<void> {
         .map((person) => ({
           displayName: person.displayName,
           email: person.email,
+          photoUrl: person.photoUrl?.trim() || undefined,
           source: 'contact' as const,
         }))
       const local = localResult as {
-        contacts?: Array<{ displayName: string; email?: string; source?: string }>
+        contacts?: Array<{ displayName: string; email?: string; photoUrl?: string; source?: string }>
       }
       speakersLocalContacts = (local?.contacts ?? []).map((person) => ({
         displayName: person.displayName,
         email: person.email,
+        photoUrl: person.photoUrl?.trim() || undefined,
         source: 'manual' as const,
       }))
     })
@@ -172,7 +180,35 @@ async function playSpeakerSnippet(meetingId: string, speaker: string): Promise<b
   return true
 }
 
-function SpeakerAvatar({ label, seed }: { label: string; seed: string }) {
+function SpeakerAvatar({
+  label,
+  seed,
+  photoUrl,
+}: {
+  label: string
+  seed: string
+  photoUrl?: string
+}) {
+  const [photoFailed, setPhotoFailed] = useState(false)
+  const trimmedPhoto = photoUrl?.trim() || ''
+
+  useEffect(() => {
+    setPhotoFailed(false)
+  }, [trimmedPhoto])
+
+  if (trimmedPhoto && !photoFailed) {
+    return (
+      <img
+        key={trimmedPhoto}
+        className="speaker-avatar speaker-avatar-photo"
+        src={trimmedPhoto}
+        alt=""
+        referrerPolicy="no-referrer"
+        onError={() => setPhotoFailed(true)}
+      />
+    )
+  }
+
   return (
     <span
       className="speaker-avatar"
@@ -229,17 +265,16 @@ function SpeakersPopover({
 
   const remoteFiltered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const fromDirectory = !q
-      ? contactDirectory.slice(0, 40)
-      : contactDirectory
-          .filter((person) => {
-            const name = person.displayName.toLowerCase()
-            const email = person.email?.toLowerCase() ?? ''
-            return name.includes(q) || email.includes(q)
-          })
-          .slice(0, 40)
+    // Granola / Gmail pattern: no contact dump until the user starts typing.
+    if (!q) return []
 
-    if (!q) return fromDirectory
+    const fromDirectory = contactDirectory
+      .filter((person) => {
+        const name = person.displayName.toLowerCase()
+        const email = person.email?.toLowerCase() ?? ''
+        return name.includes(q) || email.includes(q)
+      })
+      .slice(0, 40)
 
     const withEmail: ContactDirectoryPerson[] = []
     const withoutEmail: ContactDirectoryPerson[] = []
@@ -253,29 +288,46 @@ function SpeakersPopover({
     }
     for (const person of fromDirectory) push(person)
     for (const person of liveContacts) push(person)
-    // Prefer emailed contacts; name-only live hits sorted below.
     return [...withEmail, ...withoutEmail].slice(0, 40)
   }, [contactDirectory, liveContacts, query])
 
   const mergedCandidates = useMemo(() => {
-    const seen = new Set<string>()
-    const out: Array<{ displayName: string; email?: string; source: SpeakerIdentity['source'] }> =
-      []
-    const push = (person: {
-      displayName: string
-      email?: string
-      source: SpeakerIdentity['source']
-    }) => {
+    const byKey = new Map<string, ContactDirectoryPerson>()
+    const push = (person: ContactDirectoryPerson) => {
       const key = person.email?.toLowerCase() || `name:${person.displayName.toLowerCase()}`
-      if (seen.has(key)) return
-      seen.add(key)
-      out.push(person)
+      const existing = byKey.get(key)
+      if (!existing) {
+        byKey.set(key, person)
+        return
+      }
+      if (!existing.photoUrl && person.photoUrl) {
+        byKey.set(key, { ...existing, photoUrl: person.photoUrl })
+      }
     }
-    for (const person of filterPeopleCandidates(localCandidates, query)) push(person)
-    for (const person of filterPeopleCandidates(localContacts, query)) push(person)
-    for (const person of remoteFiltered) push(person)
-    return out
-  }, [localCandidates, localContacts, remoteFiltered, query])
+    const photosByEmail = new Map<string, string>()
+    for (const person of contactDirectory) {
+      const email = person.email?.trim().toLowerCase()
+      const photo = person.photoUrl?.trim()
+      if (email && photo) photosByEmail.set(email, photo)
+    }
+    for (const person of liveContacts) {
+      const email = person.email?.trim().toLowerCase()
+      const photo = person.photoUrl?.trim()
+      if (email && photo) photosByEmail.set(email, photo)
+    }
+    const withPhoto = (person: ContactDirectoryPerson): ContactDirectoryPerson => {
+      if (person.photoUrl?.trim()) return person
+      const email = person.email?.trim().toLowerCase()
+      const photoUrl = email ? photosByEmail.get(email) : undefined
+      return photoUrl ? { ...person, photoUrl } : person
+    }
+    for (const person of filterPeopleCandidates(localCandidates, query)) {
+      push(withPhoto({ ...person, source: person.source }))
+    }
+    for (const person of filterPeopleCandidates(localContacts, query)) push(withPhoto(person))
+    for (const person of remoteFiltered) push(withPhoto(person))
+    return [...byKey.values()]
+  }, [contactDirectory, liveContacts, localCandidates, localContacts, remoteFiltered, query])
 
   useEffect(() => {
     if (activeKey && !speakerKeys.includes(activeKey)) {
@@ -302,15 +354,9 @@ function SpeakersPopover({
   }, [activeKey, meeting.speakerIdentities, meeting.speakerLabels])
 
   useEffect(() => {
-    if (speakersContactDirectory !== null && speakersLocalContacts !== null) {
-      setContactDirectory(speakersContactDirectory)
-      setLocalContacts(speakersLocalContacts)
-      setNeedsReconnect(speakersContactNeedsReconnect)
-      setDirectoryLoading(false)
-      return
-    }
     setDirectoryLoading(true)
-    void loadSpeakersContactDirectory(false).then(() => {
+    // Force refresh so photoUrl from Google People is present (older caches omitted it).
+    void loadSpeakersContactDirectory(true).then(() => {
       setContactDirectory(speakersContactDirectory ?? [])
       setLocalContacts(speakersLocalContacts ?? [])
       setNeedsReconnect(speakersContactNeedsReconnect)
@@ -334,7 +380,7 @@ function SpeakersPopover({
         .then((result) => {
           if (seq !== searchSeq.current) return
           const data = result as {
-            contacts?: Array<{ displayName: string; email?: string }>
+            contacts?: Array<{ displayName: string; email?: string; photoUrl?: string }>
             needsReconnect?: boolean
           }
           if (data?.needsReconnect) setNeedsReconnect(true)
@@ -342,6 +388,7 @@ function SpeakersPopover({
             (data?.contacts ?? []).map((person) => ({
               displayName: person.displayName,
               email: person.email,
+              photoUrl: person.photoUrl?.trim() || undefined,
               source: 'contact' as const,
             })),
           )
@@ -453,7 +500,7 @@ function SpeakersPopover({
                           ref={inputRef}
                           className="speakers-popover-input"
                           value={query}
-                          placeholder={`Assign ${key}`}
+                          placeholder="assign from contacts"
                           onChange={(event) => {
                             setQuery(event.target.value)
                             setContactsDismissed(false)
@@ -470,17 +517,14 @@ function SpeakersPopover({
                           }}
                         />
                         {snippet ? <p className="speakers-popover-snippet">{snippet}</p> : null}
-                        {!contactsDismissed &&
-                        (query.trim() || mergedCandidates.length > 0 || needsReconnect) ? (
+                        {!contactsDismissed && query.trim() ? (
                           <div className="speakers-contacts">
                             <div className="speakers-contacts-label">
                               {directoryLoading || searching
                                 ? searching
                                   ? 'Searching contacts…'
                                   : 'Loading contacts…'
-                                : meeting.attendees?.length || meeting.attendeeEmails?.length
-                                  ? 'Participants & contacts'
-                                  : 'Contacts'}
+                                : 'Contacts'}
                             </div>
                             {needsReconnect ? (
                               <button
@@ -510,6 +554,7 @@ function SpeakersPopover({
                                     <SpeakerAvatar
                                       label={person.displayName}
                                       seed={person.email || person.displayName}
+                                      photoUrl={person.photoUrl}
                                     />
                                     <span className="speakers-contact-name">{person.displayName}</span>
                                     {person.email ? (
@@ -537,6 +582,18 @@ function SpeakersPopover({
                                 </li>
                               ) : null}
                             </ul>
+                          </div>
+                        ) : needsReconnect && !contactsDismissed ? (
+                          <div className="speakers-contacts">
+                            <button
+                              type="button"
+                              className="speakers-reconnect"
+                              onClick={() => {
+                                void window.electronAPI.invoke('calendar:open-connect', 'google')
+                              }}
+                            >
+                              Reconnect Google to load Gmail contacts
+                            </button>
                           </div>
                         ) : null}
                       </div>
@@ -576,9 +633,6 @@ export function MeetingMetaBar({
   const selectedTags = meeting.tags ?? []
   const entries = transcriptEntries ?? meeting.transcript
   const speakerKeys = useMemo(() => uniqueTranscriptSpeakers(entries), [entries])
-  const namedCount = speakerKeys.filter((key) =>
-    isSpeakerIdentified(key, meeting.speakerIdentities, meeting.speakerLabels),
-  ).length
   const selectedFolders = folders.filter((folder) => selectedFolderIds.includes(folder.id))
   const pillLabel = speakerPillSummary(
     speakerKeys,
@@ -665,9 +719,6 @@ export function MeetingMetaBar({
           onAssignSpeaker={onAssignSpeaker}
           onClose={() => setSpeakersOpen(false)}
         />
-      ) : null}
-      {speakerKeys.length > 0 && namedCount < speakerKeys.length ? (
-        <span className="speakers-pill-hint">Assign names · play samples to confirm</span>
       ) : null}
     </div>
   )

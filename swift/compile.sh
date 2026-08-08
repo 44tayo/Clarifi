@@ -31,4 +31,11 @@ swiftc swift/AudioCapture.swift \
   -o resources/audio-capture-helper \
   -target "$TARGET"
 
+swiftc swift/MicMonitor.swift \
+  -framework CoreAudio \
+  -framework AppKit \
+  -framework Foundation \
+  -o resources/mic-monitor-helper \
+  -target "$TARGET"
+
 echo "Compiled successfully"

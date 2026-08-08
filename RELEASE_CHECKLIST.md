@@ -42,8 +42,10 @@ Run this on a **clean Mac** that has never cloned the repo. Treat every failure 
 
 ## Updates
 
-- [ ] Second release published to GitHub with `latest-mac.yml`
-- [ ] Installed v1 app offers update → download → restart → new version runs
+- [ ] Latest GitHub Release includes `latest-mac.yml`, `Clarifi-*-arm64-mac.zip`, zip `.blockmap`, and DMG
+- [ ] Installed vN shows in-app banner or Settings **About & updates** for vN+1
+- [ ] **Update** → download → **Restart now** lands on vN+1
+- [ ] macOS menu **Clarifi → Check for Updates…** triggers the same check
 
 ## Observability
 

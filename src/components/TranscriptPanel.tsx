@@ -1,8 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type { TranscriptEntry } from '../types/meeting'
+import { resolveTranscriptEntryId } from '../../shared/citationNav'
 
 export type LiveInterimEntry = { text: string; speaker: string }
+
+export type TranscriptHighlight = {
+  entryId?: string
+  audioStartMs?: number
+  quote?: string
+}
 
 type TranscriptPanelProps = {
   entries: TranscriptEntry[]
@@ -14,6 +21,7 @@ type TranscriptPanelProps = {
   hideHeader?: boolean
   /** In-progress (not yet finalized) caption lines, keyed by stream source. */
   interim?: Partial<Record<'mic' | 'system', LiveInterimEntry>>
+  highlight?: TranscriptHighlight | null
 }
 
 type TranscriptBlock = {
@@ -21,6 +29,8 @@ type TranscriptBlock = {
   entries: TranscriptEntry[]
   startAt: number
   endAt: number
+  audioStartMs?: number
+  audioEndMs?: number
 }
 
 function displaySpeaker(speaker: string, labels?: Record<string, string>): string {
@@ -34,6 +44,19 @@ function formatOffset(ms: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
+function entryAudioStart(entry: TranscriptEntry): number | undefined {
+  return typeof entry.audioStartMs === 'number' ? entry.audioStartMs : undefined
+}
+
+function entryAudioEnd(entry: TranscriptEntry): number | undefined {
+  if (typeof entry.audioEndMs === 'number') return entry.audioEndMs
+  if (typeof entry.audioStartMs === 'number') {
+    return entry.audioStartMs + Math.max(800, entry.text.length * 40)
+  }
+  return undefined
+}
+
+/** Jamie/Granola: one paragraph per speaker until a different speaker speaks. */
 function groupBlocks(entries: TranscriptEntry[]): TranscriptBlock[] {
   const blocks: TranscriptBlock[] = []
   for (const entry of entries) {
@@ -41,12 +64,18 @@ function groupBlocks(entries: TranscriptEntry[]): TranscriptBlock[] {
     if (last && last.speaker === entry.speaker) {
       last.entries.push(entry)
       last.endAt = entry.at
+      const end = entryAudioEnd(entry)
+      if (typeof end === 'number') {
+        last.audioEndMs = Math.max(last.audioEndMs ?? end, end)
+      }
     } else {
       blocks.push({
         speaker: entry.speaker,
         entries: [entry],
         startAt: entry.at,
         endAt: entry.at,
+        audioStartMs: entryAudioStart(entry),
+        audioEndMs: entryAudioEnd(entry),
       })
     }
   }
@@ -62,11 +91,17 @@ export function TranscriptPanel({
   onRenameSpeaker,
   hideHeader = false,
   interim,
+  highlight = null,
 }: TranscriptPanelProps) {
   const [editing, setEditing] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
+  const highlightRef = useRef<HTMLDivElement | null>(null)
   const blocks = useMemo(() => groupBlocks(entries), [entries])
   const origin = startedAt ?? entries[0]?.at ?? 0
+  const focusEntryId = useMemo(() => {
+    if (!highlight) return null
+    return resolveTranscriptEntryId(entries, highlight)
+  }, [entries, highlight])
   const interimBlocks = useMemo(
     () =>
       (['mic', 'system'] as const)
@@ -74,6 +109,11 @@ export function TranscriptPanel({
         .filter((value): value is LiveInterimEntry => Boolean(value?.text.trim())),
     [interim],
   )
+
+  useEffect(() => {
+    if (!focusEntryId || !highlightRef.current) return
+    highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [focusEntryId])
 
   const startEdit = (speaker: string) => {
     if (!onRenameSpeaker) return
@@ -109,10 +149,14 @@ export function TranscriptPanel({
                 .map((entry) => entry.text.trim())
                 .filter(Boolean)
                 .join(' ')
+              const isHighlighted = Boolean(
+                focusEntryId && block.entries.some((entry) => entry.id === focusEntryId),
+              )
               return (
                 <div
                   key={`${block.speaker}-${block.startAt}-${block.entries[0]?.id}`}
-                  className="transcript-block"
+                  ref={isHighlighted ? highlightRef : undefined}
+                  className={`transcript-block${isHighlighted ? ' is-citation-focus' : ''}`}
                 >
                   <div className="transcript-block-head">
                     {editing === block.speaker ? (
@@ -142,7 +186,18 @@ export function TranscriptPanel({
                       </button>
                     )}
                     <span className="transcript-block-time">
-                      {formatOffset(block.startAt - origin)} – {formatOffset(block.endAt - origin)}
+                      {typeof block.audioStartMs === 'number'
+                        ? `${formatOffset(block.audioStartMs)}${
+                            typeof block.audioEndMs === 'number' &&
+                            block.audioEndMs > block.audioStartMs
+                              ? ` – ${formatOffset(block.audioEndMs)}`
+                              : ''
+                          }`
+                        : `${formatOffset(block.startAt - origin)}${
+                            block.endAt > block.startAt
+                              ? ` – ${formatOffset(block.endAt - origin)}`
+                              : ''
+                          }`}
                     </span>
                   </div>
                   <p className="transcript-block-body">{joined}</p>

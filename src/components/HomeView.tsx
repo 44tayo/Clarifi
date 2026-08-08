@@ -27,6 +27,13 @@ type HomeViewProps = {
   onOpenDashboard: () => void
   onOpenChat?: () => void
   onOpenSettings?: () => void
+  onOpenCitation?: (citation: {
+    meetingId: string
+    title: string
+    quote?: string
+    entryId?: string
+    audioStartMs?: number
+  }) => void
   isMeetingLocked: (meeting: Meeting) => boolean
 }
 
@@ -66,6 +73,7 @@ export function HomeView({
   onOpenDashboard,
   onOpenChat,
   onOpenSettings,
+  onOpenCitation,
   isMeetingLocked,
 }: HomeViewProps) {
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -230,6 +238,7 @@ export function HomeView({
         paired={connection.paired}
         onConnect={onConnectAccount}
         onOpenChatView={onOpenChat}
+        onOpenCitation={onOpenCitation}
       />
 
       <CalendarConnectModal

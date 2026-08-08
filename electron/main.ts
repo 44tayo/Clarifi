@@ -10,9 +10,12 @@ import { loadAudioPreferences } from './audioPreferences'
 import { applyNativeTheme, THEME_WINDOW_BG } from './theme'
 import { queueAuthUrl, takePendingAuthUrl } from './protocolAuth'
 import { logStartup, stripMacQuarantine } from './startupDiagnostics'
+import { installApplicationMenu } from './appMenu'
 import { checkForSignedUpdates, configureUpdater } from './updater'
 import { isAllowedExternalUrl } from './urlSafety'
 import { startCalendarReminders } from './calendarReminders'
+import { shouldStartHidden } from './loginItem'
+import { startMeetingDetection } from './meetingDetection'
 import { syncMeetingsWithCloud } from './meetingSync'
 
 app.setName('Clarifi')
@@ -107,7 +110,8 @@ function defaultMainWindowBounds(): { x: number; y: number; width: number; heigh
   return { x, y, width, height }
 }
 
-function createMainWindow(): BrowserWindow {
+function createMainWindow(options?: { show?: boolean }): BrowserWindow {
+  const shouldShow = options?.show !== false
   const resolved = applyNativeTheme(loadAudioPreferences().theme)
   const bounds = defaultMainWindowBounds()
   const win = new BrowserWindow({
@@ -132,6 +136,7 @@ function createMainWindow(): BrowserWindow {
     if (win.isDestroyed()) return
     const next = defaultMainWindowBounds()
     win.setBounds(next, false)
+    if (!shouldShow) return
     win.show()
     // Second pass after show — macOS sometimes restores a prior frame on first paint.
     setTimeout(() => {
@@ -158,6 +163,14 @@ function createMainWindow(): BrowserWindow {
   return win
 }
 
+function ensureMainWindow(): BrowserWindow {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    return mainWindow
+  }
+  mainWindow = createMainWindow({ show: true })
+  return mainWindow
+}
+
 const gotLock = app.requestSingleInstanceLock()
 logStartup('H3', 'single-instance-lock', { gotLock })
 if (!gotLock) {
@@ -168,10 +181,10 @@ if (!gotLock) {
     if (url) {
       void handleAuthDeepLink(url)
     }
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      if (mainWindow.isMinimized()) mainWindow.restore()
-      mainWindow.focus()
-    }
+    const win = ensureMainWindow()
+    if (win.isMinimized()) win.restore()
+    win.show()
+    win.focus()
   })
 
   registerProtocolClient()
@@ -183,9 +196,23 @@ if (!gotLock) {
     logStartup('H4', 'error-reporting-ready')
     registerHandlers(() => mainWindow)
     logStartup('H5', 'handlers-registered')
-    mainWindow = createMainWindow()
-    logStartup('H5', 'main-window-created')
+    await configureUpdater(() => mainWindow)
+    installApplicationMenu(() => mainWindow)
+
+    const startHidden = shouldStartHidden()
+    if (!startHidden) {
+      mainWindow = createMainWindow({ show: true })
+      logStartup('H5', 'main-window-created')
+    } else {
+      logStartup('H5', 'main-window-deferred-hidden-launch')
+    }
+
     startCalendarReminders(() => mainWindow)
+    // Detection + login-item keep running with no main window (macOS).
+    startMeetingDetection(
+      () => mainWindow,
+      () => ensureMainWindow(),
+    )
     void syncMeetingsWithCloud().then((sync) => {
       if (sync.ok && mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('meetings:changed')
@@ -197,13 +224,12 @@ if (!gotLock) {
       await handleAuthDeepLink(pending)
     }
 
-    await configureUpdater()
     void checkForSignedUpdates()
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
-        mainWindow = createMainWindow()
-      }
+      const win = ensureMainWindow()
+      win.show()
+      win.focus()
     })
 
     nativeTheme.on('updated', () => {
@@ -214,8 +240,11 @@ if (!gotLock) {
   })
 
   app.on('window-all-closed', () => {
+    // macOS: keep running so meeting detection can still show Take notes.
     if (process.platform !== 'darwin') {
       app.quit()
+    } else {
+      mainWindow = null
     }
   })
 }

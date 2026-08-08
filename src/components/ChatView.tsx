@@ -1,20 +1,33 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import type { ChatEffort } from '../../shared/chatOptions'
-import type { Meeting } from '../types/meeting'
-import { ChatPromptInput } from './ChatPromptInput'
+import { packTextAttachmentsIntoMessage } from '../../shared/chatAttachments'
+import type { Folder, Meeting } from '../types/meeting'
+import { ChatPromptInput, type ChatPromptSubmit } from './ChatPromptInput'
 
 type ChatMessage = {
   id: string
   role: 'user' | 'assistant'
   text: string
+  citations?: Array<{ meetingId: string; title: string; quote?: string }>
 }
 
 type ChatViewProps = {
   meetings: Meeting[]
+  folders: Folder[]
   paired: boolean
   onConnect: () => void
   onOpenMeeting: (id: string) => void
+  onOpenCitation?: (citation: {
+    meetingId: string
+    title: string
+    quote?: string
+    entryId?: string
+    audioStartMs?: number
+  }) => void
+  initialScope?: 'all' | 'meeting' | 'folder' | 'selected' | 'person' | 'company'
+  initialPersonEmail?: string
+  initialCompany?: string
+  onOpenEntity?: (kind: 'person' | 'company', value: string) => void
 }
 
 function errorMessage(code: string): string {
@@ -35,9 +48,36 @@ function errorMessage(code: string): string {
   }
 }
 
-export function ChatView({ meetings, paired, onConnect, onOpenMeeting }: ChatViewProps) {
+type ChatScope = 'meeting' | 'all' | 'folder' | 'selected' | 'person' | 'company'
+
+function threadStorageKey(scope: ChatScope, key: string): string {
+  return `clarifi-chat-thread:${scope}:${key}`
+}
+
+export function ChatView({
+  meetings,
+  folders,
+  paired,
+  onConnect,
+  onOpenMeeting,
+  onOpenCitation,
+  initialScope = 'all',
+  initialPersonEmail = '',
+  initialCompany = '',
+  onOpenEntity,
+}: ChatViewProps) {
+  const domainFromEmail = (email: string): string | null => {
+    const parts = email.split('@')
+    if (parts.length !== 2) return null
+    return parts[1]?.toLowerCase() || null
+  }
+
   const [meetingId, setMeetingId] = useState<string>('')
-  const [scope, setScope] = useState<'meeting' | 'all'>('meeting')
+  const [scope, setScope] = useState<ChatScope>(initialScope)
+  const [folderId, setFolderId] = useState<string>('')
+  const [personEmail, setPersonEmail] = useState(initialPersonEmail)
+  const [company, setCompany] = useState(initialCompany)
+  const [selectedMeetingIds, setSelectedMeetingIds] = useState<string[]>([])
   const [draft, setDraft] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [sending, setSending] = useState(false)
@@ -56,17 +96,71 @@ export function ChatView({ meetings, paired, onConnect, onOpenMeeting }: ChatVie
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight })
   }, [messages, sending])
 
+  const threadKey = useMemo(() => {
+    if (scope === 'meeting') return threadStorageKey('meeting', meetingId || 'none')
+    if (scope === 'folder') return threadStorageKey('folder', folderId || 'none')
+    if (scope === 'selected') return threadStorageKey('selected', selectedMeetingIds.sort().join(',') || 'none')
+    if (scope === 'person') return threadStorageKey('person', personEmail.trim().toLowerCase() || 'none')
+    if (scope === 'company') return threadStorageKey('company', company.trim().toLowerCase() || 'none')
+    return threadStorageKey('all', 'all')
+  }, [company, folderId, meetingId, personEmail, scope, selectedMeetingIds])
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(threadKey)
+      if (!raw) {
+        setMessages([])
+        return
+      }
+      const parsed = JSON.parse(raw) as ChatMessage[]
+      if (!Array.isArray(parsed)) {
+        setMessages([])
+        return
+      }
+      setMessages(parsed.slice(-60))
+    } catch {
+      setMessages([])
+    }
+  }, [threadKey])
+
+  useEffect(() => {
+    window.localStorage.setItem(threadKey, JSON.stringify(messages.slice(-60)))
+  }, [messages, threadKey])
+
+  const knownPeople = useMemo(() => {
+    const emails = new Set<string>()
+    for (const meeting of meetings) {
+      for (const email of meeting.attendeeEmails ?? []) emails.add(email.toLowerCase())
+      for (const person of meeting.attendees ?? []) {
+        if (person.email) emails.add(person.email.toLowerCase())
+      }
+    }
+    return [...emails].sort()
+  }, [meetings])
+
+  const knownCompanies = useMemo(() => {
+    const names = new Set<string>()
+    for (const meeting of meetings) {
+      for (const email of meeting.attendeeEmails ?? []) {
+        const domain = domainFromEmail(email)
+        if (domain) names.add(domain)
+      }
+      for (const person of meeting.attendees ?? []) {
+        if (person.email) {
+          const domain = domainFromEmail(person.email)
+          if (domain) names.add(domain)
+        }
+      }
+    }
+    return [...names].sort((a, b) => a.localeCompare(b))
+  }, [meetings])
+
   const send = useCallback(
-    async (payload: {
-      message: string
-      model: string
-      effort: ChatEffort
-      images: Array<{
-        imageBase64: string
-        mimeType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
-      }>
-    }) => {
-      const text = payload.message.trim()
+    async (payload: ChatPromptSubmit) => {
+      const text = packTextAttachmentsIntoMessage(
+        payload.message.trim(),
+        payload.textAttachments ?? [],
+      )
       if ((!text && payload.images.length === 0) || sending) return
       if (!paired) {
         setError('Connect your account to chat with Clarifi.')
@@ -74,8 +168,19 @@ export function ChatView({ meetings, paired, onConnect, onOpenMeeting }: ChatVie
       }
 
       const display =
-        payload.images.length > 0
-          ? `${text}${text ? '\n' : ''}[${payload.images.length} image${payload.images.length === 1 ? '' : 's'} attached]`
+        payload.images.length > 0 || (payload.textAttachments?.length ?? 0) > 0
+          ? `${text}${text ? '\n' : ''}[${[
+              payload.images.length
+                ? `${payload.images.length} image${payload.images.length === 1 ? '' : 's'}`
+                : null,
+              payload.textAttachments?.length
+                ? `${payload.textAttachments.length} file${
+                    payload.textAttachments.length === 1 ? '' : 's'
+                  }`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(', ')} attached]`
           : text
       const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: 'user', text: display }
       setMessages((prev) => [...prev, userMsg])
@@ -83,35 +188,64 @@ export function ChatView({ meetings, paired, onConnect, onOpenMeeting }: ChatVie
       setSending(true)
       setError(null)
 
+      const assistantId = `a-${Date.now()}`
+      setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', text: '' }])
+
       try {
-        const result = (await window.electronAPI.invoke('chat:send', {
-          message: text,
-          meetingId: scope === 'meeting' ? meetingId || null : null,
-          scope,
-          model: payload.model,
-          effort: payload.effort,
-          images: payload.images,
-        })) as { reply?: string; error?: string }
+        const history = messages.slice(-12).map((entry) => ({ role: entry.role, text: entry.text }))
+        const { invokeChatWithStream } = await import('../lib/chatStreamClient')
+        const result = await invokeChatWithStream({
+          payload: {
+            message: text,
+            meetingId: scope === 'meeting' ? meetingId || null : null,
+            scope,
+            folderId: scope === 'folder' ? folderId || null : null,
+            selectedMeetingIds: scope === 'selected' ? selectedMeetingIds : [],
+            personEmail: scope === 'person' ? personEmail.trim() || null : null,
+            company: scope === 'company' ? company.trim() || null : null,
+            history,
+            model: payload.model,
+            effort: payload.effort,
+            images: payload.images,
+          },
+          onDelta: (chunk) => {
+            setMessages((prev) =>
+              prev.map((entry) =>
+                entry.id === assistantId ? { ...entry, text: `${entry.text}${chunk}` } : entry,
+              ),
+            )
+          },
+        })
 
         if (result.error) {
+          setMessages((prev) => prev.filter((entry) => entry.id !== assistantId))
           setError(errorMessage(result.error))
           return
         }
         if (!result.reply) {
+          setMessages((prev) => prev.filter((entry) => entry.id !== assistantId))
           setError(errorMessage('chat_failed'))
           return
         }
-        setMessages((prev) => [
-          ...prev,
-          { id: `a-${Date.now()}`, role: 'assistant', text: result.reply! },
-        ])
+        setMessages((prev) =>
+          prev.map((entry) =>
+            entry.id === assistantId
+              ? {
+                  ...entry,
+                  text: result.reply!,
+                  citations: result.citations ?? [],
+                }
+              : entry,
+          ),
+        )
       } catch {
+        setMessages((prev) => prev.filter((entry) => entry.id !== assistantId))
         setError(errorMessage('chat_failed'))
       } finally {
         setSending(false)
       }
     },
-    [meetingId, paired, scope, sending],
+    [meetingId, paired, scope, sending, messages, folderId, selectedMeetingIds, personEmail, company],
   )
 
   return (
@@ -130,10 +264,24 @@ export function ChatView({ meetings, paired, onConnect, onOpenMeeting }: ChatVie
             <select
               className="chat-meeting-select"
               value={scope}
-              onChange={(event) => setScope(event.target.value === 'all' ? 'all' : 'meeting')}
+              onChange={(event) =>
+                setScope(
+                  event.target.value === 'all' ||
+                    event.target.value === 'folder' ||
+                    event.target.value === 'selected' ||
+                    event.target.value === 'person' ||
+                    event.target.value === 'company'
+                    ? event.target.value
+                    : 'meeting',
+                )
+              }
             >
               <option value="meeting">This meeting</option>
               <option value="all">All meetings</option>
+              <option value="folder">Folder</option>
+              <option value="selected">Selected meetings</option>
+              <option value="person">Person</option>
+              <option value="company">Company</option>
             </select>
           </label>
           {scope === 'meeting' ? (
@@ -151,6 +299,96 @@ export function ChatView({ meetings, paired, onConnect, onOpenMeeting }: ChatVie
                   </option>
                 ))}
               </select>
+            </label>
+          ) : null}
+          {scope === 'folder' ? (
+            <label className="chat-meeting-picker">
+              <span className="chat-meeting-picker-label">Folder</span>
+              <select
+                className="chat-meeting-select"
+                value={folderId}
+                onChange={(event) => setFolderId(event.target.value)}
+              >
+                <option value="">Choose folder</option>
+                {folders.map((folder) => (
+                  <option key={folder.id} value={folder.id}>
+                    {folder.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {scope === 'selected' ? (
+            <label className="chat-meeting-picker">
+              <span className="chat-meeting-picker-label">Meetings</span>
+              <select
+                className="chat-meeting-select"
+                multiple
+                value={selectedMeetingIds}
+                onChange={(event) =>
+                  setSelectedMeetingIds(
+                    [...event.target.selectedOptions].map((option) => option.value).slice(0, 20),
+                  )
+                }
+              >
+                {recentMeetings.map((meeting) => (
+                  <option key={meeting.id} value={meeting.id}>
+                    {meeting.title || 'Untitled meeting'}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {scope === 'person' ? (
+            <label className="chat-meeting-picker">
+              <span className="chat-meeting-picker-label">Person email</span>
+              <input
+                className="chat-meeting-select"
+                list="chat-person-list"
+                value={personEmail}
+                onChange={(event) => setPersonEmail(event.target.value)}
+                placeholder="name@company.com"
+              />
+              <datalist id="chat-person-list">
+                {knownPeople.map((email) => (
+                  <option key={email} value={email} />
+                ))}
+              </datalist>
+              {onOpenEntity && personEmail.trim() ? (
+                <button
+                  type="button"
+                  className="link-btn"
+                  onClick={() => onOpenEntity('person', personEmail.trim())}
+                >
+                  Open person memory
+                </button>
+              ) : null}
+            </label>
+          ) : null}
+          {scope === 'company' ? (
+            <label className="chat-meeting-picker">
+              <span className="chat-meeting-picker-label">Company</span>
+              <input
+                className="chat-meeting-select"
+                list="chat-company-list"
+                value={company}
+                onChange={(event) => setCompany(event.target.value)}
+                placeholder="acme.com"
+              />
+              <datalist id="chat-company-list">
+                {knownCompanies.map((name) => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
+              {onOpenEntity && company.trim() ? (
+                <button
+                  type="button"
+                  className="link-btn"
+                  onClick={() => onOpenEntity('company', company.trim())}
+                >
+                  Open company memory
+                </button>
+              ) : null}
             </label>
           ) : null}
         </div>
@@ -185,6 +423,25 @@ export function ChatView({ meetings, paired, onConnect, onOpenMeeting }: ChatVie
                 {message.role === 'user' ? 'You' : 'Clarifi'}
               </div>
               <div className="chat-bubble-text">{message.text}</div>
+              {message.role === 'assistant' && message.citations?.length ? (
+                <div className="chat-citations">
+                  {message.citations.slice(0, 5).map((citation, index) => (
+                    <button
+                      key={`${citation.meetingId}-${index}`}
+                      type="button"
+                      className="chat-citation-chip"
+                      onClick={() =>
+                        onOpenCitation
+                          ? onOpenCitation(citation)
+                          : onOpenMeeting(citation.meetingId)
+                      }
+                      title={citation.quote || citation.title}
+                    >
+                      {citation.title}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ))
         )}
@@ -203,7 +460,7 @@ export function ChatView({ meetings, paired, onConnect, onOpenMeeting }: ChatVie
           value={draft}
           onChange={setDraft}
           onSubmit={(payload) => void send(payload)}
-          placeholder={paired ? 'Ask anything…' : 'Connect to chat'}
+          placeholder={paired ? 'Ask Clarifi…' : 'Connect to chat'}
           disabled={!paired}
           sending={sending}
         />

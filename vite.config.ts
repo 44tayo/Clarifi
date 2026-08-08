@@ -63,6 +63,20 @@ export default defineConfig(({ mode }) => {
             },
           },
         },
+        {
+          entry: 'electron/detection-banner-preload.ts',
+          onstart() {
+            // Banner preload rebuilds with main; no separate Electron restart.
+          },
+          vite: {
+            build: {
+              outDir: 'dist-electron',
+              rollupOptions: {
+                external: ['electron'],
+              },
+            },
+          },
+        },
       ]),
       renderer(),
     ],
@@ -72,6 +86,7 @@ export default defineConfig(({ mode }) => {
         input: {
           main: 'index.html',
           widget: 'widget.html',
+          detectionBanner: 'detection-banner.html',
         },
       },
     },

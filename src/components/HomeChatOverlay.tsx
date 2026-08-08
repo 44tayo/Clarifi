@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { ChatEffort } from '../../shared/chatOptions'
+import { packTextAttachmentsIntoMessage } from '../../shared/chatAttachments'
 import { ChatPromptInput, type ChatPromptSubmit } from './ChatPromptInput'
 import { StatefulButton } from './ui/StatefulButton'
 import { useToast } from '../hooks/useToast'
@@ -9,12 +10,20 @@ export type HomeChatMessage = {
   id: string
   role: 'user' | 'assistant'
   text: string
+  citations?: Array<{ meetingId: string; title: string; quote?: string }>
 }
 
 type HomeChatOverlayProps = {
   paired: boolean
   onConnect: () => void
   onOpenChatView?: () => void
+  onOpenCitation?: (citation: {
+    meetingId: string
+    title: string
+    quote?: string
+    entryId?: string
+    audioStartMs?: number
+  }) => void
 }
 
 function errorMessage(code: string): string {
@@ -33,7 +42,7 @@ function errorMessage(code: string): string {
   }
 }
 
-export function HomeChatOverlay({ paired, onConnect, onOpenChatView }: HomeChatOverlayProps) {
+export function HomeChatOverlay({ paired, onConnect, onOpenChatView, onOpenCitation }: HomeChatOverlayProps) {
   const { toast } = useToast()
   const [draft, setDraft] = useState('')
   const [messages, setMessages] = useState<HomeChatMessage[]>([])
@@ -93,9 +102,27 @@ export function HomeChatOverlay({ paired, onConnect, onOpenChatView }: HomeChatO
     [],
   )
 
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem('clarifi-chat-thread:home')
+      if (!raw) return
+      const parsed = JSON.parse(raw) as HomeChatMessage[]
+      if (Array.isArray(parsed)) setMessages(parsed.slice(-60))
+    } catch {
+      // ignore malformed cached thread
+    }
+  }, [])
+
+  useEffect(() => {
+    window.localStorage.setItem('clarifi-chat-thread:home', JSON.stringify(messages.slice(-60)))
+  }, [messages])
+
   const send = useCallback(
     async (payload: ChatPromptSubmit) => {
-      const text = payload.message.trim()
+      const text = packTextAttachmentsIntoMessage(
+        payload.message.trim(),
+        payload.textAttachments ?? [],
+      )
       if ((!text && payload.images.length === 0) || sending) return
       if (!paired) {
         setError('Connect your account to ask Clarifi.')
@@ -105,45 +132,79 @@ export function HomeChatOverlay({ paired, onConnect, onOpenChatView }: HomeChatO
 
       setOpen(true)
       const display =
-        payload.images.length > 0
-          ? `${text}${text ? '\n' : ''}[${payload.images.length} image${
-              payload.images.length === 1 ? '' : 's'
-            } attached]`
+        payload.images.length > 0 || (payload.textAttachments?.length ?? 0) > 0
+          ? `${text}${text ? '\n' : ''}[${[
+              payload.images.length
+                ? `${payload.images.length} image${payload.images.length === 1 ? '' : 's'}`
+                : null,
+              payload.textAttachments?.length
+                ? `${payload.textAttachments.length} file${
+                    payload.textAttachments.length === 1 ? '' : 's'
+                  }`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(', ')} attached]`
           : text
       setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: 'user', text: display }])
       setDraft('')
       setSending(true)
       setError(null)
 
+      const assistantId = `a-${Date.now()}`
+      setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', text: '' }])
+
       try {
-        const result = (await window.electronAPI.invoke('chat:send', {
-          message: text,
-          meetingId: null,
-          scope: 'all',
-          model: payload.model,
-          effort: payload.effort as ChatEffort,
-          images: payload.images,
-        })) as { reply?: string; error?: string }
+        const history = messages.slice(-12).map((entry) => ({ role: entry.role, text: entry.text }))
+        const { invokeChatWithStream } = await import('../lib/chatStreamClient')
+        const result = await invokeChatWithStream({
+          payload: {
+            message: text,
+            meetingId: null,
+            scope: 'all',
+            history,
+            model: payload.model,
+            effort: payload.effort as ChatEffort,
+            images: payload.images,
+          },
+          onDelta: (chunk) => {
+            setMessages((prev) =>
+              prev.map((entry) =>
+                entry.id === assistantId ? { ...entry, text: `${entry.text}${chunk}` } : entry,
+              ),
+            )
+          },
+        })
 
         if (result.error) {
+          setMessages((prev) => prev.filter((entry) => entry.id !== assistantId))
           setError(errorMessage(result.error))
           return
         }
         if (!result.reply) {
+          setMessages((prev) => prev.filter((entry) => entry.id !== assistantId))
           setError(errorMessage('chat_failed'))
           return
         }
-        setMessages((prev) => [
-          ...prev,
-          { id: `a-${Date.now()}`, role: 'assistant', text: result.reply! },
-        ])
+        setMessages((prev) =>
+          prev.map((entry) =>
+            entry.id === assistantId
+              ? {
+                  ...entry,
+                  text: result.reply!,
+                  citations: result.citations ?? [],
+                }
+              : entry,
+          ),
+        )
       } catch {
+        setMessages((prev) => prev.filter((entry) => entry.id !== assistantId))
         setError(errorMessage('chat_failed'))
       } finally {
         setSending(false)
       }
     },
-    [paired, sending],
+    [paired, sending, messages],
   )
 
   const startNewChat = () => {
@@ -251,7 +312,28 @@ export function HomeChatOverlay({ paired, onConnect, onOpenChatView }: HomeChatO
                       className={`home-chat-bubble home-chat-bubble-${message.role}`}
                     >
                       {message.role === 'assistant' ? (
-                        <div className="home-chat-bubble-text">{message.text}</div>
+                        <>
+                          <div className="home-chat-bubble-text">{message.text}</div>
+                          {message.citations?.length ? (
+                            <div className="chat-citations">
+                              {message.citations.slice(0, 5).map((citation, index) => (
+                                <button
+                                  key={`${citation.meetingId}-${index}`}
+                                  type="button"
+                                  className="chat-citation-chip"
+                                  title={citation.quote || citation.title}
+                                  onClick={() =>
+                                    onOpenCitation
+                                      ? onOpenCitation(citation)
+                                      : onOpenChatView?.()
+                                  }
+                                >
+                                  {citation.title}
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
+                        </>
                       ) : (
                         <div className="home-chat-bubble-pill">{message.text}</div>
                       )}
@@ -359,7 +441,7 @@ export function HomeChatOverlay({ paired, onConnect, onOpenChatView }: HomeChatO
                 value={draft}
                 onChange={setDraft}
                 onSubmit={(payload) => void send(payload)}
-                placeholder={paired ? 'Ask anything…' : 'Connect to ask Clarifi…'}
+                placeholder={paired ? 'Ask Clarifi…' : 'Connect to ask Clarifi…'}
                 disabled={!paired}
                 sending={sending}
                 autoFocus
@@ -373,7 +455,7 @@ export function HomeChatOverlay({ paired, onConnect, onOpenChatView }: HomeChatO
               onChange={setDraft}
               onSubmit={(payload) => void send(payload)}
               onFocus={() => setOpen(true)}
-              placeholder={paired ? 'Ask anything…' : 'Connect to ask Clarifi…'}
+              placeholder={paired ? 'Ask Clarifi…' : 'Connect to ask Clarifi…'}
               disabled={!paired}
               sending={sending}
             />

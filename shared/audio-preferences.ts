@@ -18,6 +18,8 @@ export type AudioPreferences = {
   theme: ThemePreference
   /** Prompt before calendar events start (does not auto-record). */
   meetingRemindersEnabled: boolean
+  /** Prompt when another app is on a call (mic in use) — never auto-records. */
+  meetingDetectionEnabled: boolean
   /** Mic transcription engine — 'deepgram' (live, low-latency, default) or 'whisper' (legacy fallback, 3s chunks). */
   micSttEngine: MicSttEngine
 }
@@ -35,5 +37,6 @@ export const DEFAULT_AUDIO_PREFERENCES: AudioPreferences = {
   skipMicPicker: false,
   theme: 'light',
   meetingRemindersEnabled: true,
+  meetingDetectionEnabled: true,
   micSttEngine: 'deepgram',
 }

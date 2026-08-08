@@ -7,6 +7,11 @@ import {
 } from 'react'
 
 import {
+  classifyAttachmentMime,
+  extractAttachmentText,
+  MAX_TEXT_ATTACHMENT_BYTES,
+} from '../../shared/chatAttachments'
+import {
   chatSelectableModels,
   normalizeChatEffort,
   type ChatEffort,
@@ -18,9 +23,11 @@ import { DictationWaveformButton } from './DictationWaveformButton'
 export type ChatAttachmentPayload = {
   id: string
   name: string
-  previewUrl: string
-  imageBase64: string
-  mimeType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
+  previewUrl?: string
+  kind: 'image' | 'text'
+  imageBase64?: string
+  mimeType: string
+  textContent?: string
 }
 
 export type ChatPromptSubmit = {
@@ -29,8 +36,9 @@ export type ChatPromptSubmit = {
   effort: ChatEffort
   images: Array<{
     imageBase64: string
-    mimeType: ChatAttachmentPayload['mimeType']
+    mimeType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
   }>
+  textAttachments: Array<{ name: string; text: string }>
 }
 
 type ChatPromptInputProps = {
@@ -43,6 +51,8 @@ type ChatPromptInputProps = {
   onFocus?: () => void
   autoFocus?: boolean
   className?: string
+  /** When true, empty file-only submits and attach label target meeting context. */
+  meetingContext?: boolean
 }
 
 const MODELS = chatSelectableModels()
@@ -50,34 +60,60 @@ const MAX_ATTACHMENTS = 6
 
 function fileToAttachment(file: File): Promise<ChatAttachmentPayload | null> {
   return new Promise((resolve) => {
-    const mime = file.type
-    if (
-      mime !== 'image/png' &&
-      mime !== 'image/jpeg' &&
-      mime !== 'image/gif' &&
-      mime !== 'image/webp'
-    ) {
+    const kind = classifyAttachmentMime(file.type)
+    if (kind === 'rejected' || file.size > MAX_TEXT_ATTACHMENT_BYTES) {
       resolve(null)
       return
     }
+    if (kind === 'image') {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const result = typeof reader.result === 'string' ? reader.result : ''
+        const base64 = result.includes(',') ? result.split(',')[1] : result
+        if (!base64) {
+          resolve(null)
+          return
+        }
+        resolve({
+          id: `${file.name}-${file.size}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          name: file.name,
+          previewUrl: URL.createObjectURL(file),
+          kind: 'image',
+          imageBase64: base64,
+          mimeType: file.type,
+        })
+      }
+      reader.onerror = () => resolve(null)
+      reader.readAsDataURL(file)
+      return
+    }
+
     const reader = new FileReader()
     reader.onload = () => {
-      const result = typeof reader.result === 'string' ? reader.result : ''
-      const base64 = result.includes(',') ? result.split(',')[1] : result
-      if (!base64) {
+      const buffer = reader.result instanceof ArrayBuffer ? reader.result : null
+      if (!buffer) {
+        resolve(null)
+        return
+      }
+      const text = extractAttachmentText({
+        mimeType: file.type,
+        bytes: new Uint8Array(buffer),
+        fileName: file.name,
+      })
+      if (!text) {
         resolve(null)
         return
       }
       resolve({
         id: `${file.name}-${file.size}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         name: file.name,
-        previewUrl: URL.createObjectURL(file),
-        imageBase64: base64,
-        mimeType: mime,
+        kind: 'text',
+        mimeType: file.type,
+        textContent: text,
       })
     }
     reader.onerror = () => resolve(null)
-    reader.readAsDataURL(file)
+    reader.readAsArrayBuffer(file)
   })
 }
 
@@ -134,6 +170,7 @@ export function ChatPromptInput({
   onFocus,
   autoFocus = false,
   className = '',
+  meetingContext = false,
 }: ChatPromptInputProps) {
   const [modelId, setModelId] = useState(DEFAULT_ACTIVE_MODEL_ID)
   const [attachments, setAttachments] = useState<ChatAttachmentPayload[]>([])
@@ -165,7 +202,9 @@ export function ChatPromptInput({
 
   useEffect(
     () => () => {
-      attachmentsRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl))
+      attachmentsRef.current.forEach((item) => {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
+      })
     },
     [],
   )
@@ -214,7 +253,7 @@ export function ChatPromptInput({
   const removeAttachment = (id: string) => {
     setAttachments((prev) => {
       const target = prev.find((item) => item.id === id)
-      if (target) URL.revokeObjectURL(target.previewUrl)
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl)
       return prev.filter((item) => item.id !== id)
     })
   }
@@ -222,16 +261,32 @@ export function ChatPromptInput({
   const handleSubmit = () => {
     const message = value.trim()
     if ((!message && attachments.length === 0) || disabled || sending || dictationBusy) return
+    const hasImages = attachments.some((item) => item.kind === 'image')
+    const hasTextFiles = attachments.some((item) => item.kind === 'text')
+    const fallbackMessage = meetingContext
+      ? hasImages && !hasTextFiles
+        ? 'Use these images as meeting context.'
+        : 'Use the attached files as meeting context and help with this meeting.'
+      : hasImages
+        ? 'Describe these images.'
+        : 'Summarize the attached files.'
     onSubmit({
-      message: message || 'Describe these images.',
+      message: message || fallbackMessage,
       model: selectedModel?.id ?? DEFAULT_ACTIVE_MODEL_ID,
       effort: normalizeChatEffort('medium'),
-      images: attachments.map((item) => ({
-        imageBase64: item.imageBase64,
-        mimeType: item.mimeType,
-      })),
+      images: attachments
+        .filter((item) => item.kind === 'image' && item.imageBase64)
+        .map((item) => ({
+          imageBase64: item.imageBase64!,
+          mimeType: item.mimeType as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp',
+        })),
+      textAttachments: attachments
+        .filter((item) => item.kind === 'text' && item.textContent)
+        .map((item) => ({ name: item.name, text: item.textContent! })),
     })
-    attachments.forEach((item) => URL.revokeObjectURL(item.previewUrl))
+    attachments.forEach((item) => {
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
+    })
     setAttachments([])
   }
 
@@ -258,7 +313,11 @@ export function ChatPromptInput({
         <ul className="chat-capsule-attachments" aria-label="Attachments">
           {attachments.map((item) => (
             <li key={item.id} className="chat-capsule-attachment">
-              <img src={item.previewUrl} alt={item.name} />
+              {item.kind === 'image' && item.previewUrl ? (
+                <img src={item.previewUrl} alt={item.name} />
+              ) : (
+                <span className="chat-capsule-attachment-file">{item.name}</span>
+              )}
               <button
                 type="button"
                 className="chat-capsule-attachment-remove"
@@ -344,7 +403,7 @@ export function ChatPromptInput({
             type="button"
             className="chat-capsule-icon-btn"
             disabled={disabled || dictationBusy || attachments.length >= MAX_ATTACHMENTS}
-            aria-label="Attach image"
+            aria-label="Attach file"
             onClick={() => fileRef.current?.click()}
           >
             <PaperclipIcon />
@@ -352,7 +411,7 @@ export function ChatPromptInput({
           <input
             ref={fileRef}
             type="file"
-            accept="image/png,image/jpeg,image/gif,image/webp"
+            accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv,application/json"
             multiple
             hidden
             onChange={onFileChange}

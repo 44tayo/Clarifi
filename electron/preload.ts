@@ -41,6 +41,9 @@ const INVOKE_CHANNELS = [
   'share:get-item',
   'share:accept-invite',
   'chat:send',
+  'chat:audit-list',
+  'chat:audit-purge',
+  'chat:threads-purge',
   'audio:start',
   'audio:pause',
   'audio:resume',
@@ -76,6 +79,10 @@ const INVOKE_CHANNELS = [
   'widget:rename-speaker',
   'error:report',
   'enhance:retry-pending',
+  'update:get-status',
+  'update:check',
+  'update:download',
+  'update:install',
 ] as const
 
 const SEND_CHANNELS = [] as const
@@ -95,6 +102,15 @@ const ON_CHANNELS = [
   'audio:session-paused',
   'audio:session-resumed',
   'calendar:reminder-start',
+  'meeting:detection-start',
+  'chat:delta',
+  'update:available',
+  'update:progress',
+  'update:downloaded',
+  'update:error',
+  'update:not-available',
+  'update:status',
+  'update:menu-check',
 ] as const
 
 type InvokeChannel = (typeof INVOKE_CHANNELS)[number]

@@ -5,6 +5,12 @@ import {
   type ChatEffort,
 } from './chatOptions'
 import {
+  createStreamReplyEmitter,
+  parseAnthropicSseDataLine,
+  parseJsonChatReply,
+  type ChatCitation,
+} from './chatStream'
+import {
   CLARIFI_ENHANCED_NOTES_SYSTEM_PROMPT,
   CLARIFI_ENTERPRISE_SYSTEM_PROMPT,
   CLARIFI_GENERAL_SYSTEM_PROMPT,
@@ -34,6 +40,7 @@ export interface ScreenContextImage {
 export interface ChatRequest {
   message: string
   transcriptLines: string[]
+  history?: Array<{ role: 'user' | 'assistant'; text: string }>
   useScreenContext: boolean
   screenImage?: ScreenContextImage
   images?: ScreenContextImage[]
@@ -42,7 +49,9 @@ export interface ChatRequest {
   purpose?: ChatPurpose
 }
 
-export type ChatResult = { reply: string } | { error: string }
+export type { ChatCitation }
+
+export type ChatResult = { reply: string; citations?: ChatCitation[] } | { error: string }
 
 type AnthropicContentBlock =
   | { type: 'text'; text: string }
@@ -66,7 +75,20 @@ function collectChatImages(request: ChatRequest): ScreenContextImage[] {
   return images.slice(0, 6)
 }
 
-export async function chatWithMeetingContext(request: ChatRequest): Promise<ChatResult> {
+type BuiltChat = {
+  apiKey: string
+  model: string
+  maxTokens: number
+  systemPrompt: string
+  userContent: AnthropicContentBlock[]
+  history: Array<{ role: 'user' | 'assistant'; text: string }>
+  isEnhance: boolean
+}
+
+function buildChatPayload(
+  request: ChatRequest,
+  mode: 'json' | 'stream',
+): BuiltChat | { error: string } {
   const { message, transcriptLines, useScreenContext } = request
   const purpose = request.purpose === 'enhance_notes' ? 'enhance_notes' : 'chat'
   const images = collectChatImages(request)
@@ -87,9 +109,10 @@ export async function chatWithMeetingContext(request: ChatRequest): Promise<Chat
   const isEnhance = purpose === 'enhance_notes'
 
   const hasImages = images.length > 0 && !isEnhance
-  const screenStyleHint = useScreenContext && hasImages
-    ? '\n\nReply concisely using screen context reply style. No backticks. No em-dashes. Max 6 visible details bullets. Max 6 tab names. One summary sentence with **bold** key names only. Total response under 1200 characters for simple screen questions.'
-    : ''
+  const screenStyleHint =
+    useScreenContext && hasImages
+      ? '\n\nReply concisely using screen context reply style. No backticks. No em-dashes. Max 6 visible details bullets. Max 6 tab names. One summary sentence with **bold** key names only. Total response under 1200 characters for simple screen questions.'
+      : ''
 
   const userText = isEnhance
     ? `Meeting transcript:\n${transcript}\n\nEnhance request:\n${message}`
@@ -97,11 +120,25 @@ export async function chatWithMeetingContext(request: ChatRequest): Promise<Chat
       ? `Live meeting transcript:\n${transcript}\n\nUser typed question:\n${message}${screenStyleHint}`
       : `Live meeting transcript:\n${transcript}\n\nUser question:\n${message}`
 
-  const systemPrompt = isEnhance
-    ? CLARIFI_ENHANCED_NOTES_SYSTEM_PROMPT
-    : useScreenContext && hasImages
-      ? CLARIFI_ENTERPRISE_SYSTEM_PROMPT
-      : CLARIFI_GENERAL_SYSTEM_PROMPT
+  const history =
+    Array.isArray(request.history) && !isEnhance
+      ? request.history
+          .filter((item) => item && typeof item.text === 'string' && item.text.trim())
+          .slice(-12)
+      : []
+
+  const citationContract = isEnhance
+    ? ''
+    : mode === 'stream'
+      ? '\n\nAnswer in plain markdown/text (not a JSON object). After the full answer, on a new line write exactly <<<CITATIONS>>> then a JSON array of {"meetingId","title","quote?","entryId?","audioStartMs?"}. Use [] when no transcript/notes evidence supports the answer.'
+      : '\n\nReturn strict JSON only with schema: {"reply":"string","citations":[{"meetingId":"string","title":"string","quote":"string(optional)","entryId":"string(optional)","audioStartMs":"number(optional)"}]}. If no citation evidence is available, return citations as [].'
+
+  const systemPrompt =
+    (isEnhance
+      ? CLARIFI_ENHANCED_NOTES_SYSTEM_PROMPT
+      : useScreenContext && hasImages
+        ? CLARIFI_ENTERPRISE_SYSTEM_PROMPT
+        : CLARIFI_GENERAL_SYSTEM_PROMPT) + citationContract
 
   const userContent: AnthropicContentBlock[] = [
     ...(hasImages
@@ -124,19 +161,40 @@ export async function chatWithMeetingContext(request: ChatRequest): Promise<Chat
     ? ENHANCE_NOTES_MAX_TOKENS
     : maxTokensForEffort(normalizeChatEffort(request.effort))
 
+  return {
+    apiKey,
+    model,
+    maxTokens,
+    systemPrompt,
+    userContent,
+    history,
+    isEnhance,
+  }
+}
+
+export async function chatWithMeetingContext(request: ChatRequest): Promise<ChatResult> {
+  const built = buildChatPayload(request, 'json')
+  if ('error' in built) return built
+
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': apiKey,
+        'x-api-key': built.apiKey,
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model,
-        max_tokens: maxTokens,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userContent }],
+        model: built.model,
+        max_tokens: built.maxTokens,
+        system: built.systemPrompt,
+        messages: [
+          ...built.history.map((entry) => ({
+            role: entry.role,
+            content: [{ type: 'text', text: entry.text }],
+          })),
+          { role: 'user', content: built.userContent },
+        ],
       }),
     })
 
@@ -152,9 +210,85 @@ export async function chatWithMeetingContext(request: ChatRequest): Promise<Chat
     const reply = data.content?.[0]?.text?.trim()
     if (!reply) return { error: 'empty_reply' }
 
-    return { reply }
+    if (built.isEnhance) return { reply }
+
+    const parsed = parseJsonChatReply(reply)
+    if (parsed) return parsed
+    return { reply, citations: [] }
   } catch (err) {
     console.error('Chat error:', err)
+    return { error: 'chat_failed' }
+  }
+}
+
+export async function streamChatWithMeetingContext(
+  request: ChatRequest,
+  onDelta: (text: string) => void,
+): Promise<ChatResult> {
+  if (request.purpose === 'enhance_notes') {
+    return chatWithMeetingContext(request)
+  }
+
+  const built = buildChatPayload(request, 'stream')
+  if ('error' in built) return built
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': built.apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: built.model,
+        max_tokens: built.maxTokens,
+        stream: true,
+        system: built.systemPrompt,
+        messages: [
+          ...built.history.map((entry) => ({
+            role: entry.role,
+            content: [{ type: 'text', text: entry.text }],
+          })),
+          { role: 'user', content: built.userContent },
+        ],
+      }),
+    })
+
+    if (!response.ok) {
+      const err = await response.text()
+      console.error('LLM chat stream error:', err)
+      return { error: 'chat_failed' }
+    }
+
+    if (!response.body) return { error: 'chat_failed' }
+
+    const emitter = createStreamReplyEmitter(onDelta)
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+      for (const line of lines) {
+        const text = parseAnthropicSseDataLine(line)
+        if (text) emitter.push(text)
+      }
+    }
+    if (buffer.trim()) {
+      const text = parseAnthropicSseDataLine(buffer)
+      if (text) emitter.push(text)
+    }
+
+    const finished = emitter.finish()
+    if (!finished.reply.trim()) return { error: 'empty_reply' }
+    return { reply: finished.reply, citations: finished.citations }
+  } catch (err) {
+    console.error('Chat stream error:', err)
     return { error: 'chat_failed' }
   }
 }

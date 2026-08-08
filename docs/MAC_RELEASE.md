@@ -25,7 +25,25 @@ When cutting a release, update **all** of these together:
 
 ## Auto-updater
 
-Packaged apps read updates from `https://github.com/Tayowill/clarificluely/releases`. Override with env vars `GH_UPDATE_OWNER` and `GH_UPDATE_REPO` at build time if needed.
+Packaged apps use **electron-updater** against `https://github.com/Tayowill/clarificluely/releases`. Override with `GH_UPDATE_OWNER` / `GH_UPDATE_REPO` at build time if needed.
+
+Every **signed** GitHub Release marked `latest` must include:
+
+| Asset | Role |
+|--------|------|
+| `Clarifi-{version}-arm64.dmg` | Website / first install |
+| `Clarifi-{version}-arm64-mac.zip` | Updater install target |
+| `Clarifi-{version}-arm64-mac.zip.blockmap` | Differential download |
+| `latest-mac.yml` | Feed metadata (`path` must point at the zip) |
+
+CI uploads these from `release/` on signed `publish-release` runs. Never mark unsigned builds as `latest`.
+
+### E2E verify (vN → vN+1)
+
+1. Install signed Clarifi **vN** from DMG into `/Applications`.
+2. Bump `package.json` + `web/src/lib/downloads.ts`, tag/publish **vN+1** with zip + `latest-mac.yml`.
+3. Launch vN → banner or **Settings → About & updates → Check for updates** → **Update** → **Restart now**.
+4. Confirm **About** shows **vN+1**. Also: **Clarifi → Check for Updates…** in the macOS app menu.
 
 ## Verify before announcing
 
@@ -33,6 +51,12 @@ Packaged apps read updates from `https://github.com/Tayowill/clarificluely/relea
 npm run verify:mac:dmg -- release/Clarifi-1.0.0-arm64.dmg
 node scripts/verify-download-artifact.mjs \
   "https://github.com/Tayowill/clarificluely/releases/download/v1.0.0/Clarifi-1.0.0-arm64.dmg" \
+  50000000
+node scripts/verify-download-artifact.mjs \
+  "https://github.com/Tayowill/clarificluely/releases/download/v1.0.0/latest-mac.yml" \
+  100
+node scripts/verify-download-artifact.mjs \
+  "https://github.com/Tayowill/clarificluely/releases/download/v1.0.0/Clarifi-1.0.0-arm64-mac.zip" \
   50000000
 ```
 

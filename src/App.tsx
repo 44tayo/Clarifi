@@ -3,12 +3,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FREE_HISTORY_RETENTION_DAYS } from '../shared/entitlements'
 import { ChatView } from './components/ChatView'
 import { CommandPalette } from './components/CommandPalette'
+import { EntityMemoryView } from './components/EntityMemoryView'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { HomeView } from './components/HomeView'
 import { MeetingWorkspace } from './components/MeetingWorkspace'
 import { MeetingsListView } from './components/MeetingsListView'
 import { MicPickerModal } from './components/MicPickerModal'
 import { OfflineBanner } from './components/OfflineBanner'
+import { UpdateBanner } from './components/UpdateBanner'
 import { OnboardingFlow } from './components/OnboardingFlow'
 import { SettingsPanel } from './components/SettingsPanel'
 import { SharedWithMeView } from './components/SharedWithMeView'
@@ -28,6 +30,8 @@ import { takeDiscardMeetingOnMicCancel } from './lib/micPickerCancel'
 import { applyTheme } from './lib/theme'
 import { meetingAttendeesFromCalendar } from '../shared/speakers'
 import type { CalendarEvent } from '../shared/calendar'
+import type { DetectedMeetingPayload } from '../shared/meetingDetection'
+import type { CitationFocus } from '../shared/citationNav'
 import type { MeetingTemplateId } from '../shared/meetingTemplates'
 import type { Meeting, SpeakerIdentities } from './types/meeting'
 import type { SidebarSelection } from './types/navigation'
@@ -71,6 +75,7 @@ function App() {
     useSidebarWidth()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [activeMeeting, setActiveMeeting] = useState<Meeting | null>(null)
+  const [transcriptFocus, setTranscriptFocus] = useState<CitationFocus | null>(null)
   const [nav, setNav] = useState<SidebarSelection>({ view: 'home' })
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [commandOpen, setCommandOpen] = useState(false)
@@ -305,6 +310,38 @@ function App() {
     return off
   }, [handleStartCalendarEvent])
 
+  const handleDetectedMeeting = useCallback(
+    async (payload: DetectedMeetingPayload) => {
+      if (payload.calendarEvent?.id && payload.calendarEvent.provider) {
+        if (payload.calendarEvent.meetingUrl) {
+          void window.electronAPI.invoke(
+            'calendar:open-meeting-url',
+            payload.calendarEvent.meetingUrl,
+          )
+        }
+        await handleStartCalendarEvent(payload.calendarEvent)
+        return
+      }
+
+      const meeting = await createMeeting({
+        title: payload.suggestedTitle || `${payload.appName} call`,
+      })
+      setSelectedId(meeting.id)
+      setActiveMeeting(meeting)
+      await beginCapture(meeting.id, { discardOnMicCancel: true })
+    },
+    [beginCapture, createMeeting, handleStartCalendarEvent, setActiveMeeting],
+  )
+
+  useEffect(() => {
+    const off = window.electronAPI.on('meeting:detection-start', (raw) => {
+      const payload = raw as DetectedMeetingPayload
+      if (!payload?.title) return
+      void handleDetectedMeeting(payload)
+    })
+    return off
+  }, [handleDetectedMeeting])
+
   const handleStartCapture = useCallback(
     (meetingId: string) => {
       void beginCapture(meetingId)
@@ -434,6 +471,14 @@ function App() {
     [getMeeting, connection.plan, openDashboard],
   )
 
+  const handleOpenCitation = useCallback(
+    (citation: CitationFocus) => {
+      setTranscriptFocus(citation)
+      void handleSelect(citation.meetingId)
+    },
+    [handleSelect],
+  )
+
   const handleSelectView = useCallback((selection: SidebarSelection) => {
     setNav(selection)
     setSelectedId(null)
@@ -514,6 +559,7 @@ function App() {
       >
         <div className="app-titlebar-drag" aria-hidden="true" />
         <OfflineBanner />
+        <UpdateBanner />
         <SidebarToggle
           expanded={!sidebarCollapsed}
           onToggle={() => setSidebarCollapsed((collapsed) => !collapsed)}
@@ -649,6 +695,13 @@ function App() {
                   await handleEnhance()
                 })
               }}
+              transcriptFocus={
+                transcriptFocus && transcriptFocus.meetingId === activeMeeting.id
+                  ? transcriptFocus
+                  : null
+              }
+              onTranscriptFocusConsumed={() => setTranscriptFocus(null)}
+              relatedMeetings={meetings}
             />
           ) : nav.view === 'home' ? (
             <HomeView
@@ -666,14 +719,57 @@ function App() {
               onOpenDashboard={() => void openDashboard()}
               onOpenChat={() => handleSelectView({ view: 'chat' })}
               onOpenSettings={() => setSettingsOpen(true)}
+              onOpenCitation={handleOpenCitation}
               isMeetingLocked={(meeting) => isMeetingLocked(meeting, connection.plan)}
             />
           ) : nav.view === 'chat' ? (
             <ChatView
               meetings={meetings}
+              folders={folders}
               paired={connection.paired}
               onConnect={() => void openConnect()}
               onOpenMeeting={(id) => void handleSelect(id)}
+              onOpenCitation={handleOpenCitation}
+              initialScope={
+                nav.personEmail ? 'person' : nav.company ? 'company' : 'all'
+              }
+              initialPersonEmail={nav.personEmail ?? ''}
+              initialCompany={nav.company ?? ''}
+              onOpenEntity={(kind, value) =>
+                handleSelectView(
+                  kind === 'person'
+                    ? { view: 'person', personEmail: value }
+                    : { view: 'company', company: value },
+                )
+              }
+            />
+          ) : nav.view === 'person' && nav.personEmail ? (
+            <EntityMemoryView
+              kind="person"
+              value={nav.personEmail}
+              meetings={meetings}
+              onOpenMeeting={(id) => void handleSelect(id)}
+              onOpenScopedChat={(scope, value) =>
+                handleSelectView(
+                  scope === 'person'
+                    ? { view: 'chat', personEmail: value }
+                    : { view: 'chat', company: value },
+                )
+              }
+            />
+          ) : nav.view === 'company' && nav.company ? (
+            <EntityMemoryView
+              kind="company"
+              value={nav.company}
+              meetings={meetings}
+              onOpenMeeting={(id) => void handleSelect(id)}
+              onOpenScopedChat={(scope, value) =>
+                handleSelectView(
+                  scope === 'person'
+                    ? { view: 'chat', personEmail: value }
+                    : { view: 'chat', company: value },
+                )
+              }
             />
           ) : nav.view === 'shared' ? (
             <SharedWithMeView

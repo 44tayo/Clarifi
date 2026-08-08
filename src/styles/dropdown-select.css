@@ -35,7 +35,14 @@
 
 .ds-dropdown-select-trigger.is-open {
   border-color: var(--ds-border-strong);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ds-border) 55%, transparent);
+  box-shadow: none;
+  outline: none;
+}
+
+.ds-dropdown-select-trigger:focus,
+.ds-dropdown-select-trigger:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .ds-dropdown-select-trigger-label {
@@ -157,8 +164,14 @@
 
 .ds-dropdown-select--dark .ds-dropdown-select-trigger:hover,
 .ds-dropdown-select--dark .ds-dropdown-select-trigger.is-open {
-  border-color: rgba(43, 108, 255, 0.6);
-  box-shadow: 0 0 0 3px rgba(43, 108, 255, 0.15);
+  border-color: rgba(148, 163, 184, 0.45);
+  box-shadow: none;
+}
+
+.ds-dropdown-select--dark .ds-dropdown-select-trigger:focus,
+.ds-dropdown-select--dark .ds-dropdown-select-trigger:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .ds-dropdown-select--dark .ds-dropdown-select-chevron {

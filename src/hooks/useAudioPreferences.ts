@@ -21,6 +21,7 @@ type PrefsPatch = Partial<
     | 'skipMicPicker'
     | 'theme'
     | 'meetingRemindersEnabled'
+    | 'meetingDetectionEnabled'
     | 'micSttEngine'
   >
 >

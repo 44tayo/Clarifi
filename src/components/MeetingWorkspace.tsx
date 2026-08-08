@@ -15,6 +15,7 @@ import { applySpeakerIdentity } from '../../shared/speakers'
 import type { SpeakerIdentity } from '../../shared/speakers'
 import type { useRecording } from '../hooks/useRecording'
 import type { MeetingTemplateId } from '../../shared/meetingTemplates'
+import { applyNoteInsert, undoNoteInsert, type NoteSnapshot } from '../../shared/noteInsertUndo'
 import type { Folder, Meeting } from '../types/meeting'
 
 type MeetingWorkspaceProps = {
@@ -45,6 +46,13 @@ type MeetingWorkspaceProps = {
   allTags: string[]
   onSetTags: (tags: string[]) => void
   onChangeTemplate: (templateId: MeetingTemplateId) => void
+  relatedMeetings?: Meeting[]
+  transcriptFocus?: {
+    entryId?: string
+    audioStartMs?: number
+    quote?: string
+  } | null
+  onTranscriptFocusConsumed?: () => void
 }
 
 type ReadyTab = 'summary' | 'transcript' | 'tasks' | 'notes'
@@ -75,6 +83,9 @@ export function MeetingWorkspace({
   allTags,
   onSetTags,
   onChangeTemplate,
+  relatedMeetings = [],
+  transcriptFocus = null,
+  onTranscriptFocusConsumed,
 }: MeetingWorkspaceProps) {
   const isCapturingThisMeeting = captureMeetingId === meeting.id
   const recordingState = isCapturingThisMeeting ? recording.state : 'idle'
@@ -86,6 +97,12 @@ export function MeetingWorkspace({
   const [shareMounted, setShareMounted] = useState(false)
   const [hasSharedWithPeople, setHasSharedWithPeople] = useState(false)
   const [selectionAsk, setSelectionAsk] = useState<AskSelectionRequest | null>(null)
+  const [activeHighlight, setActiveHighlight] = useState<{
+    entryId?: string
+    audioStartMs?: number
+    quote?: string
+  } | null>(null)
+  const [noteUndoStack, setNoteUndoStack] = useState<NoteSnapshot[]>([])
   const sharedFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { toast } = useToast()
 
@@ -93,10 +110,18 @@ export function MeetingWorkspace({
   const showLiveLayout = (canCapture && isCapturingThisMeeting) || isCapturing
   const showEnhanced =
     meeting.status === 'processing' || meeting.status === 'ready' || meeting.status === 'error'
+  const showAskFloat = showEnhanced || showLiveLayout
   const showDraftNotes = canCapture && !showLiveLayout && !showEnhanced
   const canShare = plan === 'pro_plus'
 
   const transcript = showLiveLayout && isCapturingThisMeeting ? recording.transcript : meeting.transcript
+
+  useEffect(() => {
+    if (!transcriptFocus) return
+    setReadyTab('transcript')
+    setActiveHighlight(transcriptFocus)
+    onTranscriptFocusConsumed?.()
+  }, [transcriptFocus, onTranscriptFocusConsumed])
 
   const flashSharedPill = useCallback(() => {
     if (sharedFlashTimerRef.current) clearTimeout(sharedFlashTimerRef.current)
@@ -232,7 +257,7 @@ export function MeetingWorkspace({
   )
 
   return (
-    <div className={`meeting-workspace${showEnhanced ? ' has-ask-float' : ''}`}>
+    <div className={`meeting-workspace${showAskFloat ? ' has-ask-float' : ''}`}>
       {!connected ? (
         <div className="connect-banner">
           <span>
@@ -323,6 +348,7 @@ export function MeetingWorkspace({
               startedAt={meeting.startedAt}
               onRenameSpeaker={renameSpeaker}
               interim={recording.interim}
+              highlight={activeHighlight}
             />
           </div>
         ) : null}
@@ -450,6 +476,7 @@ export function MeetingWorkspace({
                     startedAt={meeting.startedAt}
                     onRenameSpeaker={renameSpeaker}
                     hideHeader
+                    highlight={activeHighlight}
                   />
                 </div>
               </section>
@@ -477,13 +504,66 @@ export function MeetingWorkspace({
         ) : null}
       </div>
 
-      {showEnhanced ? (
+      {showAskFloat ? (
         <MeetingAskFloat
           meeting={meeting}
           paired={connected}
           onConnect={onConnect}
           selectionRequest={selectionAsk}
           onSelectionHandled={() => setSelectionAsk(null)}
+          onOpenCitation={(citation) => {
+            if (citation.meetingId === meeting.id) {
+              setReadyTab('transcript')
+              setActiveHighlight(citation)
+              return
+            }
+            setReadyTab('transcript')
+            setActiveHighlight(citation)
+          }}
+          onInsertIntoNotes={(text) => {
+            const applied = applyNoteInsert(
+              {
+                enhancedNotes: meeting.enhancedNotes,
+                userNotes: meeting.userNotes,
+              },
+              'enhancedNotes',
+              text,
+              noteUndoStack,
+            )
+            setNoteUndoStack(applied.stack)
+            onUpdate({ enhancedNotes: applied.next.enhancedNotes })
+          }}
+          onInsertIntoScratchpad={(text) => {
+            const applied = applyNoteInsert(
+              {
+                enhancedNotes: meeting.enhancedNotes,
+                userNotes: meeting.userNotes,
+              },
+              'userNotes',
+              text,
+              noteUndoStack,
+            )
+            setNoteUndoStack(applied.stack)
+            onUpdate({ userNotes: applied.next.userNotes })
+          }}
+          canUndoInsert={noteUndoStack.length > 0}
+          relatedMeetings={relatedMeetings}
+          onUndoInsert={() => {
+            const undone = undoNoteInsert(
+              {
+                enhancedNotes: meeting.enhancedNotes,
+                userNotes: meeting.userNotes,
+              },
+              noteUndoStack,
+            )
+            setNoteUndoStack(undone.stack)
+            if (!undone.restored) return
+            if (undone.restored.target === 'enhancedNotes') {
+              onUpdate({ enhancedNotes: undone.next.enhancedNotes })
+            } else {
+              onUpdate({ userNotes: undone.next.userNotes })
+            }
+          }}
         />
       ) : null}
 

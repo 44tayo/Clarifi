@@ -84,6 +84,10 @@ export function loadAudioPreferences(): AudioPreferences {
         typeof parsed.meetingRemindersEnabled === 'boolean'
           ? parsed.meetingRemindersEnabled
           : DEFAULTS.meetingRemindersEnabled,
+      meetingDetectionEnabled:
+        typeof parsed.meetingDetectionEnabled === 'boolean'
+          ? parsed.meetingDetectionEnabled
+          : DEFAULTS.meetingDetectionEnabled,
       micSttEngine: parseMicSttEngine(parsed.micSttEngine),
     }
     return cached

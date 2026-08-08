@@ -4,7 +4,11 @@ import * as path from 'path'
 
 const SAMPLE_RATE = 16000
 const BYTES_PER_MS = (SAMPLE_RATE * 2) / 1000 // mono 16-bit PCM
-const SNIPPET_MS = 4500
+/** Default speaker ID sample length (~12–15s). */
+export const SNIPPET_TARGET_MS = 14_000
+export const SNIPPET_MAX_MS = 15_000
+const SNIPPET_MS = SNIPPET_TARGET_MS
+const SNIPPET_MERGE_GAP_MS = 2_000
 
 type ActiveRecording = {
   meetingId: string
@@ -165,4 +169,61 @@ export function getSpeakerSnippetBase64(
 ): string | null {
   const wav = sliceRecordingWav(meetingId, startMs, durationMs)
   return wav ? wav.toString('base64') : null
+}
+
+export type SpeakerSnippetTiming = {
+  startMs: number
+  durationMs: number
+}
+
+type TimedSpeakerEntry = {
+  speaker: string
+  audioStartMs?: number
+  audioEndMs?: number
+  at: number
+}
+
+/** Pick a ~12–15s window starting at the longest contiguous stretch for this speaker. */
+export function resolveSpeakerSnippetTiming(
+  transcript: TimedSpeakerEntry[],
+  speaker: string,
+  meetingStartedAt?: number,
+): SpeakerSnippetTiming | null {
+  const entries = transcript.filter((row) => row.speaker === speaker)
+  if (entries.length === 0) return null
+
+  const timed = entries
+    .filter((row) => typeof row.audioStartMs === 'number')
+    .map((row) => {
+      const start = row.audioStartMs!
+      const end =
+        typeof row.audioEndMs === 'number' && row.audioEndMs > start
+          ? row.audioEndMs
+          : start + 2_000
+      return { start, end }
+    })
+    .sort((a, b) => a.start - b.start)
+
+  if (timed.length > 0) {
+    const merged: Array<{ start: number; end: number }> = []
+    for (const seg of timed) {
+      const last = merged[merged.length - 1]
+      if (last && seg.start - last.end <= SNIPPET_MERGE_GAP_MS) {
+        last.end = Math.max(last.end, seg.end)
+      } else {
+        merged.push({ ...seg })
+      }
+    }
+    merged.sort((a, b) => b.end - b.start - (a.end - a.start))
+    const best = merged[0]!
+    const span = best.end - best.start
+    return {
+      startMs: best.start,
+      durationMs: Math.min(SNIPPET_MAX_MS, Math.max(SNIPPET_TARGET_MS, span + 400)),
+    }
+  }
+
+  const entry = entries[0]!
+  const startMs = Math.max(0, entry.at - (meetingStartedAt ?? entry.at))
+  return { startMs, durationMs: SNIPPET_TARGET_MS }
 }

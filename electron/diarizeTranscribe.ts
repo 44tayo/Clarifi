@@ -1,5 +1,6 @@
 import fetch from 'node-fetch'
 
+import { splitWordsIntoSpeakerRuns } from '../shared/speakerRuns'
 import { getTranscriptionLanguage } from './audioPreferences'
 import { getDeepgramApiBaseUrl, getDeepgramApiKey } from './keys'
 import { proxyDiarize } from './proxyClient'
@@ -72,7 +73,8 @@ function extractPcmFromWav(buffer: Buffer): Buffer | null {
   return buffer.subarray(44)
 }
 
-function parseDeepgramUtterances(data: DeepgramResponse): DiarizedUtterance[] {
+/** Prefer Deepgram utterance objects; fall back to gap-aware word runs. */
+export function parseDeepgramUtterances(data: DeepgramResponse): DiarizedUtterance[] {
   const results: DiarizedUtterance[] = []
 
   for (const utterance of data.results?.utterances ?? []) {
@@ -88,72 +90,22 @@ function parseDeepgramUtterances(data: DeepgramResponse): DiarizedUtterance[] {
 
   const words = data.results?.channels?.[0]?.alternatives?.[0]?.words ?? []
   if (words.length > 0) {
-    let speakerIndex = typeof words[0].speaker === 'number' ? words[0].speaker : 0
-    let parts: string[] = []
-    let segmentStart = typeof words[0].start === 'number' ? words[0].start : undefined
-    let segmentEnd = typeof words[0].end === 'number' ? words[0].end : undefined
-
-    // Debounce single-word diarization flips — same rationale as the live
-    // path in deepgramLive.ts: don't fragment a short real utterance into
-    // its own island just because one word briefly flips speaker index.
-    let pendingIndex: number | null = null
-    let pendingTokens: string[] = []
-    let pendingStart: number | undefined
-    let pendingEnd: number | undefined
-
-    const foldPendingIntoCurrent = () => {
-      if (pendingTokens.length === 0) return
-      parts.push(...pendingTokens)
-      if (typeof pendingEnd === 'number') segmentEnd = pendingEnd
-      pendingIndex = null
-      pendingTokens = []
-      pendingStart = undefined
-      pendingEnd = undefined
-    }
-
-    const commitPending = () => {
-      pushUtterance(results, speakerIndex, parts.join(' '), segmentStart, segmentEnd)
-      parts = pendingTokens
-      speakerIndex = pendingIndex!
-      segmentStart = pendingStart
-      segmentEnd = pendingEnd
-      pendingIndex = null
-      pendingTokens = []
-      pendingStart = undefined
-      pendingEnd = undefined
-    }
-
-    for (const word of words) {
-      const nextSpeaker = typeof word.speaker === 'number' ? word.speaker : speakerIndex
-      const token = word.punctuated_word ?? word.word ?? ''
-      if (!token) continue
-      const wordStart = typeof word.start === 'number' ? word.start : undefined
-      const wordEnd = typeof word.end === 'number' ? word.end : undefined
-
-      if (nextSpeaker === speakerIndex) {
-        foldPendingIntoCurrent()
-        parts.push(token)
-        if (typeof wordEnd === 'number') segmentEnd = wordEnd
-        continue
-      }
-
-      if (pendingIndex === nextSpeaker) {
-        pendingTokens.push(token)
-        pendingEnd = wordEnd
-        commitPending()
-        continue
-      }
-
-      foldPendingIntoCurrent()
-      pendingIndex = nextSpeaker
-      pendingTokens = [token]
-      pendingStart = wordStart
-      pendingEnd = wordEnd
-    }
-
-    foldPendingIntoCurrent()
-    if (parts.length > 0) {
-      pushUtterance(results, speakerIndex, parts.join(' '), segmentStart, segmentEnd)
+    const runs = splitWordsIntoSpeakerRuns(
+      words.map((word) => ({
+        token: word.punctuated_word ?? word.word ?? '',
+        speaker: typeof word.speaker === 'number' ? word.speaker : 0,
+        startMs: typeof word.start === 'number' ? Math.round(word.start * 1000) : undefined,
+        endMs: typeof word.end === 'number' ? Math.round(word.end * 1000) : undefined,
+      })),
+    )
+    for (const run of runs) {
+      pushUtterance(
+        results,
+        run.speakerIndex,
+        run.text,
+        typeof run.startMs === 'number' ? run.startMs / 1000 : undefined,
+        typeof run.endMs === 'number' ? run.endMs / 1000 : undefined,
+      )
     }
     if (results.length > 0) return results
   }
@@ -190,12 +142,34 @@ async function callDeepgram(
   return (await response.json()) as DeepgramResponse
 }
 
-async function diarizeWithDeepgram(audioBase64: string): Promise<DiarizedUtterance[] | null> {
+function buildBatchQuery(langParam: string, keyterms: string[] = []): string {
+  // Batch v2 diarizer is stronger on multi-speaker meetings than streaming v1.
+  const params = new URLSearchParams({
+    model: 'nova-3',
+    diarize_model: 'v2',
+    punctuate: 'true',
+    utterances: 'true',
+    paragraphs: 'true',
+    smart_format: 'true',
+    mip_opt_out: 'true',
+    filler_words: 'true',
+  })
+  for (const term of keyterms.slice(0, 40)) {
+    const cleaned = term.trim()
+    if (cleaned) params.append('keyterm', cleaned)
+  }
+  const base = params.toString()
+  return `${base}${langParam}`
+}
+
+async function diarizeWithDeepgram(
+  audioBase64: string,
+  keyterms: string[] = [],
+): Promise<DiarizedUtterance[] | null> {
   const language = getTranscriptionLanguage()
   const langParam =
     language && language !== 'auto' ? `&language=${language}` : '&detect_language=true'
-  const baseQuery =
-    'model=nova-3&diarize_model=latest&punctuate=true&utterances=true&smart_format=true&mip_opt_out=true&filler_words=true'
+  const baseQuery = buildBatchQuery(langParam, keyterms)
   const audioBuffer = Buffer.from(audioBase64, 'base64')
 
   const pcm = extractPcmFromWav(audioBuffer)
@@ -205,14 +179,14 @@ async function diarizeWithDeepgram(audioBase64: string): Promise<DiarizedUtteran
     attempts.push({
       body: pcm,
       contentType: 'application/octet-stream',
-      query: `${baseQuery}&encoding=linear16&sample_rate=16000&channels=1${langParam}`,
+      query: `${baseQuery}&encoding=linear16&sample_rate=16000&channels=1`,
     })
   }
 
   attempts.push({
     body: audioBuffer,
     contentType: 'audio/wav',
-    query: `${baseQuery}${langParam}`,
+    query: baseQuery,
   })
 
   let hadApiKey = false
@@ -258,9 +232,10 @@ async function diarizeWithDeepgram(audioBase64: string): Promise<DiarizedUtteran
 
 export async function transcribeSystemWithDiarization(
   audioBase64: string,
+  options?: { keyterms?: string[] },
 ): Promise<DiarizedUtterance[] | null> {
   try {
-    const results = await diarizeWithDeepgram(audioBase64)
+    const results = await diarizeWithDeepgram(audioBase64, options?.keyterms ?? [])
     if (!results || results.length === 0) {
       console.warn('Deepgram returned no usable diarized utterances for system audio chunk')
     }

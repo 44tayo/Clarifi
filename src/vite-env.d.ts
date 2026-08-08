@@ -41,6 +41,9 @@ type ElectronInvoke =
   | 'share:get-item'
   | 'share:accept-invite'
   | 'chat:send'
+  | 'chat:audit-list'
+  | 'chat:audit-purge'
+  | 'chat:threads-purge'
   | 'audio:start'
   | 'audio:pause'
   | 'audio:resume'
@@ -76,6 +79,10 @@ type ElectronInvoke =
   | 'widget:rename-speaker'
   | 'error:report'
   | 'enhance:retry-pending'
+  | 'update:get-status'
+  | 'update:check'
+  | 'update:download'
+  | 'update:install'
 
 type ElectronEvent =
   | 'transcript:update'
@@ -92,6 +99,15 @@ type ElectronEvent =
   | 'audio:session-paused'
   | 'audio:session-resumed'
   | 'calendar:reminder-start'
+  | 'meeting:detection-start'
+  | 'chat:delta'
+  | 'update:available'
+  | 'update:progress'
+  | 'update:downloaded'
+  | 'update:error'
+  | 'update:not-available'
+  | 'update:status'
+  | 'update:menu-check'
 
 interface Window {
   electronAPI: {

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
+import { listChatThreadKeys, purgeChatThreads } from '../../shared/chatRetention'
 import { enumerateMicrophones, type MicOption } from '../lib/microphones'
 import { DropdownSelect } from './ui/DropdownSelect'
 import { OUTPUT_LANGUAGE_OPTIONS, SPOKEN_LANGUAGE_OPTIONS } from '../lib/languages'
+import { useAppUpdate } from '../hooks/useAppUpdate'
 import { useAudioPreferences } from '../hooks/useAudioPreferences'
 import { useCalendar } from '../hooks/useCalendar'
 import { GoogleCalendarIcon, OutlookCalendarIcon } from './icons/CalendarBrandIcons'
@@ -25,9 +27,19 @@ const MIC_STT_ENGINE_OPTIONS = [
 
 export function SettingsPanel({ onClose, calendarEnabled = false }: SettingsPanelProps) {
   const { prefs, update } = useAudioPreferences()
+  const {
+    status: updateStatus,
+    check: checkForUpdates,
+    download: downloadUpdate,
+    install: installUpdate,
+  } = useAppUpdate()
   const { status: calendarStatus, refresh: refreshCalendar, openConnect, disconnect } =
     useCalendar(calendarEnabled)
   const [mics, setMics] = useState<MicOption[]>([])
+  const [auditRows, setAuditRows] = useState<
+    Array<{ id: string; at: number; scope: string; citationCount: number; ok: boolean }>
+  >([])
+  const [privacyMessage, setPrivacyMessage] = useState<string | null>(null)
 
   const micOptions = useMemo(
     () => [
@@ -59,6 +71,25 @@ export function SettingsPanel({ onClose, calendarEnabled = false }: SettingsPane
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
+
+  const refreshAudit = useCallback(async () => {
+    try {
+      const rows = (await window.electronAPI.invoke('chat:audit-list')) as Array<{
+        id: string
+        at: number
+        scope: string
+        citationCount: number
+        ok: boolean
+      }>
+      setAuditRows(Array.isArray(rows) ? rows.slice(0, 20) : [])
+    } catch {
+      setAuditRows([])
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshAudit()
+  }, [refreshAudit])
 
   return (
     <div className="settings-overlay" role="dialog" aria-modal="true" aria-label="Settings" onClick={onClose}>
@@ -100,6 +131,23 @@ export function SettingsPanel({ onClose, calendarEnabled = false }: SettingsPane
           <p className="settings-section-hint">
             When a calendar event is about to start, Clarifi asks if you want to record — it never
             starts capture without you.
+          </p>
+          <label className="settings-field settings-checkbox-row">
+            <span>Prompt when a call starts</span>
+            <input
+              type="checkbox"
+              checked={prefs?.meetingDetectionEnabled ?? true}
+              onChange={(event) =>
+                void update({ meetingDetectionEnabled: event.target.checked })
+              }
+              aria-label="Prompt when a call starts"
+            />
+          </label>
+          <p className="settings-section-hint">
+            When Zoom, Meet in a browser, Teams, or another call app uses your mic, Clarifi offers
+            Take notes — it never starts capture without you. With this on, Clarifi can start at
+            login (hidden) and keep listening after you close the window so the prompt still
+            appears.
           </p>
         </div>
 
@@ -306,6 +354,112 @@ export function SettingsPanel({ onClose, calendarEnabled = false }: SettingsPane
               </div>
             </>
           )}
+        </div>
+
+        <div className="settings-section">
+          <h3>Chat privacy</h3>
+          <p className="settings-section-hint">
+            Clear local Ask/Chat threads on this device, and review recent chat sends (scope only —
+            no message bodies).
+          </p>
+          <div className="settings-calendar-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                const keys = listChatThreadKeys(Object.keys(window.localStorage))
+                const removed = purgeChatThreads(window.localStorage, keys)
+                void window.electronAPI.invoke('chat:threads-purge')
+                setPrivacyMessage(`Removed ${removed} local chat thread${removed === 1 ? '' : 's'}.`)
+              }}
+            >
+              Purge local chat threads
+            </button>
+            <button
+              type="button"
+              className="link-btn"
+              onClick={() => {
+                void window.electronAPI.invoke('chat:audit-purge').then(() => {
+                  setAuditRows([])
+                  setPrivacyMessage('Cleared local chat audit log.')
+                })
+              }}
+            >
+              Clear chat audit
+            </button>
+            <button type="button" className="link-btn" onClick={() => void refreshAudit()}>
+              Refresh audit
+            </button>
+          </div>
+          {privacyMessage ? <p className="settings-section-hint">{privacyMessage}</p> : null}
+          {auditRows.length > 0 ? (
+            <ul className="settings-section-hint">
+              {auditRows.map((row) => (
+                <li key={row.id}>
+                  {new Date(row.at).toLocaleString()} · {row.scope} · citations {row.citationCount} ·{' '}
+                  {row.ok ? 'ok' : 'error'}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="settings-section-hint">No chat audit events yet.</p>
+          )}
+        </div>
+
+        <div className="settings-section">
+          <h3>About &amp; updates</h3>
+          <p className="settings-section-hint">
+            Clarifi {updateStatus.currentVersion || '—'}
+            {updateStatus.lastCheckedAt
+              ? ` · Last checked ${new Date(updateStatus.lastCheckedAt).toLocaleString()}`
+              : ''}
+          </p>
+          {!updateStatus.packaged ? (
+            <p className="settings-section-hint">
+              In-app updates run in the installed (packaged) app. Dev builds stay on this version.
+            </p>
+          ) : null}
+          <div className="settings-calendar-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={updateStatus.checking}
+              onClick={() => void checkForUpdates()}
+            >
+              {updateStatus.checking ? 'Checking…' : 'Check for updates'}
+            </button>
+            {updateStatus.availableVersion && !updateStatus.downloaded ? (
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={
+                  updateStatus.downloadPercent != null && updateStatus.downloadPercent < 100
+                }
+                onClick={() => void downloadUpdate()}
+              >
+                {updateStatus.downloadPercent != null && updateStatus.downloadPercent < 100
+                  ? `Downloading… ${Math.round(updateStatus.downloadPercent)}%`
+                  : `Update to ${updateStatus.availableVersion}`}
+              </button>
+            ) : null}
+            {updateStatus.downloaded ? (
+              <button type="button" className="btn btn-primary" onClick={() => void installUpdate()}>
+                Restart to install
+              </button>
+            ) : null}
+          </div>
+          {updateStatus.error ? (
+            <p className="settings-section-hint settings-update-error" role="alert">
+              Couldn’t check for updates. {updateStatus.error}
+            </p>
+          ) : null}
+          {updateStatus.packaged &&
+          !updateStatus.checking &&
+          !updateStatus.availableVersion &&
+          !updateStatus.error &&
+          updateStatus.lastCheckedAt ? (
+            <p className="settings-section-hint">You’re on the latest version.</p>
+          ) : null}
         </div>
       </div>
     </div>

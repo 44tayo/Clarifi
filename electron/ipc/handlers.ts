@@ -19,6 +19,7 @@ import {
   saveAudioPreferences,
   type AudioPreferences,
 } from '../audioPreferences'
+import { setMeetingDetectionEnabled } from '../meetingDetection'
 import { applySpeakerIdentity } from '../../shared/speakers'
 import {
   fetchCalendarEvents,
@@ -36,8 +37,21 @@ import {
   listSharedWithMe,
   publishMeetingShare,
 } from '../shareClient'
-import { proxyMeetingChat } from '../proxyClient'
-import { packMeetingsForChat } from '../../shared/chatContext'
+import { proxyMeetingChat, type ChatHistoryMessage } from '../proxyClient'
+import {
+  resolveTranscriptEntriesForChat,
+  transcriptEntriesToChatLines,
+} from '../../shared/chatTranscript'
+import {
+  rebuildRetrievalIndex,
+  retrievePackedContext,
+} from '../meetingRetrievalIndex'
+import { buildChatMetricEvent, formatChatMetricLog } from '../../shared/chatMetrics'
+import {
+  appendChatAuditEvent,
+  listChatAuditEvents,
+  purgeChatAuditEvents,
+} from '../chatAudit'
 import { resolveSpeakerDisplay } from '../transcriptUtils'
 import { pushMeetingToCloud, deleteMeetingFromCloud, syncMeetingsWithCloud } from '../meetingSync'
 import {
@@ -75,6 +89,7 @@ import {
   appendSystemWavChunk,
   deleteMeetingRecording,
   getSpeakerSnippetBase64,
+  resolveSpeakerSnippetTiming,
   startMeetingRecording,
   stopMeetingRecording,
 } from '../meetingRecording'
@@ -85,6 +100,7 @@ import {
   registerEnhanceRunner,
 } from '../enhanceQueue'
 import { enhanceMeetingNotes } from '../noteEnhance'
+import { buildMeetingKeyterms, finalizeSystemTranscript } from '../finalizeTranscript'
 import { exportMeetingToFile } from '../meetingExport'
 import { isProxyConfigured } from '../proxyClient'
 import {
@@ -168,9 +184,13 @@ function stopMicDeepgramLive(): void {
 async function beginSystemAudioCapture(): Promise<boolean> {
   stopDeepgramLive()
 
+  const meeting = activeMeetingId ? getMeeting(activeMeetingId) : null
+  const keyterms = meeting ? buildMeetingKeyterms(meeting) : []
+
   const session = new DeepgramLiveSession({
     diarize: true,
     source: 'system',
+    keyterms,
     ...(systemSpeakerState ? { initialSpeakerState: systemSpeakerState } : {}),
     onInterim: (update) => broadcastTranscriptInterim('system', update),
     onFinal: (utterance) => {
@@ -275,6 +295,11 @@ let activeMeetingId: string | null = null
 let resolveMainWindow: (() => BrowserWindow | null) | undefined
 
 function broadcastMeetingsChanged(): void {
+  try {
+    rebuildRetrievalIndex(listMeetings())
+  } catch (err) {
+    console.error('retrieval index rebuild failed', err)
+  }
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {
       win.webContents.send('meetings:changed')
@@ -503,16 +528,29 @@ async function finalizeActiveMeeting(recordingPath?: string | null): Promise<Sto
   if (!activeMeetingId) return null
   const meetingId = activeMeetingId
   activeMeetingId = null
+  const liveTranscript = [...sessionTranscriptEntries]
 
-  const meeting = updateMeeting(meetingId, {
+  let meeting = updateMeeting(meetingId, {
     status: 'processing',
     endedAt: Date.now(),
-    transcript: [...sessionTranscriptEntries],
+    transcript: liveTranscript,
     ...(recordingPath ? { recordingPath } : {}),
   })
   broadcastMeetingsChanged()
 
   if (!meeting) return null
+
+  // Batch re-diarize the full recording so Speaker N turns match who actually spoke
+  // (live streaming diarization is weaker than Deepgram batch v2).
+  try {
+    const finalized = await finalizeSystemTranscript(meeting, liveTranscript)
+    if (finalized && finalized.length > 0) {
+      meeting = updateMeeting(meetingId, { transcript: finalized }) ?? meeting
+      broadcastMeetingsChanged()
+    }
+  } catch (err) {
+    console.warn('Finalize transcript diarize failed; keeping live transcript', err)
+  }
 
   const configured = await isProxyConfigured()
   if (!configured) {
@@ -792,24 +830,14 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
           ? sessionTranscriptEntries
           : meeting.transcript
 
-      const entry =
-        transcript.find(
-          (row) => row.speaker === speaker && typeof row.audioStartMs === 'number',
-        ) ?? transcript.find((row) => row.speaker === speaker)
+      const timing = resolveSpeakerSnippetTiming(transcript, speaker, meeting.startedAt)
+      if (!timing) return { ok: false, error: 'no_speaker' }
 
-      if (!entry) return { ok: false, error: 'no_speaker' }
-
-      const startMs =
-        typeof entry.audioStartMs === 'number'
-          ? entry.audioStartMs
-          : Math.max(0, entry.at - (meeting.startedAt ?? entry.at))
-
-      const durationMs =
-        typeof entry.audioEndMs === 'number' && entry.audioEndMs > startMs
-          ? Math.min(5000, entry.audioEndMs - startMs + 400)
-          : 5000
-
-      const audioBase64 = getSpeakerSnippetBase64(meetingId, startMs, durationMs)
+      const audioBase64 = getSpeakerSnippetBase64(
+        meetingId,
+        timing.startMs,
+        timing.durationMs,
+      )
       if (!audioBase64) return { ok: false, error: 'slice_failed' }
       return { ok: true, audioBase64, mimeType: 'audio/wav' }
     },
@@ -944,9 +972,15 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
       payload?: {
         message?: string
         meetingId?: string | null
-        scope?: 'meeting' | 'all'
+        scope?: 'meeting' | 'all' | 'folder' | 'selected' | 'person' | 'company'
+        folderId?: string | null
+        selectedMeetingIds?: string[]
+        personEmail?: string | null
+        company?: string | null
+        history?: Array<{ role?: 'user' | 'assistant'; text?: string }>
         model?: string
         effort?: 'low' | 'medium' | 'max'
+        streamRequestId?: string
         images?: Array<{
           imageBase64: string
           mimeType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
@@ -970,31 +1004,156 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
               typeof image.mimeType === 'string',
           ).slice(0, 6)
         : []
+      const history: ChatHistoryMessage[] = Array.isArray(payload?.history)
+        ? payload.history
+            .filter(
+              (entry): entry is ChatHistoryMessage =>
+                Boolean(entry) &&
+                (entry?.role === 'user' || entry?.role === 'assistant') &&
+                typeof entry?.text === 'string' &&
+                entry.text.trim().length > 0,
+            )
+            .slice(-12)
+        : []
 
-      const scope = payload?.scope === 'all' ? 'all' : 'meeting'
-      if (scope === 'all') {
-        const packed = packMeetingsForChat(
-          listMeetings().map((meeting) => ({
-            id: meeting.id,
-            title: meeting.title,
-            summary: meeting.summary,
-            enhancedNotes: meeting.enhancedNotes,
-            userNotes: meeting.userNotes,
-            startedAt: meeting.startedAt,
-            createdAt: meeting.createdAt,
-          })),
+      const streamRequestId =
+        typeof payload?.streamRequestId === 'string' && payload.streamRequestId.trim()
+          ? payload.streamRequestId.trim()
+          : null
+      const startedAt = Date.now()
+      let firstTokenAt: number | undefined
+      let retrievalHitIds: string[] = []
+      const runChat = async (request: Parameters<typeof proxyMeetingChat>[0]) => {
+        const result = await proxyMeetingChat(request, {
+          onDelta: streamRequestId
+            ? (text) => {
+                if (firstTokenAt === undefined) firstTokenAt = Date.now()
+                getMainWindow(getWindow)?.webContents.send('chat:delta', {
+                  requestId: streamRequestId,
+                  text,
+                })
+              }
+            : undefined,
+        })
+        const finishedAt = Date.now()
+        const citationCount =
+          'reply' in result && Array.isArray(result.citations) ? result.citations.length : 0
+        const ok = 'reply' in result
+        const metric = buildChatMetricEvent({
+          scope: request.scope ?? 'meeting',
+          startedAt,
+          firstTokenAt,
+          finishedAt,
+          citationCount,
+          retrievalHitIds,
+          streamed: Boolean(streamRequestId),
+          ok,
+          error: 'error' in result ? result.error : undefined,
+        })
+        console.info(formatChatMetricLog(metric))
+        appendChatAuditEvent({
+          id: `audit-${finishedAt}-${Math.random().toString(36).slice(2, 7)}`,
+          at: finishedAt,
+          scope: request.scope ?? 'meeting',
+          folderId: request.folderId ?? null,
+          personEmail: request.personEmail ?? null,
+          company: request.company ?? null,
+          meetingId: typeof payload?.meetingId === 'string' ? payload.meetingId : null,
+          citationCount,
+          retrievalHitIds,
+          ok,
+          error: 'error' in result ? result.error : undefined,
+        })
+        return result
+      }
+
+      const scope =
+        payload?.scope === 'all' ||
+        payload?.scope === 'folder' ||
+        payload?.scope === 'selected' ||
+        payload?.scope === 'person' ||
+        payload?.scope === 'company'
+          ? payload.scope
+          : 'meeting'
+      if (scope !== 'meeting') {
+        const allMeetings = listMeetings()
+        const domainFromEmail = (email: string): string | null => {
+          const parts = email.split('@')
+          if (parts.length !== 2) return null
+          return parts[1]?.toLowerCase() || null
+        }
+        const scopedMeetings = allMeetings.filter((meeting) => {
+          if (scope === 'all') return true
+          if (scope === 'folder') {
+            const folderId = typeof payload?.folderId === 'string' ? payload.folderId : ''
+            return Boolean(folderId) && (meeting.folderIds ?? []).includes(folderId)
+          }
+          if (scope === 'selected') {
+            const selected = new Set(
+              Array.isArray(payload?.selectedMeetingIds)
+                ? payload.selectedMeetingIds.filter((id): id is string => typeof id === 'string')
+                : [],
+            )
+            return selected.has(meeting.id)
+          }
+          if (scope === 'person') {
+            const personEmail = typeof payload?.personEmail === 'string' ? payload.personEmail.trim().toLowerCase() : ''
+            if (!personEmail) return false
+            const emails = [
+              ...(meeting.attendeeEmails ?? []),
+              ...(meeting.attendees ?? []).map((person) => person.email).filter(Boolean) as string[],
+            ].map((email) => email.toLowerCase())
+            return emails.includes(personEmail)
+          }
+          if (scope === 'company') {
+            const company = typeof payload?.company === 'string' ? payload.company.trim().toLowerCase() : ''
+            if (!company) return false
+            const domains = [
+              ...(meeting.attendeeEmails ?? []),
+              ...(meeting.attendees ?? []).map((person) => person.email).filter(Boolean) as string[],
+            ]
+              .map((email) => domainFromEmail(email.toLowerCase()))
+              .filter((domain): domain is string => Boolean(domain))
+            return domains.includes(company)
+          }
+          return true
+        })
+
+        const retrieved = retrievePackedContext(
+          scopedMeetings,
+          message,
         )
+        retrievalHitIds = retrieved.meetingIds
+        const packed = retrieved.packed
         if (!packed) {
-          return proxyMeetingChat({
+          return runChat({
             message: `${message}\n\n(No local meetings available for context.)`,
             transcriptLines: [],
+            history,
+            scope,
+            folderId: payload?.folderId ?? null,
+            selectedMeetingIds: payload?.selectedMeetingIds ?? [],
+            personEmail: payload?.personEmail ?? null,
+            company: payload?.company ?? null,
             model,
             effort,
             images,
           })
         }
         const enriched = `${packed}\n\nUser question:\n${message}`
-        return proxyMeetingChat({ message: enriched, transcriptLines: [], model, effort, images })
+        return runChat({
+          message: enriched,
+          transcriptLines: [],
+          history,
+          scope,
+          folderId: payload?.folderId ?? null,
+          selectedMeetingIds: payload?.selectedMeetingIds ?? [],
+          personEmail: payload?.personEmail ?? null,
+          company: payload?.company ?? null,
+          model,
+          effort,
+          images,
+        })
       }
 
       let transcriptLines: string[] = []
@@ -1003,18 +1162,28 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
         const meeting = getMeeting(meetingId)
         if (meeting) {
           const labels = meeting.speakerLabels ?? {}
-          transcriptLines = meeting.transcript.map(
-            (entry) => `${resolveSpeakerDisplay(entry.speaker, labels)}: ${entry.text}`,
+          const transcriptEntries = resolveTranscriptEntriesForChat({
+            meetingId,
+            activeMeetingId,
+            sessionEntries: sessionTranscriptEntries,
+            storedEntries: meeting.transcript,
+          })
+          transcriptLines = transcriptEntriesToChatLines(transcriptEntries, (speaker) =>
+            resolveSpeakerDisplay(speaker, labels),
           )
           const contextBits = [
             `Meeting title: ${meeting.title}`,
+            meetingId === activeMeetingId ? 'Live session: yes (using in-progress transcript)' : null,
+            meeting.enhancedNotes?.trim() ? `Enhanced notes:\n${meeting.enhancedNotes.trim()}` : null,
             meeting.summary ? `Summary: ${meeting.summary}` : null,
             meeting.userNotes?.trim() ? `User notes:\n${meeting.userNotes.trim()}` : null,
           ].filter(Boolean)
           const enriched = [...contextBits, '', message].join('\n')
-          return proxyMeetingChat({
+          return runChat({
             message: enriched,
             transcriptLines,
+            history,
+            scope: 'meeting',
             model,
             effort,
             images,
@@ -1022,9 +1191,27 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
         }
       }
 
-      return proxyMeetingChat({ message, transcriptLines, model, effort, images })
+      return runChat({
+        message,
+        transcriptLines,
+        history,
+        scope: 'meeting',
+        model,
+        effort,
+        images,
+      })
     },
   )
+
+  ipcMain.handle('chat:audit-list', () => listChatAuditEvents())
+  ipcMain.handle('chat:audit-purge', () => {
+    purgeChatAuditEvents()
+    return { ok: true }
+  })
+  ipcMain.handle('chat:threads-purge', () => {
+    // Renderer owns localStorage threads; this acknowledges the policy action.
+    return { ok: true, note: 'renderer_purge_required' }
+  })
 
   ipcMain.handle('error:report', (_event, payload?: { message?: string; stack?: string }) => {
     const message = payload?.message ?? 'renderer_error'
@@ -1198,11 +1385,20 @@ export function registerHandlers(getWindow?: () => BrowserWindow | null): void {
       ...(typeof payload?.meetingRemindersEnabled === 'boolean'
         ? { meetingRemindersEnabled: payload.meetingRemindersEnabled }
         : {}),
+      ...(typeof payload?.meetingDetectionEnabled === 'boolean'
+        ? { meetingDetectionEnabled: payload.meetingDetectionEnabled }
+        : {}),
       ...(payload?.micSttEngine === 'whisper' || payload?.micSttEngine === 'deepgram'
         ? { micSttEngine: payload.micSttEngine }
         : {}),
     }
     saveAudioPreferences(next)
+    if (
+      typeof payload?.meetingDetectionEnabled === 'boolean' &&
+      payload.meetingDetectionEnabled !== current.meetingDetectionEnabled
+    ) {
+      setMeetingDetectionEnabled(payload.meetingDetectionEnabled)
+    }
     return next
   })
 

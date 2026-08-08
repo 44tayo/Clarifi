@@ -42,3 +42,24 @@ describe('speaker label continuity helpers', () => {
     expect(canonicalSpeakerKey('Me', 'mic')).toBe('Me')
   })
 })
+
+describe('resolveSpeakerSnippetTiming', () => {
+  it('prefers the longest contiguous stretch and aims for ~14s', async () => {
+    const { resolveSpeakerSnippetTiming, SNIPPET_TARGET_MS, SNIPPET_MAX_MS } = await import(
+      '../electron/meetingRecording'
+    )
+    const timing = resolveSpeakerSnippetTiming(
+      [
+        { speaker: 'Speaker 1', at: 0, audioStartMs: 1_000, audioEndMs: 2_500 },
+        { speaker: 'Speaker 2', at: 1, audioStartMs: 3_000, audioEndMs: 8_000 },
+        { speaker: 'Speaker 1', at: 2, audioStartMs: 20_000, audioEndMs: 26_000 },
+        { speaker: 'Speaker 1', at: 3, audioStartMs: 26_500, audioEndMs: 31_000 },
+      ],
+      'Speaker 1',
+    )
+    expect(timing).not.toBeNull()
+    expect(timing!.startMs).toBe(20_000)
+    expect(timing!.durationMs).toBeGreaterThanOrEqual(SNIPPET_TARGET_MS)
+    expect(timing!.durationMs).toBeLessThanOrEqual(SNIPPET_MAX_MS)
+  })
+})

@@ -3,6 +3,7 @@ import { hasFeature } from '@/lib/entitlements'
 import { planRequiredResponse } from '@/lib/plan-guard'
 import {
   chatWithMeetingContext,
+  streamChatWithMeetingContext,
   type ChatImageMime,
   type ChatPurpose,
 } from '@/lib/llm-server'
@@ -50,12 +51,19 @@ export async function POST(req: Request) {
   const payload = body as {
     message?: string
     transcriptLines?: string[]
+    history?: Array<{ role?: string; text?: string }>
+    scope?: 'all' | 'meeting' | 'folder' | 'selected' | 'person' | 'company'
+    folderId?: string | null
+    selectedMeetingIds?: string[]
+    personEmail?: string | null
+    company?: string | null
     useScreenContext?: boolean
     screenImage?: { imageBase64: string; mimeType: ChatImageMime }
     images?: unknown
     model?: string
     effort?: ChatEffort
     purpose?: ChatPurpose
+    stream?: boolean
   }
 
   if (!payload.message || typeof payload.message !== 'string') {
@@ -77,12 +85,9 @@ export async function POST(req: Request) {
     if (!hasFeature(plan, 'screen_context') && (payload.useScreenContext || screenImage)) {
       return planRequiredResponse('pro', 'screen_context')
     }
-    // Image attachments in chat share the vision path; gate free users from multi-image uploads
-    // only when they also request screen context. Plain chat image attach is allowed for chat.
   }
 
   const modelId = typeof payload.model === 'string' ? payload.model.trim() : ''
-  // Enhance notes picks Sonnet server-side — do not gate on the client's premium model list.
   if (
     purpose !== 'enhance_notes' &&
     modelId &&
@@ -95,17 +100,70 @@ export async function POST(req: Request) {
   const transcriptLines = Array.isArray(payload.transcriptLines)
     ? payload.transcriptLines.filter((line): line is string => typeof line === 'string')
     : []
+  const history = Array.isArray(payload.history)
+    ? payload.history
+        .filter(
+          (entry): entry is { role: 'user' | 'assistant'; text: string } =>
+            Boolean(entry) &&
+            (entry?.role === 'user' || entry?.role === 'assistant') &&
+            typeof entry?.text === 'string',
+        )
+        .slice(-12)
+    : []
 
-  const result = await chatWithMeetingContext({
+  const chatRequest = {
     message: payload.message,
     transcriptLines,
+    history,
     useScreenContext: Boolean(payload.useScreenContext),
     screenImage,
     images,
     model: purpose === 'enhance_notes' ? undefined : modelId || undefined,
     effort: normalizeChatEffort(payload.effort),
     purpose,
-  })
+  }
+
+  const wantStream = payload.stream === true && purpose === 'chat'
+
+  if (wantStream) {
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const send = (obj: unknown) => {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`))
+        }
+        try {
+          const result = await streamChatWithMeetingContext(chatRequest, (text) => {
+            send({ type: 'delta', text })
+          })
+          if ('error' in result) {
+            send({ type: 'error', error: result.error })
+          } else {
+            send({
+              type: 'done',
+              reply: result.reply,
+              citations: result.citations ?? [],
+            })
+          }
+        } catch (err) {
+          console.error('Chat SSE error:', err)
+          send({ type: 'error', error: 'chat_failed' })
+        } finally {
+          controller.close()
+        }
+      },
+    })
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+      },
+    })
+  }
+
+  const result = await chatWithMeetingContext(chatRequest)
 
   if ('error' in result) {
     const status = result.error === 'api_key_missing' ? 503 : 500

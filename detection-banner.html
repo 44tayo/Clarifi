@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'"
+    />
+    <title>Meeting detected</title>
+    <style>
+      :root {
+        --clarifi-blue: #2b6cff;
+        --banner-bg: #1c1c1f;
+        --banner-border: rgba(255, 255, 255, 0.1);
+        --banner-fg: #f5f5f7;
+        --banner-muted: rgba(245, 245, 247, 0.62);
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        overflow: hidden;
+        font-family:
+          'SF Pro Text',
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          sans-serif;
+        user-select: none;
+        -webkit-app-region: drag;
+      }
+
+      .banner {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        height: 76px;
+        margin: 4px;
+        padding: 14px 12px 16px 36px;
+        border-radius: 16px;
+        background: var(--banner-bg);
+        border: 1px solid var(--banner-border);
+        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
+        color: var(--banner-fg);
+        box-sizing: border-box;
+        overflow: hidden;
+      }
+
+      .dismiss {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        width: 22px;
+        height: 22px;
+        display: grid;
+        place-items: center;
+        border: none;
+        border-radius: 50%;
+        background: transparent;
+        color: rgba(245, 245, 247, 0.45);
+        font-size: 14px;
+        line-height: 1;
+        cursor: pointer;
+        -webkit-app-region: no-drag;
+        padding: 0;
+      }
+
+      .dismiss:hover {
+        color: var(--banner-fg);
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .mark {
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+        background: var(--clarifi-blue);
+        display: grid;
+        place-items: center;
+        color: white;
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        flex-shrink: 0;
+        box-shadow: 0 2px 8px rgba(43, 108, 255, 0.35);
+      }
+
+      .copy {
+        min-width: 0;
+      }
+
+      .title {
+        font-size: 14px;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+      }
+
+      .app {
+        margin-top: 3px;
+        font-size: 12px;
+        color: var(--banner-muted);
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 220px;
+      }
+
+      .actions {
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+        -webkit-app-region: no-drag;
+      }
+
+      .take-notes {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: none;
+        background: var(--clarifi-blue);
+        color: white;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 650;
+        padding: 9px 14px;
+        cursor: pointer;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(43, 108, 255, 0.35);
+      }
+
+      .take-notes:hover {
+        filter: brightness(1.06);
+      }
+
+      .take-notes:active {
+        filter: brightness(0.96);
+      }
+
+      .progress {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 3px;
+        background: rgba(255, 255, 255, 0.06);
+        pointer-events: none;
+      }
+
+      .progress-bar {
+        height: 100%;
+        width: 100%;
+        background: var(--clarifi-blue);
+        transform-origin: left center;
+        will-change: transform;
+      }
+
+      .banner.is-paused .progress-bar {
+        animation-play-state: paused;
+      }
+
+      @keyframes deplete {
+        from {
+          transform: scaleX(1);
+        }
+        to {
+          transform: scaleX(0);
+        }
+      }
+
+      .progress-bar.is-running {
+        animation: deplete var(--dismiss-ms, 14000ms) linear forwards;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .progress-bar.is-running {
+          animation: none;
+          transform: scaleX(1);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="banner" id="banner" role="alertdialog" aria-label="Meeting detected">
+      <button type="button" class="dismiss" id="dismiss" aria-label="Dismiss">✕</button>
+      <div class="left">
+        <div class="mark" aria-hidden="true">C</div>
+        <div class="copy">
+          <div class="title" id="title">Meeting detected</div>
+          <div class="app" id="appName">Call</div>
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" class="take-notes" id="takeNotes">Take notes</button>
+      </div>
+      <div class="progress" aria-hidden="true">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+    </div>
+    <script type="module" src="/src/detection-banner-main.ts"></script>
+  </body>
+</html>
