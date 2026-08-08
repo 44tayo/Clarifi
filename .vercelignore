@@ -1,0 +1,8 @@
+web/public/downloads/*.dmg
+web/public/downloads/*.exe
+web/.lane-a-shots/
+web/.lane-b-shots/
+release/
+node_modules/
+dist/
+dist-electron/

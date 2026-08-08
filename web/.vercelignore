@@ -1,0 +1,5 @@
+# Installers are served from GitHub Releases, not Vercel upload.
+public/downloads/*.dmg
+public/downloads/*.exe
+.lane-a-shots/
+.lane-b-shots/
