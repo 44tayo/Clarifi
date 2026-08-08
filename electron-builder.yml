@@ -46,10 +46,9 @@ dmg:
   icon: build/icon.icns
   artifactName: Clarifi-${version}-${arch}.dmg
   # Website installs use DMG; electron-updater installs from zip + latest-mac.yml.
+  # Zip target stays in mac.target; electron-builder 26 has no top-level `zip:` key
+  # (defaults to Clarifi-${version}-${arch}-mac.zip for updater feeds).
   writeUpdateInfo: false
-# Updater feed path must match these zip names (see latest-mac.yml).
-zip:
-  artifactName: Clarifi-${version}-${arch}-mac.zip
 win:
   target: nsis
   icon: build/icon.ico
