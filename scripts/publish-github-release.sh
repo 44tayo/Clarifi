@@ -41,10 +41,10 @@ gh release upload "$TAG" "${ASSETS[@]}" --clobber 2>/dev/null || \
     --title "Clarifi ${VERSION}" \
     --notes "Clarifi ${VERSION} desktop installers"
 
-ARM_URL="https://github.com/Tayowill/clarificluely/releases/download/${TAG}/Clarifi-${VERSION}-arm64.dmg"
+ARM_URL="https://github.com/44tayo/Clarifi/releases/download/${TAG}/Clarifi-${VERSION}-arm64.dmg"
 echo ""
 echo "Verifying arm64 DMG URL..."
 node "$ROOT/scripts/verify-download-artifact.mjs" "$ARM_URL" 50000000 || true
 
 echo ""
-echo "Release published: https://github.com/Tayowill/clarificluely/releases/tag/${TAG}"
+echo "Release published: https://github.com/44tayo/Clarifi/releases/tag/${TAG}"
