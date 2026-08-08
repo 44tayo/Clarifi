@@ -1,13 +1,10 @@
 'use client'
 
-import Link from 'next/link'
-
 import { Button } from '@/components/ui/button'
 import {
   type DownloadTarget,
   getDownloadForTarget,
   getDownloadManifest,
-  getDownloadPageHref,
   parseDownloadTarget,
 } from '@/lib/downloads'
 import { platformDownloadLabel, useCustomerPlatform } from '@/hooks/useCustomerPlatform'
@@ -72,19 +69,23 @@ export function DownloadClarifi({
   if (variant === 'compact') {
     if (buttonStyle === 'landing') {
       return (
-        <Link href={primaryManifest.href} className={cn('download-mac-btn', className)}>
+        <a
+          href={primaryManifest.href}
+          className={cn('download-mac-btn', className)}
+          rel="noopener noreferrer"
+        >
           {isPrimaryMac ? <AppleLogo size={14} /> : null}
           {platformDownloadLabel(platform)}
-        </Link>
+        </a>
       )
     }
 
     return (
       <Button asChild className={cn('gap-2', className)}>
-        <Link href={primaryManifest.href}>
+        <a href={primaryManifest.href} rel="noopener noreferrer">
           {isPrimaryMac ? <AppleLogo size={14} /> : null}
           {platformDownloadLabel(platform)}
-        </Link>
+        </a>
       </Button>
     )
   }
@@ -92,16 +93,16 @@ export function DownloadClarifi({
   return (
     <div className={cn('flex flex-wrap gap-3', className)}>
       <Button asChild className="gap-2">
-        <Link href={primaryManifest.href}>
+        <a href={primaryManifest.href} rel="noopener noreferrer">
           {isPrimaryMac ? <AppleLogo size={14} /> : null}
           {primaryManifest.shortLabel}
-        </Link>
+        </a>
       </Button>
       <Button asChild variant="outline" className="gap-2">
-        <Link href={secondaryManifest.href}>
+        <a href={secondaryManifest.href} rel="noopener noreferrer">
           {isSecondaryMac ? <AppleLogo size={14} /> : null}
           {secondaryManifest.shortLabel}
-        </Link>
+        </a>
       </Button>
     </div>
   )

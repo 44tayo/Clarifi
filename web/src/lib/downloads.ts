@@ -22,6 +22,7 @@ export type DownloadPlatformManifest = {
   pillLabel: string
   filename: string
   path: string
+  /** Direct installer URL (GitHub Releases). */
   href: string
   macArch?: MacArch
 }
@@ -36,48 +37,6 @@ export function getMacDownloadPath(arch: MacArch = 'arm64'): string {
 
 export function getWindowsDownloadPath(): string {
   return `/downloads/${encodeURIComponent(WIN_EXE_FILENAME)}`
-}
-
-export function getDownloadPageHref(target: DownloadTarget): string {
-  if (target === 'windows') return '/download?platform=windows'
-  const arch = target === 'mac-x64' ? 'x64' : 'arm64'
-  return `/download?platform=mac&arch=${arch}`
-}
-
-export const DOWNLOAD_PLATFORMS: DownloadPlatformManifest[] = [
-  {
-    id: 'mac-arm64',
-    label: 'macOS (Apple Silicon)',
-    shortLabel: 'Mac — Apple Silicon',
-    pillLabel: 'macOS — Apple Silicon',
-    filename: MAC_DMG_ARM64_FILENAME,
-    path: getMacDownloadPath('arm64'),
-    href: getDownloadPageHref('mac-arm64'),
-    macArch: 'arm64',
-  },
-  {
-    id: 'mac-x64',
-    label: 'macOS (Intel)',
-    shortLabel: 'Mac — Intel',
-    pillLabel: 'macOS — Intel',
-    filename: MAC_DMG_X64_FILENAME,
-    path: getMacDownloadPath('x64'),
-    href: getDownloadPageHref('mac-x64'),
-    macArch: 'x64',
-  },
-  {
-    id: 'windows',
-    label: 'Windows (64-bit)',
-    shortLabel: 'Windows (.exe)',
-    pillLabel: 'Windows (.exe)',
-    filename: WIN_EXE_FILENAME,
-    path: getWindowsDownloadPath(),
-    href: getDownloadPageHref('windows'),
-  },
-]
-
-export function getDownloadManifest(target: DownloadTarget): DownloadPlatformManifest {
-  return DOWNLOAD_PLATFORMS.find((p) => p.id === target) ?? DOWNLOAD_PLATFORMS[0]
 }
 
 function githubReleaseAssetUrl(filename: string): string {
@@ -121,6 +80,48 @@ export function getWindowsDownloadUrl(): string {
     process.env.NEXT_PUBLIC_CLARIFI_WIN_DOWNLOAD_URL,
     () => githubReleaseAssetUrl(WIN_EXE_FILENAME),
   )
+}
+
+/** Direct installer href — no interstitial /download page. */
+export function getDownloadPageHref(target: DownloadTarget): string {
+  if (target === 'windows') return getWindowsDownloadUrl()
+  return getMacDownloadUrl(target === 'mac-x64' ? 'x64' : 'arm64')
+}
+
+export const DOWNLOAD_PLATFORMS: DownloadPlatformManifest[] = [
+  {
+    id: 'mac-arm64',
+    label: 'macOS (Apple Silicon)',
+    shortLabel: 'Mac — Apple Silicon',
+    pillLabel: 'macOS — Apple Silicon',
+    filename: MAC_DMG_ARM64_FILENAME,
+    path: getMacDownloadPath('arm64'),
+    href: getMacDownloadUrl('arm64'),
+    macArch: 'arm64',
+  },
+  {
+    id: 'mac-x64',
+    label: 'macOS (Intel)',
+    shortLabel: 'Mac — Intel',
+    pillLabel: 'macOS — Intel',
+    filename: MAC_DMG_X64_FILENAME,
+    path: getMacDownloadPath('x64'),
+    href: getMacDownloadUrl('x64'),
+    macArch: 'x64',
+  },
+  {
+    id: 'windows',
+    label: 'Windows (64-bit)',
+    shortLabel: 'Windows (.exe)',
+    pillLabel: 'Windows (.exe)',
+    filename: WIN_EXE_FILENAME,
+    path: getWindowsDownloadPath(),
+    href: getWindowsDownloadUrl(),
+  },
+]
+
+export function getDownloadManifest(target: DownloadTarget): DownloadPlatformManifest {
+  return DOWNLOAD_PLATFORMS.find((p) => p.id === target) ?? DOWNLOAD_PLATFORMS[0]
 }
 
 export function getDownloadForTarget(target: DownloadTarget): {
