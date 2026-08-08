@@ -21,11 +21,11 @@ When cutting a release, update **all** of these together:
 1. [`package.json`](../package.json) `version`
 2. [`web/src/lib/downloads.ts`](../web/src/lib/downloads.ts) — `CLARIFI_VERSION` and DMG/EXE filenames
 3. Git tag `v{version}` (CI creates this on publish)
-4. [`electron-builder.yml`](../electron-builder.yml) `publish.repo` — must match `GH_UPDATE_REPO` in [`.env.example`](../.env.example) (`clarificluely`)
+4. [`electron-builder.yml`](../electron-builder.yml) `publish.repo` — must match `GH_UPDATE_REPO` in [`.env.example`](../.env.example) (`Clarifi`)
 
 ## Auto-updater
 
-Packaged apps use **electron-updater** against `https://github.com/Tayowill/clarificluely/releases`. Override with `GH_UPDATE_OWNER` / `GH_UPDATE_REPO` at build time if needed.
+Packaged apps use **electron-updater** against `https://github.com/44tayo/Clarifi/releases`. Override with `GH_UPDATE_OWNER` / `GH_UPDATE_REPO` at build time if needed.
 
 Every **signed** GitHub Release marked `latest` must include:
 
@@ -50,13 +50,13 @@ CI uploads these from `release/` on signed `publish-release` runs. Never mark un
 ```bash
 npm run verify:mac:dmg -- release/Clarifi-1.0.0-arm64.dmg
 node scripts/verify-download-artifact.mjs \
-  "https://github.com/Tayowill/clarificluely/releases/download/v1.0.0/Clarifi-1.0.0-arm64.dmg" \
+  "https://github.com/44tayo/Clarifi/releases/download/v1.0.0/Clarifi-1.0.0-arm64.dmg" \
   50000000
 node scripts/verify-download-artifact.mjs \
-  "https://github.com/Tayowill/clarificluely/releases/download/v1.0.0/latest-mac.yml" \
+  "https://github.com/44tayo/Clarifi/releases/download/v1.0.0/latest-mac.yml" \
   100
 node scripts/verify-download-artifact.mjs \
-  "https://github.com/Tayowill/clarificluely/releases/download/v1.0.0/Clarifi-1.0.0-arm64-mac.zip" \
+  "https://github.com/44tayo/Clarifi/releases/download/v1.0.0/Clarifi-1.0.0-arm64-mac.zip" \
   50000000
 ```
 

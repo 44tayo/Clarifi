@@ -1,6 +1,6 @@
 import type { CustomerPlatform } from '@/lib/platform'
 
-const GITHUB_REPO = 'Tayowill/clarificluely'
+const GITHUB_REPO = '44tayo/Clarifi'
 
 export const CLARIFI_VERSION = '1.0.0'
 export const MAC_DMG_ARM64_FILENAME = 'Clarifi-1.0.0-arm64.dmg'

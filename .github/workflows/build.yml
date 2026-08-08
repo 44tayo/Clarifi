@@ -214,11 +214,11 @@ jobs:
         run: |
           VERSION=$(node -p "require('./package.json').version")
           node scripts/verify-download-artifact.mjs \
-            "https://github.com/Tayowill/clarificluely/releases/download/v${VERSION}/Clarifi-${VERSION}-arm64.dmg" \
+            "https://github.com/44tayo/Clarifi/releases/download/v${VERSION}/Clarifi-${VERSION}-arm64.dmg" \
             50000000 || true
           node scripts/verify-download-artifact.mjs \
-            "https://github.com/Tayowill/clarificluely/releases/download/v${VERSION}/latest-mac.yml" \
+            "https://github.com/44tayo/Clarifi/releases/download/v${VERSION}/latest-mac.yml" \
             100 || true
           node scripts/verify-download-artifact.mjs \
-            "https://github.com/Tayowill/clarificluely/releases/download/v${VERSION}/Clarifi-${VERSION}-arm64-mac.zip" \
+            "https://github.com/44tayo/Clarifi/releases/download/v${VERSION}/Clarifi-${VERSION}-arm64-mac.zip" \
             50000000 || true

@@ -154,8 +154,8 @@ export async function configureUpdater(getWindow: WindowGetter): Promise<void> {
 
   autoUpdater.setFeedURL({
     provider: 'github',
-    owner: process.env.GH_UPDATE_OWNER ?? 'Tayowill',
-    repo: process.env.GH_UPDATE_REPO ?? 'clarificluely',
+    owner: process.env.GH_UPDATE_OWNER ?? '44tayo',
+    repo: process.env.GH_UPDATE_REPO ?? 'Clarifi',
   })
 
   autoUpdater.requestHeaders = {}

@@ -39,8 +39,8 @@ mac:
           - clarifi
 publish:
   provider: github
-  owner: Tayowill
-  repo: clarificluely
+  owner: 44tayo
+  repo: Clarifi
 dmg:
   title: Clarifi
   icon: build/icon.icns
