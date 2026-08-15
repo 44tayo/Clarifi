@@ -1,0 +1,224 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: 22
+  SKIP_NATIVE_REBUILD: '1'
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install desktop dependencies
+        run: npm ci
+
+      - name: Typecheck + unit tests (desktop)
+        run: |
+          npx tsc --noEmit
+          npx tsc --noEmit -p tsconfig.node.json
+          npm test
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Typecheck web
+        working-directory: web
+        run: npx tsc --noEmit
+
+  build-mac:
+    needs: quality
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Import code signing certificate
+        if: env.BUILD_CERTIFICATE_BASE64 != ''
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+        run: |
+          CERT_PATH=$RUNNER_TEMP/build_certificate.p12
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o "$CERT_PATH"
+          security create-keychain -p actions "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p actions "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k actions "$KEYCHAIN_PATH"
+
+      - name: Build signed macOS release
+        if: env.BUILD_CERTIFICATE_BASE64 != ''
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CSC_IDENTITY_AUTO_DISCOVERY: true
+          CLARIFI_API_URL: https://www.clarifiapp.com
+        run: npm run build:mac
+
+      - name: Build unsigned macOS artifacts (no signing secrets)
+        if: env.BUILD_CERTIFICATE_BASE64 == ''
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          SKIP_NOTARIZE: '1'
+          SKIP_NATIVE_REBUILD: ''
+          CLARIFI_API_URL: https://www.clarifiapp.com
+        run: MAC_CI_ARCH=arm64 bash scripts/build-mac-ci.sh
+
+      - name: Upload macOS release artifacts (DMG + updater zip/yml)
+        uses: actions/upload-artifact@v4
+        with:
+          name: clarifi-macos-release
+          path: |
+            release/*.dmg
+            release/*-mac.zip
+            release/*-mac.zip.blockmap
+            release/latest-mac.yml
+          if-no-files-found: error
+
+  build-win:
+    needs: quality
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rebuild native modules for Electron
+        run: npx --yes @electron/rebuild -f -w keytar
+
+      - name: Build frontend
+        env:
+          CLARIFI_API_URL: https://www.clarifiapp.com
+        run: npx tsc --noEmit && npm run build
+
+      - name: Package Windows installer
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npx electron-builder --win --x64 --publish never
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clarifi-windows-exe
+          path: release/*.exe
+          if-no-files-found: error
+
+  publish-release:
+    needs: [build-mac, build-win]
+    # Only publish when Mac was signed. Unsigned CI builds stay as artifacts.
+    if: >
+      always() &&
+      needs.build-mac.result == 'success' &&
+      github.event_name != 'pull_request' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read package version
+        id: version
+        run: echo "tag=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Require signing secrets for public latest release
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+        run: |
+          if [ -z "$BUILD_CERTIFICATE_BASE64" ]; then
+            echo "Skipping GitHub Release publish — unsigned builds must not be marked latest."
+            echo "skip=1" >> "$GITHUB_ENV"
+          else
+            echo "skip=0" >> "$GITHUB_ENV"
+          fi
+
+      - name: Download macOS release artifacts
+        if: env.skip != '1'
+        uses: actions/download-artifact@v4
+        with:
+          name: clarifi-macos-release
+          path: release-assets
+
+      - name: Download Windows installer
+        if: env.skip != '1' && needs.build-win.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: clarifi-windows-exe
+          path: release-assets
+
+      - name: Require updater metadata before publishing latest
+        if: env.skip != '1'
+        run: |
+          set -euo pipefail
+          test -f release-assets/latest-mac.yml
+          ls release-assets/*-mac.zip >/dev/null
+          echo "Updater artifacts present:"
+          ls -la release-assets/
+
+      - name: Publish GitHub Release assets
+        if: env.skip != '1'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Clarifi ${{ steps.version.outputs.tag }}
+          draft: false
+          prerelease: false
+          make_latest: true
+          overwrite_files: true
+          files: release-assets/**
+          generate_release_notes: true
+
+      - name: Verify release DMG + updater metadata URLs
+        if: env.skip != '1'
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          node scripts/verify-download-artifact.mjs \
+            "https://github.com/44tayo/Clarifi/releases/download/v${VERSION}/Clarifi-${VERSION}-arm64.dmg" \
+            50000000 || true
+          node scripts/verify-download-artifact.mjs \
+            "https://github.com/44tayo/Clarifi/releases/download/v${VERSION}/latest-mac.yml" \
+            100 || true
+          node scripts/verify-download-artifact.mjs \
+            "https://github.com/44tayo/Clarifi/releases/download/v${VERSION}/Clarifi-${VERSION}-arm64-mac.zip" \
+            50000000 || true

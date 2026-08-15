@@ -1,0 +1,75 @@
+.hero-meteor-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: min(620px, 58%);
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+  isolation: isolate;
+  background: linear-gradient(
+    #2563eb 0%,
+    #4e80ee 16.3259%,
+    #5f8cf0 22.2154%,
+    #6d97f1 27.0177%,
+    #7aa0f2 31.0541%,
+    #86a8f3 34.6462%,
+    #90b0f4 38.1151%,
+    #9bb7f5 41.7823%,
+    #a5bff6 45.9692%,
+    #b0c6f7 50.9972%,
+    #bccff8 57.1875%,
+    #c9d9fa 64.8615%,
+    #d9e3fb 74.3407%,
+    #eaf0fd 85.9464%,
+    #fff 100%
+  );
+}
+
+.hero-sky-photo {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: url('/images/hero-notto-sky.jpg') center top / cover no-repeat;
+  opacity: 0.85;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    transparent 72%,
+    rgba(0, 0, 0, 0.35) 82%,
+    #000 97%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    transparent 72%,
+    rgba(0, 0, 0, 0.35) 82%,
+    #000 97%
+  );
+}
+
+.hero-gradient-up {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    #2563eb 0%,
+    rgba(255, 255, 255, 0.5) 65%,
+    #fff 87%
+  );
+}
+
+.hero-gradient-down {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 30%;
+  z-index: 3;
+  pointer-events: none;
+  transform: rotate(180deg);
+  background: linear-gradient(#fff 0%, rgba(255, 255, 255, 0) 100%);
+}

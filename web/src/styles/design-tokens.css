@@ -1,0 +1,73 @@
+/* Clarifi design tokens — shared across app UI and marketing surfaces */
+
+:root {
+  /* Brand */
+  --ds-blue: #2b6cff;
+  --ds-blue-hover: #1a5ae8;
+  --ds-hero-accent: #60b4ff;
+  --ds-navy: #17181c;
+  --ds-charcoal: #1f2025;
+
+  /* Neutrals — warm editorial, matched to the desktop app */
+  --ds-muted: #5f6470;
+  --ds-muted-hero: #8e939e;
+  --ds-lavender: #e5e4e0;
+  --ds-lavender-soft: #f1f0ed;
+  --ds-border: #eae9e5;
+
+  /* Surfaces */
+  --ds-card: #f7f6f3;
+  --ds-surface-feature: #f5f4f1;
+  --ds-surface-visual: #efeeea;
+  --ds-surface-mock: #fdfdfc;
+
+  /* Layout */
+  --ds-content-max: 1100px;
+  --ds-section-py: 5.5rem;
+  --ds-section-px: 2rem;
+
+  /* Radii — grounded, precise */
+  --ds-radius-button: 0.5rem;
+  --ds-radius-card: 0.875rem;
+  --ds-radius-visual: 0.625rem;
+  --ds-radius-mock: 0.5rem;
+
+  /* Feature grid */
+  --ds-feature-side-padding: 2.5cm;
+  --ds-feature-gap: 0.5cm;
+  --ds-feature-wide-w: 16cm;
+  --ds-feature-narrow-w: 8cm;
+  --ds-feature-wide-h: 7cm;
+  --ds-feature-narrow-h: 7.5cm;
+  --ds-feature-row-inner-w: calc(
+    var(--ds-feature-wide-w) + var(--ds-feature-gap) + var(--ds-feature-narrow-w)
+  );
+  --ds-feature-row-max-w: var(--ds-feature-row-inner-w);
+  --ds-feature-grid-columns: 6;
+  --ds-feature-visual-height: 220px;
+  --ds-feature-visual-height-compact: 180px;
+  --ds-feature-visual-height-mobile: 200px;
+
+  /* Logo trust strip */
+  --ds-logo-strip-bg: #ffffff;
+  --ds-logo-strip-border: #e8ecf4;
+  --ds-logo-strip-fade: rgba(255, 255, 255, 0.98);
+  --ds-logo-heading: #7f8ea3;
+
+  /* Typography */
+  --ds-section-title-size: clamp(1.75rem, 4vw, 2.35rem);
+  --ds-section-subtitle-size: 1.05rem;
+  --ds-feature-title-size: 1.05rem;
+  --ds-feature-body-size: 0.875rem;
+
+  /* Aliases for legacy landing.css (--cl-*) */
+  --cl-blue: var(--ds-blue);
+  --cl-blue-hover: var(--ds-blue-hover);
+  --cl-navy: var(--ds-navy);
+  --cl-charcoal: var(--ds-charcoal);
+  --cl-lavender: var(--ds-lavender);
+  --cl-lavender-soft: var(--ds-lavender-soft);
+  --cl-muted: var(--ds-muted);
+  --cl-border: var(--ds-border);
+  --cl-card: var(--ds-card);
+}

@@ -1,0 +1,229 @@
+/* Cross-meeting Ask stage — centered intro + perspective chat card */
+
+.aam-section {
+  width: 100%;
+  padding: 4.5rem var(--ds-section-px, 2rem) 5.5rem;
+  background: #ffffff;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.aam-intro {
+  max-width: 40rem;
+  margin: 0 auto 2.75rem;
+  text-align: center;
+}
+
+.aam-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  margin-bottom: 0.85rem;
+  color: var(--ds-blue, #2b6cff);
+}
+
+.aam-title {
+  margin: 0 0 0.85rem;
+  font-size: clamp(1.75rem, 3.2vw, 2.55rem);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  color: #0a0a0b;
+}
+
+.aam-title em {
+  font-style: italic;
+  font-weight: 500;
+  color: rgba(10, 10, 11, 0.72);
+}
+
+.aam-sub {
+  margin: 0 auto;
+  max-width: 34rem;
+  font-size: 1.02rem;
+  line-height: 1.55;
+  color: rgba(10, 10, 11, 0.58);
+}
+
+.aam-stage {
+  position: relative;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  perspective: 1400px;
+  padding: 0.5rem 0 1.5rem;
+}
+
+.aam-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 420px;
+  border-radius: 18px;
+  background: #ffffff;
+  border: 1px solid rgba(26, 26, 46, 0.08);
+  box-shadow:
+    0 28px 64px rgba(26, 26, 46, 0.12),
+    0 8px 24px rgba(26, 26, 46, 0.06);
+  transform: rotateX(10deg) rotateY(-2deg) translateY(8px);
+  transform-origin: center top;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.aam-card-fade {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 4.5rem;
+  background: linear-gradient(180deg, #ffffff 10%, rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+
+.aam-suggestions {
+  list-style: none;
+  margin: 0;
+  padding: 2.75rem 1.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+}
+
+.aam-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0.55rem;
+  border-radius: 10px;
+  color: rgba(20, 20, 22, 0.78);
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+.aam-suggestion-icon {
+  flex-shrink: 0;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  border: 1.5px solid rgba(26, 26, 46, 0.22);
+  background:
+    linear-gradient(
+      135deg,
+      transparent 42%,
+      rgba(26, 26, 46, 0.35) 42%,
+      rgba(26, 26, 46, 0.35) 58%,
+      transparent 58%
+    ),
+    linear-gradient(
+      45deg,
+      transparent 42%,
+      rgba(26, 26, 46, 0.35) 42%,
+      rgba(26, 26, 46, 0.35) 58%,
+      transparent 58%
+    );
+  opacity: 0.55;
+}
+
+.aam-composer {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0.5rem 1rem 1rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 999px;
+  background: #f4f5f7;
+  border: 1px solid rgba(26, 26, 46, 0.06);
+}
+
+.aam-composer-plus {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  color: rgba(20, 20, 22, 0.45);
+  font-size: 1.15rem;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.aam-composer-divider {
+  width: 1px;
+  height: 1.15rem;
+  background: rgba(26, 26, 46, 0.12);
+}
+
+.aam-composer-placeholder {
+  flex: 1;
+  min-width: 0;
+  color: rgba(20, 20, 22, 0.4);
+  font-size: 0.92rem;
+}
+
+.aam-composer-mic {
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 999px;
+  border: 1.5px solid rgba(26, 26, 46, 0.28);
+  position: relative;
+}
+
+.aam-composer-mic::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -3px;
+  width: 6px;
+  height: 3px;
+  border: 1.5px solid rgba(26, 26, 46, 0.28);
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  transform: translateX(-50%);
+}
+
+.aam-composer-send {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--ds-blue, #2b6cff);
+  box-shadow: 0 4px 12px rgba(43, 108, 255, 0.35);
+  position: relative;
+}
+
+.aam-composer-send::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 7px solid #fff;
+  transform: translate(-50%, -50%);
+}
+
+@media (max-width: 720px) {
+  .aam-section {
+    padding: 3rem 1.25rem 3.5rem;
+  }
+
+  .aam-stage {
+    max-width: 100%;
+    perspective: none;
+  }
+
+  .aam-card {
+    min-height: 380px;
+    transform: none;
+  }
+
+  .aam-suggestion {
+    font-size: 0.88rem;
+  }
+}

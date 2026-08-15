@@ -1,0 +1,10 @@
+{
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "clarifiapp.com" }],
+      "destination": "https://www.clarifiapp.com/:path*",
+      "permanent": true
+    }
+  ]
+}

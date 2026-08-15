@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Outlook">
+  <defs>
+    <linearGradient id="ol-env" x1="18" y1="10" x2="44" y2="40" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#28A8EA"/>
+      <stop offset="1" stop-color="#0B6CBD"/>
+    </linearGradient>
+  </defs>
+  <rect x="18" y="10" width="24" height="28" rx="3" fill="url(#ol-env)"/>
+  <path fill="#0078D4" d="M18 13h24v7H18z"/>
+  <path fill="#50E6FF" opacity=".35" d="M22 15h3.5v3.5H22zm5.5 0H31v3.5h-3.5zm5.5 0H40v3.5h-3.5zM22 20.5h3.5V24H22zm5.5 0H31V24h-3.5zm5.5 0H40V24h-3.5z"/>
+  <path fill="#0364B8" d="M18 28.5 30 36l12-7.5V38H18v-9.5z"/>
+  <path fill="#28A8EA" d="M18 28.5 30 36l12-7.5H18z"/>
+  <rect x="6" y="14" width="24" height="24" rx="5" fill="#0A4C95"/>
+  <rect x="7.5" y="15.5" width="21" height="21" rx="4" fill="#28A8EA"/>
+  <path fill="#FFFFFF" d="M18.2 32.6c-2.9 0-5-1.9-5-4.9s2.1-4.9 5-4.9 5 1.9 5 4.9-2.1 4.9-5 4.9zm0-2.1c1.6 0 2.7-1.2 2.7-2.8s-1.1-2.8-2.7-2.8-2.7 1.2-2.7 2.8 1.1 2.8 2.7 2.8z"/>
+</svg>

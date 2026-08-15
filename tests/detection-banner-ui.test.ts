@@ -1,0 +1,36 @@
+import { describe, expect, it } from 'vitest'
+
+import { DETECTION_BANNER_DISMISS_MS } from '../shared/meetingDetection'
+import {
+  DETECTION_BANNER_HEIGHT,
+  DETECTION_BANNER_MENU_HEIGHT,
+  DETECTION_BANNER_WIDTH,
+} from '../electron/detectionBanner'
+import { shouldStartHidden } from '../electron/loginItem'
+
+describe('detection banner UX', () => {
+  it('auto-dismisses after a short visible window', () => {
+    expect(DETECTION_BANNER_DISMISS_MS).toBe(8_000)
+  })
+
+  it('uses a compact top-right window that expands for the menu', () => {
+    expect(DETECTION_BANNER_WIDTH).toBe(360)
+    expect(DETECTION_BANNER_HEIGHT).toBe(76)
+    expect(DETECTION_BANNER_MENU_HEIGHT).toBeGreaterThan(DETECTION_BANNER_HEIGHT)
+  })
+})
+
+describe('login item hidden launch', () => {
+  it('honors --hidden for background detection sessions', () => {
+    const had = process.argv.includes('--hidden')
+    if (!had) process.argv.push('--hidden')
+    try {
+      expect(shouldStartHidden()).toBe(true)
+    } finally {
+      if (!had) {
+        const idx = process.argv.lastIndexOf('--hidden')
+        if (idx >= 0) process.argv.splice(idx, 1)
+      }
+    }
+  })
+})

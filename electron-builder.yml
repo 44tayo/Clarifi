@@ -1,0 +1,60 @@
+appId: com.clarifi.desktop
+productName: Clarifi
+copyright: Copyright © 2026 Clarifi
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - build/tray/**/*
+npmRebuild: false
+afterPack: scripts/before-sign.cjs
+afterSign: scripts/notarize.cjs
+mac:
+  extraResources:
+    - from: resources/audio-capture-helper
+      to: audio-capture-helper
+      filter:
+        - "**/*"
+    - from: resources/mic-monitor-helper
+      to: mic-monitor-helper
+      filter:
+        - "**/*"
+  target:
+    - dmg
+    - zip
+  icon: build/icon.icns
+  category: public.app-category.productivity
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    CFBundleDisplayName: Clarifi
+    NSMicrophoneUsageDescription: Clarifi needs microphone access to capture meeting audio.
+    NSScreenCaptureUsageDescription: Clarifi needs screen recording access to capture system audio from meetings.
+    CFBundleURLTypes:
+      - CFBundleURLName: Clarifi Auth
+        CFBundleURLSchemes:
+          - clarifi
+publish:
+  provider: github
+  owner: 44tayo
+  repo: Clarifi
+dmg:
+  title: Clarifi
+  icon: build/icon.icns
+  artifactName: Clarifi-${version}-${arch}.dmg
+  # Website installs use DMG; electron-updater installs from zip + latest-mac.yml.
+  # Zip target stays in mac.target; electron-builder 26 has no top-level `zip:` key
+  # (defaults to Clarifi-${version}-${arch}-mac.zip for updater feeds).
+  writeUpdateInfo: false
+win:
+  target: nsis
+  icon: build/icon.ico
+  signAndEditExecutable: false
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  shortcutName: Clarifi

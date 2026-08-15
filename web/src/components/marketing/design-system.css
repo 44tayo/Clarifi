@@ -1,0 +1,338 @@
+/* Clarifi marketing design system — feature grids, cards, and mock visuals */
+
+.ds-feature-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-feature-gap);
+  box-sizing: border-box;
+  width: var(--ds-feature-row-inner-w);
+  max-width: 100%;
+  margin-inline: auto;
+  padding: 0;
+}
+
+.ds-feature-row {
+  display: grid;
+  gap: var(--ds-feature-gap);
+  width: 100%;
+}
+
+.ds-feature-row--wide-narrow {
+  grid-template-columns: var(--ds-feature-wide-w) var(--ds-feature-narrow-w);
+}
+
+.ds-feature-row--narrow-wide {
+  grid-template-columns: var(--ds-feature-narrow-w) var(--ds-feature-wide-w);
+}
+
+.ds-feature-row--thirds {
+  grid-template-columns: repeat(3, var(--ds-feature-narrow-w));
+  gap: var(--ds-feature-gap);
+}
+
+.ds-feature-row--thirds > :only-child {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+
+.ds-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--ds-feature-grid-columns), minmax(0, 1fr));
+  gap: var(--ds-feature-gap);
+  max-width: var(--ds-content-max);
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.ds-feature-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--ds-surface-feature);
+  border-radius: var(--ds-radius-card);
+  padding: 0;
+  border: none;
+  overflow: hidden;
+}
+
+.ds-feature-wide,
+.ds-feature-narrow,
+.ds-feature-third {
+  width: 100%;
+  max-width: none;
+  height: auto;
+  grid-column: auto;
+}
+
+.ds-feature-visual {
+  flex: none;
+  width: 100%;
+  margin-bottom: 0;
+  border-radius: var(--ds-radius-card) var(--ds-radius-card) 0 0;
+  background: var(--ds-surface-feature);
+  border: none;
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.ds-feature-wide .ds-feature-visual {
+  height: var(--ds-feature-wide-h);
+}
+
+.ds-feature-narrow .ds-feature-visual,
+.ds-feature-third .ds-feature-visual {
+  height: var(--ds-feature-narrow-h);
+}
+
+.ds-feature-card h3 {
+  font-size: var(--ds-feature-title-size);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ds-navy);
+  margin: 0;
+  padding: 0.65rem 0.85rem 0.25rem;
+  flex-shrink: 0;
+}
+
+.ds-feature-card p {
+  margin: 0;
+  padding: 0 0.85rem 0.85rem;
+  color: var(--ds-muted);
+  font-size: var(--ds-feature-body-size);
+  line-height: 1.45;
+  flex-shrink: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Mock visual primitives — use inside MarketingFeatureVisual */
+.ds-mock {
+  height: 100%;
+  min-height: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.ds-mock-summary {
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 1.25rem;
+}
+
+.ds-mock-doc {
+  width: min(100%, 320px);
+  background: transparent;
+  border-radius: var(--ds-radius-mock);
+  border: none;
+  padding: 1rem 1.1rem;
+  box-shadow: none;
+}
+
+.ds-mock-doc-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 0.75rem;
+}
+
+.ds-mock-doc-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ds-muted);
+  margin: 0 0 0.5rem;
+}
+
+.ds-mock-doc ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: #374151;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.ds-mock-chat {
+  padding: 0.75rem;
+}
+
+.ds-mock-chat-window {
+  width: 100%;
+  max-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.ds-mock-chat-input,
+.ds-mock-chat-prompt {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  border: none;
+  box-shadow: none;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.72rem;
+  color: var(--ds-muted);
+}
+
+.ds-mock-chat-bubble {
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.95);
+  border: none;
+  padding: 0.65rem 0.75rem;
+  box-shadow: none;
+}
+
+.ds-mock-chat-brand {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 0.25rem;
+}
+
+.ds-mock-chat-bubble p {
+  margin: 0;
+  font-size: 0.68rem;
+  line-height: 1.45;
+  color: #4b5563;
+}
+
+.ds-mock-globe {
+  width: min(72%, 150px);
+  height: auto;
+  color: #9ca3af;
+}
+
+.ds-mock-notes {
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-content: center;
+  padding: 0.85rem;
+}
+
+.ds-mock-note-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: calc(50% - 0.25rem);
+  min-width: 7.5rem;
+  border-radius: 0.45rem;
+  padding: 0.35rem 0.45rem;
+  box-shadow: none;
+}
+
+.ds-mock-note-chip span {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  flex-shrink: 0;
+}
+
+.ds-mock-note-chip p {
+  margin: 0;
+  font-size: 0.58rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #1f2937;
+}
+
+.ds-mock-share {
+  position: relative;
+  min-height: 160px;
+}
+
+.ds-mock-share-head {
+  width: 88px;
+  height: 110px;
+  border-radius: 50%;
+  background: repeating-linear-gradient(
+    180deg,
+    #93c5fd 0,
+    #93c5fd 5px,
+    transparent 5px,
+    transparent 10px
+  );
+  opacity: 0.85;
+}
+
+.ds-mock-share-bubble {
+  position: absolute;
+  border-radius: 999px;
+  padding: 0.28rem 0.65rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+}
+
+.ds-mock-share-bubble-violet {
+  top: 18%;
+  right: 16%;
+  background: var(--ds-accent-violet, #a78bfa);
+}
+
+.ds-mock-share-bubble-blue {
+  bottom: 16%;
+  right: 10%;
+  background: var(--ds-accent-blue, #60a5fa);
+}
+
+@media (max-width: 1160px) and (min-width: 901px) {
+  .ds-feature-row--wide-narrow {
+    grid-template-columns: 2fr 1fr;
+  }
+
+  .ds-feature-row--narrow-wide {
+    grid-template-columns: 1fr 2fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .ds-feature-stack {
+    width: auto;
+    max-width: none;
+    margin-inline: auto;
+    padding: 0;
+  }
+
+  .ds-feature-row--wide-narrow,
+  .ds-feature-row--narrow-wide,
+  .ds-feature-row--thirds {
+    grid-template-columns: 1fr;
+  }
+
+  .ds-feature-wide,
+  .ds-feature-narrow,
+  .ds-feature-third {
+    width: 100%;
+    height: auto;
+  }
+
+  .ds-feature-wide .ds-feature-visual,
+  .ds-feature-narrow .ds-feature-visual,
+  .ds-feature-third .ds-feature-visual {
+    height: var(--ds-feature-visual-height-mobile);
+  }
+
+  .ds-feature-visual {
+    min-height: var(--ds-feature-visual-height-mobile);
+  }
+
+  .ds-feature-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ds-feature-grid .ds-feature-wide,
+  .ds-feature-grid .ds-feature-narrow,
+  .ds-feature-grid .ds-feature-third {
+    grid-column: span 1;
+  }
+}

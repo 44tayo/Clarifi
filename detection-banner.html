@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'"
+    />
+    <title>Start Clarifi</title>
+    <style>
+      :root {
+        --banner-bg: #1c1c1e;
+        --banner-fg: #f5f5f7;
+        --banner-muted: rgba(245, 245, 247, 0.62);
+        --banner-btn-bg: rgba(255, 255, 255, 0.1);
+        --banner-btn-border: rgba(255, 255, 255, 0.18);
+        --banner-progress: rgba(255, 255, 255, 0.55);
+        --menu-bg: #2c2c2e;
+        --menu-hover: rgba(255, 255, 255, 0.1);
+        --menu-sep: rgba(255, 255, 255, 0.12);
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        overflow: hidden;
+        font-family:
+          'SF Pro Text',
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          sans-serif;
+        user-select: none;
+        -webkit-app-region: drag;
+      }
+
+      .shell {
+        margin: 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        box-sizing: border-box;
+      }
+
+      .banner {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        height: 64px;
+        padding: 12px 10px 14px 16px;
+        border-radius: 14px;
+        background: var(--banner-bg);
+        border: none;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42);
+        color: var(--banner-fg);
+        box-sizing: border-box;
+        overflow: hidden;
+      }
+
+      .dismiss {
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        width: 18px;
+        height: 18px;
+        display: grid;
+        place-items: center;
+        border: none;
+        border-radius: 50%;
+        background: transparent;
+        color: rgba(245, 245, 247, 0.45);
+        font-size: 11px;
+        line-height: 1;
+        cursor: pointer;
+        -webkit-app-region: no-drag;
+        padding: 0;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 120ms ease;
+      }
+
+      .banner:hover .dismiss {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .dismiss:hover {
+        color: var(--banner-fg);
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      .copy {
+        min-width: 0;
+        flex: 1;
+      }
+
+      .title {
+        font-size: 13px;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+      }
+
+      .subtitle {
+        margin-top: 3px;
+        font-size: 11px;
+        color: var(--banner-muted);
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 180px;
+      }
+
+      .actions {
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+        -webkit-app-region: no-drag;
+      }
+
+      .split {
+        display: inline-flex;
+        align-items: stretch;
+        border: 1px solid var(--banner-btn-border);
+        background: var(--banner-btn-bg);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+
+      .start-clarifi {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        border: none;
+        background: transparent;
+        color: white;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 650;
+        padding: 8px 10px;
+        cursor: pointer;
+      }
+
+      .start-clarifi:hover,
+      .menu-toggle:hover {
+        background: rgba(255, 255, 255, 0.12);
+      }
+
+      .start-clarifi:active,
+      .menu-toggle:active {
+        background: rgba(255, 255, 255, 0.06);
+      }
+
+      .start-clarifi img {
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+        display: block;
+        flex-shrink: 0;
+      }
+
+      .menu-toggle {
+        display: grid;
+        place-items: center;
+        width: 28px;
+        border: none;
+        border-left: 1px solid var(--banner-btn-border);
+        background: transparent;
+        color: rgba(245, 245, 247, 0.85);
+        cursor: pointer;
+        padding: 0;
+      }
+
+      .menu-toggle svg {
+        width: 10px;
+        height: 10px;
+        display: block;
+      }
+
+      .progress {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 2px;
+        background: rgba(255, 255, 255, 0.08);
+        pointer-events: none;
+      }
+
+      .progress-bar {
+        height: 100%;
+        width: 100%;
+        background: var(--banner-progress);
+        transform-origin: left center;
+        will-change: transform;
+      }
+
+      .banner.is-paused .progress-bar {
+        animation-play-state: paused;
+      }
+
+      @keyframes deplete {
+        from {
+          transform: scaleX(1);
+        }
+        to {
+          transform: scaleX(0);
+        }
+      }
+
+      .progress-bar.is-running {
+        animation: deplete var(--dismiss-ms, 8000ms) linear forwards;
+      }
+
+      .menu {
+        display: none;
+        align-self: flex-end;
+        width: min(260px, 100%);
+        padding: 6px;
+        border-radius: 12px;
+        background: var(--menu-bg);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+        -webkit-app-region: no-drag;
+        box-sizing: border-box;
+      }
+
+      .shell.menu-open .menu {
+        display: block;
+      }
+
+      .menu-item {
+        display: block;
+        width: 100%;
+        border: none;
+        background: transparent;
+        color: var(--banner-fg);
+        text-align: left;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 500;
+        padding: 9px 10px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+
+      .menu-item:hover {
+        background: var(--menu-hover);
+      }
+
+      .menu-sep {
+        height: 1px;
+        margin: 4px 6px;
+        background: var(--menu-sep);
+      }
+
+      .menu-item.is-hidden,
+      .menu-sep.is-hidden {
+        display: none;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .progress-bar.is-running {
+          animation: none;
+          transform: scaleX(1);
+        }
+
+        .dismiss {
+          transition: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell" id="shell">
+      <div class="banner" id="banner" role="alertdialog" aria-label="Are you in a meeting?">
+        <button type="button" class="dismiss" id="dismiss" aria-label="Dismiss">✕</button>
+        <div class="copy">
+          <div class="title" id="title">Are you in a meeting?</div>
+          <div class="subtitle" id="subtitle">Start Clarifi to take notes</div>
+        </div>
+        <div class="actions">
+          <div class="split">
+            <button type="button" class="start-clarifi" id="startClarifi">
+              <img src="clarifi-logo.png" alt="" width="16" height="16" draggable="false" />
+              Start Clarifi
+            </button>
+            <button
+              type="button"
+              class="menu-toggle"
+              id="menuToggle"
+              aria-label="More options"
+              aria-expanded="false"
+              aria-haspopup="menu"
+            >
+              <svg viewBox="0 0 12 12" aria-hidden="true">
+                <path
+                  d="M2.5 4.25L6 7.75L9.5 4.25"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="progress" aria-hidden="true">
+          <div class="progress-bar" id="progressBar"></div>
+        </div>
+      </div>
+      <div class="menu" id="menu" role="menu" hidden>
+        <button type="button" class="menu-item" id="openApp" role="menuitem">Open Clarifi</button>
+        <div class="menu-sep" id="muteSep"></div>
+        <button type="button" class="menu-item" id="muteApp" role="menuitem">
+          Turn off notifications for this app
+        </button>
+        <button type="button" class="menu-item" id="openSettings" role="menuitem">
+          Change notification settings
+        </button>
+      </div>
+    </div>
+    <script type="module" src="/src/detection-banner-main.ts"></script>
+  </body>
+</html>

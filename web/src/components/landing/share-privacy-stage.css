@@ -1,0 +1,355 @@
+/* Privacy + share stage — scenic backdrop with Clarifi recap + share overlay */
+
+.sns-section {
+  width: 100%;
+  padding: 4.5rem var(--ds-section-px, 2rem) 5.5rem;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.sns-intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: 2rem 3rem;
+  align-items: start;
+  width: 100%;
+  max-width: 1160px;
+  margin: 0 auto 2.5rem;
+}
+
+.sns-intro-title {
+  margin: 0;
+  font-size: clamp(1.85rem, 3.4vw, 2.75rem);
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+  color: #0a0a0b;
+}
+
+.sns-intro-copy {
+  margin: 0;
+  padding-top: 0.4rem;
+  max-width: 28rem;
+  font-size: 1rem;
+  line-height: 1.55;
+  color: rgba(10, 10, 11, 0.62);
+}
+
+.sns-stage {
+  position: relative;
+  width: 100%;
+  max-width: 1160px;
+  margin: 0 auto;
+  height: clamp(420px, 52vw, 560px);
+  border-radius: 20px;
+  overflow: hidden;
+  isolation: isolate;
+  box-shadow: 0 16px 48px rgba(26, 26, 46, 0.1);
+}
+
+.sns-stage-bg {
+  position: absolute;
+  inset: 0;
+  background-color: #1a3a4a;
+  background-size: cover;
+  background-position: center;
+  transform: scale(1.02);
+}
+
+.sns-stage-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(8, 16, 24, 0.12) 0%,
+    rgba(8, 16, 24, 0.28) 100%
+  );
+  pointer-events: none;
+}
+
+.sns-window {
+  position: absolute;
+  z-index: 1;
+  left: 6%;
+  top: 10%;
+  width: min(68%, 640px);
+  height: 86%;
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px 14px 0 0;
+  background: #f7f7f5;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.sns-window-chrome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(26, 26, 46, 0.08);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.sns-traffic {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.sns-traffic span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #d1d5db;
+}
+
+.sns-traffic span:nth-child(1) {
+  background: #ff5f57;
+}
+
+.sns-traffic span:nth-child(2) {
+  background: #febc2e;
+}
+
+.sns-traffic span:nth-child(3) {
+  background: #28c840;
+}
+
+.sns-chrome-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.sns-chrome-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(26, 26, 46, 0.06);
+}
+
+.sns-share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 28px;
+  padding: 0 0.7rem;
+  border-radius: 8px;
+  background: #2a2a2e;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.sns-share-btn::before {
+  content: '';
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+}
+
+.sns-window-body {
+  flex: 1;
+  min-height: 0;
+  padding: 1.35rem 1.5rem 1.5rem;
+  overflow: hidden;
+}
+
+.sns-doc-title {
+  margin: 0 0 0.85rem;
+  font-size: clamp(1.35rem, 2.4vw, 1.85rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: #141416;
+}
+
+.sns-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 1.25rem;
+}
+
+.sns-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 28px;
+  padding: 0 0.7rem;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid rgba(26, 26, 46, 0.1);
+  color: rgba(20, 20, 22, 0.72);
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.sns-pill--accent {
+  color: var(--ds-blue, #2b6cff);
+  border-color: rgba(43, 108, 255, 0.25);
+  background: rgba(43, 108, 255, 0.06);
+}
+
+.sns-section-label {
+  margin: 0 0 0.65rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #141416;
+}
+
+.sns-bullets {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  color: rgba(20, 20, 22, 0.72);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.sns-share {
+  position: absolute;
+  z-index: 2;
+  right: 5%;
+  top: 18%;
+  width: min(34%, 300px);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.22),
+    0 0 0 1px rgba(26, 26, 46, 0.06);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.sns-share-title {
+  margin: 0;
+  padding: 1rem 1rem 0.75rem;
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: #141416;
+}
+
+.sns-share-group {
+  padding: 0.55rem 0.75rem;
+  background: #f3f3f1;
+  color: rgba(20, 20, 22, 0.5);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.sns-people {
+  list-style: none;
+  margin: 0;
+  padding: 0.35rem 0.5rem 0.65rem;
+}
+
+.sns-person {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.45rem;
+  border-radius: 10px;
+}
+
+.sns-avatar {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+  font-weight: 650;
+  color: #fff;
+}
+
+.sns-avatar--green {
+  background: #34a853;
+}
+
+.sns-avatar--orange {
+  background: #f59e0b;
+}
+
+.sns-avatar--blue {
+  background: var(--ds-blue, #2b6cff);
+}
+
+.sns-person-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.sns-person-meta strong {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #141416;
+}
+
+.sns-person-meta span {
+  font-size: 0.72rem;
+  color: rgba(20, 20, 22, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 900px) {
+  .sns-section {
+    padding: 3rem 1.25rem 3.5rem;
+  }
+
+  .sns-intro {
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
+    margin-bottom: 1.75rem;
+  }
+
+  .sns-intro-copy {
+    padding-top: 0;
+    max-width: none;
+  }
+
+  .sns-stage {
+    height: auto;
+    min-height: 520px;
+  }
+
+  .sns-window {
+    left: 4%;
+    top: 8%;
+    width: 92%;
+    height: 72%;
+  }
+
+  .sns-share {
+    right: 6%;
+    top: auto;
+    bottom: 4%;
+    width: min(78%, 280px);
+  }
+}
+
+@media (max-width: 560px) {
+  .sns-window-body {
+    padding: 1rem 1.1rem;
+  }
+
+  .sns-doc-title {
+    font-size: 1.2rem;
+  }
+
+  .sns-bullets {
+    font-size: 0.8rem;
+  }
+}

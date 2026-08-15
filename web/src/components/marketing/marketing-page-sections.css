@@ -1,0 +1,178 @@
+/* Marketing page layout overrides — matches landing design tokens */
+
+/* Landing page only — transparent hero nav over the gradient (other pages stay solid white).
+   Padding / geometry match .landing-nav so link positions stay identical across pages. */
+.marketing-page .landing-nav-hero {
+  background: transparent;
+  border-bottom: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  padding: 0.85rem 2rem;
+}
+
+.marketing-page .landing-nav-hero .landing-nav-logo,
+.marketing-page .landing-nav-hero .landing-nav-link {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.marketing-page .landing-nav-hero .landing-nav-link:hover,
+.marketing-page .landing-nav-hero .landing-nav-link-active {
+  color: #ffffff;
+}
+
+.marketing-page .landing-nav-hero .landing-nav-login {
+  border-color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.marketing-page .landing-nav-hero .landing-nav-login:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+/* Keep shared blue Get for Mac on the landing hero bar */
+.marketing-page .landing-nav-hero .landing-nav-download.download-mac-btn {
+  background: var(--cl-blue, #2b6cff);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+.marketing-page .landing-hero-scroll.landing-hero {
+  padding-top: 0.5cm;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.marketing-page .landing-hero-copy {
+  padding-top: 0;
+}
+
+.marketing-page .landing-hero-copy > div > div {
+  padding-top: 0;
+}
+
+.marketing-page .landing-hero-scroll .marketing-hero-title,
+.marketing-page .landing-hero-scroll .marketing-hero-title span {
+  color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28), 0 2px 18px rgba(0, 0, 0, 0.32);
+}
+
+.marketing-page .landing-hero-scroll .marketing-hero-title .hero-rotating-word,
+.marketing-page .landing-hero-scroll .marketing-hero-title .hero-rotating-word span {
+  color: #60b4ff !important;
+  text-shadow: 0 1px 10px rgba(96, 180, 255, 0.4), 0 1px 8px rgba(0, 0, 0, 0.3);
+}
+
+.marketing-page .landing-hero-scroll .landing-hero-subtitle {
+  color: rgba(255, 255, 255, 0.92) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28), 0 2px 14px rgba(0, 0, 0, 0.3);
+}
+
+.marketing-page .logos3-heading {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  color: var(--ds-muted-hero);
+}
+
+.marketing-page #demo,
+.marketing-page #features,
+.marketing-page #faq {
+  scroll-margin-top: 2rem;
+}
+
+.marketing-page .landing-hero-scroll .hero-rotating-word span {
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+  color: #60b4ff !important;
+  filter: drop-shadow(0 1px 10px rgba(96, 180, 255, 0.35));
+}
+
+.marketing-page .landing-hero {
+  background: transparent;
+}
+
+.marketing-page .landing-hero-scroll {
+  position: relative;
+  isolation: isolate;
+}
+
+.marketing-page .landing-hero-scroll > *:not(.landing-hero-bg):not(.hero-meteor-bg) {
+  position: relative;
+  z-index: 1;
+}
+
+.marketing-page .landing-section {
+  background: transparent;
+}
+
+.marketing-page .landing-section-tint {
+  background: transparent;
+}
+
+.marketing-site-footer {
+  background: linear-gradient(180deg, transparent 0%, hsl(205 18% 94% / 0.45) 55%, #eef1f4 100%);
+}
+
+.marketing-site-footer .landing-footer-logo-text {
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
+
+.marketing-site-footer .landing-footer-col h4 {
+  font-weight: 600;
+}
+
+.marketing-site-footer .landing-footer-col a,
+.marketing-site-footer .landing-footer-link-btn {
+  font-weight: 400;
+  color: #4b5563;
+}
+
+.marketing-site-footer .landing-footer-link-btn:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.marketing-site-footer .landing-footer-link-btn:disabled:hover {
+  color: #4b5563;
+}
+
+.marketing-site-footer .landing-footer-badge {
+  display: inline-block;
+  margin-left: 6px;
+  vertical-align: middle;
+  line-height: 1.4;
+}
+
+.marketing-frosted-overlay {
+  background: rgba(26, 26, 46, 0.28);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.marketing-frosted-modal {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(28px) saturate(1.8);
+  -webkit-backdrop-filter: blur(28px) saturate(1.8);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 24px 64px rgba(26, 26, 46, 0.18);
+}
+
+.marketing-footer-subprocessors {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin: 0.5rem 0 0;
+}
+
+.marketing-footer-subprocessors a {
+  color: #64748b;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.marketing-footer-subprocessors a:hover {
+  color: var(--cl-navy);
+}

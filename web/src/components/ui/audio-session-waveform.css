@@ -1,0 +1,166 @@
+.as-waveform-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 0.75rem;
+  cursor: pointer;
+  padding: 0;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.as-waveform-btn:disabled {
+  cursor: default;
+}
+
+.as-waveform-btn--sm {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
+
+.as-waveform-btn--md {
+  width: 48px;
+  height: 48px;
+}
+
+.as-waveform-btn--lg {
+  width: 64px;
+  height: 64px;
+}
+
+.as-waveform-btn--on-dark {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.as-waveform-btn--on-dark:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.as-waveform-btn--default {
+  color: var(--muted-foreground);
+}
+
+.as-waveform-btn--default:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.as-waveform-btn--active.as-waveform-btn--on-dark {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.as-waveform-btn--active.as-waveform-btn--default {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.as-waveform {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.as-waveform-btn--sm .as-waveform {
+  height: 18px;
+  gap: 3px;
+}
+
+.as-waveform-btn--md .as-waveform {
+  height: 24px;
+  gap: 4px;
+}
+
+.as-waveform-btn--lg .as-waveform {
+  height: 32px;
+  gap: 5px;
+}
+
+.as-waveform span {
+  display: block;
+  background: currentColor;
+  border-radius: 1px;
+}
+
+.as-waveform-btn--sm .as-waveform span {
+  width: 3px;
+  height: 8px;
+}
+
+.as-waveform-btn--md .as-waveform span {
+  width: 4px;
+  height: 10px;
+}
+
+.as-waveform-btn--lg .as-waveform span {
+  width: 5px;
+  height: 14px;
+}
+
+.as-waveform--active span {
+  animation: as-wave 0.8s ease-in-out infinite;
+}
+
+.as-waveform-btn--sm.as-waveform-btn--active .as-waveform span:nth-child(1) {
+  animation-delay: 0s;
+  height: 5px;
+}
+.as-waveform-btn--sm.as-waveform-btn--active .as-waveform span:nth-child(2) {
+  animation-delay: 0.1s;
+  height: 12px;
+}
+.as-waveform-btn--sm.as-waveform-btn--active .as-waveform span:nth-child(3) {
+  animation-delay: 0.2s;
+  height: 7px;
+}
+.as-waveform-btn--sm.as-waveform-btn--active .as-waveform span:nth-child(4) {
+  animation-delay: 0.3s;
+  height: 10px;
+}
+
+.as-waveform-btn--md.as-waveform-btn--active .as-waveform span:nth-child(1) {
+  animation-delay: 0s;
+  height: 7px;
+}
+.as-waveform-btn--md.as-waveform-btn--active .as-waveform span:nth-child(2) {
+  animation-delay: 0.1s;
+  height: 16px;
+}
+.as-waveform-btn--md.as-waveform-btn--active .as-waveform span:nth-child(3) {
+  animation-delay: 0.2s;
+  height: 9px;
+}
+.as-waveform-btn--md.as-waveform-btn--active .as-waveform span:nth-child(4) {
+  animation-delay: 0.3s;
+  height: 13px;
+}
+
+.as-waveform-btn--lg.as-waveform-btn--active .as-waveform span:nth-child(1) {
+  animation-delay: 0s;
+  height: 10px;
+}
+.as-waveform-btn--lg.as-waveform-btn--active .as-waveform span:nth-child(2) {
+  animation-delay: 0.1s;
+  height: 22px;
+}
+.as-waveform-btn--lg.as-waveform-btn--active .as-waveform span:nth-child(3) {
+  animation-delay: 0.2s;
+  height: 12px;
+}
+.as-waveform-btn--lg.as-waveform-btn--active .as-waveform span:nth-child(4) {
+  animation-delay: 0.3s;
+  height: 18px;
+}
+
+@keyframes as-wave {
+  0%,
+  100% {
+    transform: scaleY(0.6);
+  }
+  50% {
+    transform: scaleY(1.2);
+  }
+}

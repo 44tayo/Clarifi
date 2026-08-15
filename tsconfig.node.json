@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "composite": false,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowSyntheticDefaultImports": true,
+    "noEmit": true,
+    "target": "ES2020",
+    "strict": true,
+    "skipLibCheck": true
+  },
+  "include": ["electron/**/*", "shared/**/*", "vite.config.ts", "scripts/**/*"]
+}

@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+web/node_modules/
+
+# Build outputs
+native/build/
+dist/
+dist-electron/
+release/
+.next/
+web/.next/
+out/
+web/out/
+
+# Installers — host on GitHub Releases / CDN, never in git
+*.dmg
+*.exe
+*.zip
+web/public/downloads/
+web/public/downloads/**
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+.env.signing.local
+web/.env.local
+build/developer-id-csr/private.key
+
+# Caches / tooling
+.DS_Store
+*.log
+.vercel
+web/.vercel
+**/supabase/.temp/
+*.tsbuildinfo
+web/tsconfig.tsbuildinfo
+.lane-*-shots/
+web/.lane-*-shots/
+
+# Accidental Finder duplicates
+resources/* 2
+resources/* 2.*
+resources/audio-capture-helper 2
+resources/window_capture_exclude 2.node
